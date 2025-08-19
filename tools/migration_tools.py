@@ -56,7 +56,10 @@ __all__ = [
 def build_migration_plan(xml_content: str) -> str:
     """
     Produce a topologically sorted DAG of NiFi processors based on Connections.
-
+    
+    Args:
+        xml_content: Either XML content as string OR file path to XML file
+    
     Returns JSON:
       {
         "tasks": [{"id": "...", "name": "...", "type": "..."}, ...],
@@ -65,7 +68,20 @@ def build_migration_plan(xml_content: str) -> str:
       }
     """
     try:
-        root = ET.fromstring(xml_content)
+        # Check if input is a file path or XML content
+        if xml_content.strip().startswith('<?xml') or xml_content.strip().startswith('<'):
+            # Input is XML content
+            root = ET.fromstring(xml_content)
+        else:
+            # Input is likely a file path
+            import os
+            if os.path.exists(xml_content):
+                with open(xml_content, 'r') as f:
+                    xml_text = f.read()
+                root = ET.fromstring(xml_text)
+            else:
+                # Try parsing as XML content anyway
+                root = ET.fromstring(xml_content)
 
         # id → meta
         procs: Dict[str, Dict[str, Any]] = {}
