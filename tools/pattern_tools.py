@@ -11,8 +11,33 @@ from langchain_core.tools import tool
 # Import UC-backed registry (aliased for clarity)
 from registry import PatternRegistryUC as _UCRegistry
 
-# Shared registry instance
-_registry = _UCRegistry()
+# Lazy-initialized registry instance
+_registry = None
+
+def _get_registry():
+    """Get the pattern registry, initializing it lazily."""
+    global _registry
+    if _registry is None:
+        try:
+            _registry = _UCRegistry()
+        except RuntimeError as e:
+            # If Unity Catalog/Spark is not available, use a fallback
+            if "SparkSession not available" in str(e):
+                _registry = _FallbackRegistry()
+            else:
+                raise
+    return _registry
+
+class _FallbackRegistry:
+    """Fallback registry for when Unity Catalog is not available."""
+    def __init__(self):
+        self._patterns = {}
+    
+    def get_pattern(self, processor_class: str):
+        return self._patterns.get(processor_class)
+    
+    def add_pattern(self, processor_class: str, pattern: dict):
+        self._patterns[processor_class] = pattern
 
 __all__ = [
     "generate_databricks_code",
@@ -26,7 +51,8 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
     Look up a migration pattern from UC; if missing, auto-register a stub
     so you can fill it in later. Returns a rendered dictionary.
     """
-    pattern = _registry.get_pattern(processor_class) or {}
+    registry = _get_registry()
+    pattern = registry.get_pattern(processor_class) or {}
 
     if not pattern:
         lc = processor_class.lower()
@@ -78,7 +104,7 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
             }
 
         # Persist new stub into UC (and the in-memory cache)
-        _registry.add_pattern(processor_class, pattern)
+        registry.add_pattern(processor_class, pattern)
 
     # Render code with injected placeholders when present
     code = None
