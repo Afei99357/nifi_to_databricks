@@ -29,7 +29,18 @@ os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 
 # --- LLM & system prompt ---
-llm = ChatDatabricks(endpoint=MODEL_ENDPOINT)
+# Patch ChatDatabricks to fix additionalProperties in tool schemas
+class FixedChatDatabricks(ChatDatabricks):
+    def _format_tools_for_request(self, tools):
+        formatted_tools = super()._format_tools_for_request(tools)
+        for tool in formatted_tools:
+            if isinstance(tool, dict) and 'function' in tool:
+                func_def = tool['function']
+                if 'parameters' in func_def:
+                    _fix_additional_properties(func_def['parameters'])
+        return formatted_tools
+
+llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an expert in Apache NiFi and Databricks migration.
 
 Core Migration Patterns:
@@ -60,6 +71,22 @@ The chunked approach will:
 # -------------------------
 # LangGraph agent scaffolding
 # -------------------------
+
+def _fix_additional_properties(schema: dict) -> None:
+    """Recursively remove or set additionalProperties to False in JSON schema."""
+    if isinstance(schema, dict):
+        # Remove additionalProperties or set to False
+        if "additionalProperties" in schema:
+            schema["additionalProperties"] = False
+        
+        # Recursively fix nested schemas
+        for key, value in schema.items():
+            if isinstance(value, dict):
+                _fix_additional_properties(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        _fix_additional_properties(item)
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     custom_inputs: Optional[dict[str, Any]]
