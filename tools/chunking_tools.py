@@ -108,7 +108,44 @@ def extract_complete_workflow_map(xml_content: str) -> str:
                         if key is not None:
                             controller_services[cs_id]["properties"][key] = value
         
-        # Build processor dependency graph
+        # Extract funnels (flow control elements)
+        funnels = {}
+        for funnel in root.findall(".//funnels"):
+            funnel_id = (funnel.findtext("id") or "").strip()
+            if funnel_id:
+                funnels[funnel_id] = {
+                    "id": funnel_id,
+                    "name": (funnel.findtext("name") or f"Funnel_{funnel_id[:8]}").strip(),
+                    "type": "Funnel",
+                    "parent_group_id": (funnel.findtext("parentGroupId") or "").strip(),
+                    "inputs": [],  # Will be populated from connections
+                    "outputs": []  # Will be populated from connections
+                }
+        
+        # Analyze funnel connections and create bypass mappings
+        funnel_bypasses = {}  # Maps: {downstream_processor: [list_of_upstream_processors]}
+        
+        for conn in all_connections:
+            src_id = conn["source"]
+            dst_id = conn["destination"]
+            
+            # Track funnel inputs
+            if dst_id in funnels:
+                funnels[dst_id]["inputs"].append(src_id)
+            
+            # Track funnel outputs  
+            if src_id in funnels:
+                funnels[src_id]["outputs"].append(dst_id)
+        
+        # Create bypass mappings for each funnel
+        for funnel_id, funnel_info in funnels.items():
+            for output_processor in funnel_info["outputs"]:
+                if output_processor not in funnel_bypasses:
+                    funnel_bypasses[output_processor] = []
+                # All inputs to the funnel become inputs to the output processor
+                funnel_bypasses[output_processor].extend(funnel_info["inputs"])
+        
+        # Build processor dependency graph (excluding funnels)
         processor_dependencies = {}
         processor_dependents = {}
         
@@ -116,6 +153,10 @@ def extract_complete_workflow_map(xml_content: str) -> str:
             src_id = conn["source"]
             dst_id = conn["destination"]
             
+            # Skip connections involving funnels - they'll be handled by bypass mappings
+            if src_id in funnels or dst_id in funnels:
+                continue
+                
             # Track dependencies (what each processor depends on)
             if dst_id not in processor_dependencies:
                 processor_dependencies[dst_id] = []
@@ -126,19 +167,39 @@ def extract_complete_workflow_map(xml_content: str) -> str:
                 processor_dependents[src_id] = []
             processor_dependents[src_id].append(dst_id)
         
+        # Apply funnel bypass mappings to processor dependencies
+        for downstream_proc, upstream_procs in funnel_bypasses.items():
+            if downstream_proc not in processor_dependencies:
+                processor_dependencies[downstream_proc] = []
+            
+            # Add all upstream processors that connect through funnels
+            for upstream_proc in upstream_procs:
+                if upstream_proc not in funnels:  # Don't add funnels themselves
+                    processor_dependencies[downstream_proc].append(upstream_proc)
+                    
+                    # Also update the upstream processor's dependents
+                    if upstream_proc not in processor_dependents:
+                        processor_dependents[upstream_proc] = []
+                    if downstream_proc not in processor_dependents[upstream_proc]:
+                        processor_dependents[upstream_proc].append(downstream_proc)
+        
         # Create complete workflow map
         workflow_map = {
             "processors": all_processors,
             "connections": all_connections,
             "process_groups": process_groups,
             "controller_services": controller_services,
+            "funnels": funnels,
+            "funnel_bypasses": funnel_bypasses,
             "processor_dependencies": processor_dependencies,
             "processor_dependents": processor_dependents,
             "summary": {
                 "total_processors": len(all_processors),
                 "total_connections": len(all_connections),
                 "total_process_groups": len(process_groups),
-                "total_controller_services": len(controller_services)
+                "total_controller_services": len(controller_services),
+                "total_funnels": len(funnels),
+                "funnels_bypassed": len(funnel_bypasses)
             }
         }
         
@@ -152,11 +213,18 @@ def _extract_all_processors_and_connections(root: ET.Element) -> Tuple[Dict[str,
     processors = {}
     connections = []
     
-    # Extract processors with their IDs
+    # First, identify all funnels to exclude them from processors
+    funnel_ids = set()
+    for funnel in root.findall(".//funnels"):
+        funnel_id = (funnel.findtext("id") or "").strip()
+        if funnel_id:
+            funnel_ids.add(funnel_id)
+    
+    # Extract processors with their IDs (excluding funnels)
     for processor in root.findall(".//processors"):
         proc_id = (processor.findtext("id") or "").strip()
-        if not proc_id:
-            continue
+        if not proc_id or proc_id in funnel_ids:
+            continue  # Skip funnels and empty IDs
             
         proc_info = {
             "id": proc_id,
