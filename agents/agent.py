@@ -31,10 +31,30 @@ os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 # --- LLM & system prompt ---
 llm = ChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an expert in Apache NiFi and Databricks migration.
+
+Core Migration Patterns:
 - Use Auto Loader for GetFile/ListFile
-- Use Delta Lake for PutHDFS/PutFile
+- Use Delta Lake for PutHDFS/PutFile  
 - Use Structured Streaming and Databricks Jobs
-Always provide executable PySpark and explain the migration patterns.
+- Always provide executable PySpark and explain the migration patterns
+
+Handling Large NiFi Files:
+- For large NiFi XML files (>50 processors or complex workflows), use `orchestrate_chunked_nifi_migration` instead of `orchestrate_nifi_migration`
+- The chunked approach prevents context limit issues by processing NiFi workflows in manageable chunks while preserving graph relationships
+- Use `chunk_nifi_xml_by_process_groups` to analyze the structure before processing if needed
+- Cross-chunk dependencies are automatically handled in the final Databricks job configuration
+
+When to use chunked processing:
+1. NiFi XML files with 50+ processors
+2. Complex workflows with multiple process groups
+3. When context limits are encountered during processing
+4. Large enterprise NiFi templates
+
+The chunked approach will:
+1. Split the NiFi workflow by process groups and processor batches  
+2. Process each chunk individually to generate Databricks code
+3. Reconstruct the complete workflow with proper task dependencies
+4. Generate a multi-task Databricks job that respects the original NiFi execution order
 """
 
 # -------------------------

@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 from langchain_core.tools import tool
 
+from config import logger
 from utils import safe_name as _safe_name, write_text as _write_text, read_text as _read_text
 from utils import (
     parse_nifi_template_impl,
@@ -31,6 +32,11 @@ from tools.pattern_tools import (
     suggest_autoloader_options,
 )
 from tools.dlt_tools import generate_dlt_pipeline_config
+from tools.chunking_tools import (
+    chunk_nifi_xml_by_process_groups,
+    reconstruct_full_workflow,
+    estimate_chunk_size
+)
 
 def _default_notebook_path(project: str) -> str:
     user = os.environ.get("WORKSPACE_USER") or os.environ.get("USER_EMAIL") or "Shared"
@@ -40,8 +46,10 @@ def _default_notebook_path(project: str) -> str:
 
 __all__ = [
     "orchestrate_nifi_migration",
-    "convert_flow",
+    "convert_flow", 
     "build_migration_plan",
+    "orchestrate_chunked_nifi_migration",
+    "process_nifi_chunk",
 ]
 
 @tool
@@ -391,3 +399,331 @@ def orchestrate_nifi_migration(
             result["deploy_result"] = deploy_res
 
     return json.dumps(result, indent=2)
+
+@tool
+def process_nifi_chunk(
+    chunk_data: str, 
+    project: str,
+    chunk_index: int = 0
+) -> str:
+    """
+    Process a single NiFi chunk and generate Databricks code for its processors.
+    
+    Args:
+        chunk_data: JSON string containing chunk information (processors, connections)
+        project: Project name for context
+        chunk_index: Index of this chunk for naming
+        
+    Returns:
+        JSON with generated code and task information for this chunk
+    """
+    try:
+        chunk = json.loads(chunk_data)
+        processors = chunk.get("processors", [])
+        internal_connections = chunk.get("internal_connections", [])
+        external_connections = chunk.get("external_connections", [])
+        chunk_id = chunk.get("chunk_id", f"chunk_{chunk_index}")
+        
+        generated_tasks = []
+        
+        # Process each processor in the chunk
+        for idx, processor in enumerate(processors):
+            proc_type = processor.get("type", "Unknown")
+            proc_name = processor.get("name", f"processor_{idx}")
+            props = processor.get("properties", {})
+            
+            # Generate Databricks code for this processor
+            code = generate_databricks_code.func(
+                processor_type=proc_type,
+                properties=json.dumps(props),
+            )
+            
+            # Enhance code with Auto Loader suggestions if needed
+            if ("GetFile" in proc_type or "ListFile" in proc_type) and "cloudFiles" not in code:
+                al = json.loads(suggest_autoloader_options.func(json.dumps(props)))
+                code = f"# Suggested Auto Loader for {proc_type}\n{al['code']}\n# Tips:\n# - " + "\n# - ".join(al["tips"])
+            
+            task = {
+                "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                "name": _safe_name(proc_name),
+                "type": proc_type,
+                "code": code,
+                "properties": props,
+                "chunk_id": chunk_id,
+                "processor_index": idx
+            }
+            generated_tasks.append(task)
+        
+        # Analyze connections for task ordering within chunk
+        task_dependencies = {}
+        processor_id_to_task = {task["id"]: task["name"] for task in generated_tasks}
+        
+        for conn in internal_connections:
+            src_id = conn["source"]
+            dst_id = conn["destination"]
+            
+            if src_id in processor_id_to_task and dst_id in processor_id_to_task:
+                dst_task = processor_id_to_task[dst_id]
+                src_task = processor_id_to_task[src_id]
+                
+                if dst_task not in task_dependencies:
+                    task_dependencies[dst_task] = []
+                task_dependencies[dst_task].append(src_task)
+        
+        result = {
+            "chunk_id": chunk_id,
+            "tasks": generated_tasks,
+            "internal_task_dependencies": task_dependencies,
+            "external_connections": external_connections,
+            "processor_count": len(processors),
+            "task_count": len(generated_tasks),
+            "project": project
+        }
+        
+        return json.dumps(result, indent=2)
+        
+    except Exception as e:
+        return json.dumps({"error": f"Error processing chunk: {str(e)}", "chunk_data": chunk_data[:200]})
+
+@tool 
+def orchestrate_chunked_nifi_migration(
+    xml_path: str,
+    out_dir: str, 
+    project: str,
+    job: str,
+    notebook_path: str = "",
+    max_processors_per_chunk: int = 25,
+    existing_cluster_id: str = "",
+    deploy: bool = False
+) -> str:
+    """
+    End-to-end chunked migration for large NiFi XML files.
+    
+    This tool handles large NiFi XML files by:
+    1. Chunking the XML by process groups and processor batches
+    2. Processing each chunk individually (avoids context limits)
+    3. Reconstructing the full workflow with proper task dependencies
+    4. Generating a complete Databricks multi-task job configuration
+    
+    Args:
+        xml_path: Path to the NiFi XML file (local or DBFS)
+        out_dir: Output directory for generated artifacts
+        project: Project name
+        job: Job name
+        notebook_path: Target notebook path in Databricks workspace
+        max_processors_per_chunk: Maximum processors per chunk (default: 25)
+        existing_cluster_id: Existing cluster ID to use
+        deploy: Whether to deploy the job to Databricks
+        
+    Returns:
+        JSON summary with chunking statistics, processing results, and final workflow
+    """
+    try:
+        # --- Setup output directory ---
+        root = Path(out_dir)
+        proj_name = _safe_name(project)
+        out = root / proj_name
+        (out / "src/steps").mkdir(parents=True, exist_ok=True)
+        (out / "jobs").mkdir(parents=True, exist_ok=True)
+        (out / "conf").mkdir(parents=True, exist_ok=True)
+        (out / "notebooks").mkdir(parents=True, exist_ok=True)
+        (out / "chunks").mkdir(parents=True, exist_ok=True)  # For chunk artifacts
+        
+        # --- Default notebook path if not provided ---
+        if not notebook_path:
+            notebook_path = _default_notebook_path(project)
+        
+        # --- Read and chunk the XML ---
+        xml_text = _read_text(xml_path)
+        
+        # Step 1: Chunk the XML by process groups
+        chunking_result = json.loads(chunk_nifi_xml_by_process_groups.func(
+            xml_content=xml_text,
+            max_processors_per_chunk=max_processors_per_chunk
+        ))
+        
+        if "error" in chunking_result:
+            return json.dumps({"error": f"Chunking failed: {chunking_result['error']}"})
+        
+        chunks = chunking_result["chunks"]
+        cross_chunk_links = chunking_result["cross_chunk_links"]
+        summary = chunking_result["summary"]
+        
+        # Save chunking results
+        _write_text(out / "conf/chunking_result.json", json.dumps(chunking_result, indent=2))
+        
+        # Step 2: Process each chunk individually
+        chunk_results = []
+        all_step_files = []
+        
+        for i, chunk in enumerate(chunks):
+            chunk_data = json.dumps(chunk)
+            
+            # Process this chunk
+            chunk_result = json.loads(process_nifi_chunk.func(
+                chunk_data=chunk_data,
+                project=project,
+                chunk_index=i
+            ))
+            
+            if "error" in chunk_result:
+                logger.warning(f"Error processing chunk {i}: {chunk_result['error']}")
+                continue
+            
+            chunk_results.append(chunk_result)
+            
+            # Write individual task files for this chunk
+            for task in chunk_result["tasks"]:
+                task_name = task["name"]
+                code = task["code"]
+                step_path = out / f"src/steps/{i:02d}_{task_name}.py"
+                _write_text(step_path, code)
+                all_step_files.append(str(step_path))
+            
+            # Save chunk processing result
+            _write_text(out / f"chunks/chunk_{i}_result.json", json.dumps(chunk_result, indent=2))
+        
+        # Step 3: Reconstruct the full workflow
+        workflow_result = json.loads(reconstruct_full_workflow.func(
+            chunk_results=chunk_results,
+            cross_chunk_links=cross_chunk_links
+        ))
+        
+        if "error" in workflow_result:
+            return json.dumps({"error": f"Workflow reconstruction failed: {workflow_result['error']}"})
+        
+        # Save reconstructed workflow
+        _write_text(out / "conf/reconstructed_workflow.json", json.dumps(workflow_result, indent=2))
+        
+        # Step 4: Generate final Databricks job configuration
+        final_job_config = workflow_result.get("databricks_job_config", {})
+        final_job_config.update({
+            "name": job,
+            "email_notifications": {
+                "on_failure": [os.environ.get("NOTIFICATION_EMAIL", "")],
+            } if os.environ.get("NOTIFICATION_EMAIL") else {},
+        })
+        
+        # Enhance job config with cluster settings
+        if existing_cluster_id:
+            for task in final_job_config.get("tasks", []):
+                task["existing_cluster_id"] = existing_cluster_id
+        else:
+            cluster_config = {
+                "spark_version": "16.4.x-scala2.12",
+                "node_type_id": "Standard_DS3_v2", 
+                "num_workers": 0,
+                "autotermination_minutes": 60
+            }
+            for task in final_job_config.get("tasks", []):
+                task["new_cluster"] = cluster_config
+        
+        _write_text(out / "jobs/job.chunked.json", json.dumps(final_job_config, indent=2))
+        
+        # Step 5: Generate project artifacts
+        # Bundle + README
+        bundle_yaml = scaffold_asset_bundle.func(project, job, notebook_path)
+        _write_text(out / "databricks.yml", bundle_yaml)
+        
+        readme = [
+            f"# {project} (Chunked Migration)",
+            "",
+            "Generated from large NiFi flow using chunked processing.",
+            "",
+            f"## Migration Statistics",
+            f"- Original processors: {summary['total_processors']}",
+            f"- Original connections: {summary['total_connections']}",
+            f"- Chunks created: {summary['chunk_count']}",
+            f"- Cross-chunk links: {summary['cross_chunk_links_count']}",
+            "",
+            "## Contents",
+            "- `src/steps/` individual processor translations (grouped by chunks)",
+            "- `chunks/` individual chunk processing results",
+            "- `conf/` chunking analysis and reconstructed workflow",
+            "- `jobs/job.chunked.json` final multi-task job configuration",
+            "- `databricks.yml` Databricks Asset Bundle",
+            "",
+            "## Next steps",
+            "1. Review the chunked migration results in `conf/`",
+            "2. Test individual chunks if needed using files in `chunks/`",
+            "3. Deploy the final job using `jobs/job.chunked.json`",
+            "4. Monitor cross-chunk dependencies for correct execution order",
+        ]
+        _write_text(out / "README.md", "\n".join(readme))
+        
+        # Step 6: Save parameter contexts and controller services
+        params_js = extract_nifi_parameters_and_services_impl(xml_text)
+        _write_text(out / "conf/parameter_contexts.json", json.dumps(params_js, indent=2))
+        
+        # Step 7: Generate orchestrator notebook (enhanced for chunked processing)
+        orchestrator = textwrap.dedent(f"""\
+        # Databricks notebook source
+        # Orchestrator notebook for chunked NiFi migration
+        dbutils.widgets.text("STEP_MODULE", "")
+        dbutils.widgets.text("CHUNK_ID", "")
+        step_mod = dbutils.widgets.get("STEP_MODULE")
+        chunk_id = dbutils.widgets.get("CHUNK_ID")
+        
+        import importlib.util, sys, os, glob, json
+        
+        def run_module(rel_path: str):
+            root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            full_path = os.path.join(root, rel_path)
+            if not os.path.exists(full_path):
+                raise FileNotFoundError(f"Module not found: {{full_path}}")
+            spec = importlib.util.spec_from_file_location("step_mod", full_path)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["step_mod"] = mod
+            spec.loader.exec_module(mod)
+        
+        def run_chunk_steps(chunk_prefix: str):
+            root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            pattern = os.path.join(root, "src", "steps", f"{{chunk_prefix}}_*.py")
+            steps = sorted(glob.glob(pattern))
+            print(f"Running steps for chunk {{chunk_prefix}}: {{len(steps)}} files")
+            for s in steps:
+                rel = os.path.relpath(s, root)
+                print(f" -> {{rel}}")
+                run_module(rel)
+        
+        if step_mod:
+            print(f"Running single step: {{step_mod}}")
+            run_module(step_mod)
+        elif chunk_id:
+            print(f"Running all steps for chunk: {{chunk_id}}")
+            run_chunk_steps(chunk_id)
+        else:
+            root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            steps = sorted(glob.glob(os.path.join(root, "src", "steps", "*.py")))
+            print("No STEP_MODULE or CHUNK_ID provided; running all steps sequentially:")
+            print(f"Total steps: {{len(steps)}}")
+            for s in steps:
+                rel = os.path.relpath(s, root)
+                print(f" -> {{rel}}")
+                run_module(rel)
+        """)
+        _write_text(out / "notebooks/main", orchestrator)
+        
+        # Step 8: Optional deployment
+        deploy_result = None
+        if deploy:
+            deploy_result = deploy_and_run_job.func(json.dumps(final_job_config), run_now=False)
+        
+        # Final result summary
+        result = {
+            "migration_type": "chunked",
+            "output_dir": str(out),
+            "chunking_summary": summary,
+            "chunks_processed": len(chunk_results),
+            "total_tasks_generated": sum(len(cr["tasks"]) for cr in chunk_results),
+            "step_files_written": all_step_files,
+            "cross_chunk_links_count": len(cross_chunk_links),
+            "final_job_config_path": str(out / "jobs/job.chunked.json"),
+            "notebook_path": notebook_path,
+            "deploy_result": deploy_result
+        }
+        
+        return json.dumps(result, indent=2)
+        
+    except Exception as e:
+        return json.dumps({"error": f"Chunked migration failed: {str(e)}"})
