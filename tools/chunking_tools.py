@@ -398,22 +398,54 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
         
         # Build task dependencies based on cross-chunk links
         task_dependencies = {}
-        for link in cross_chunk_links:
-            src_chunk = link["source_chunk_id"]
-            dst_chunk = link["destination_chunk_id"]
-            
-            # All tasks in destination chunk depend on all tasks in source chunk
-            src_tasks = chunk_task_mapping.get(src_chunk, [])
-            dst_tasks = chunk_task_mapping.get(dst_chunk, [])
-            
-            for dst_task in dst_tasks:
-                if dst_task not in task_dependencies:
-                    task_dependencies[dst_task] = []
-                task_dependencies[dst_task].extend(src_tasks)
         
-        # Remove duplicates and self-dependencies
+        # Create a processor ID to task name mapping for precise dependency tracking
+        processor_to_task = {}
+        for task in all_tasks:
+            proc_id = task.get("processor_id", task.get("id"))
+            if proc_id:
+                processor_to_task[proc_id] = task.get("name")
+        
+        for link in cross_chunk_links:
+            src_processor_id = link.get("source_processor_id")
+            dst_processor_id = link.get("destination_processor_id")
+            
+            # Find the actual task names for the connected processors
+            src_task_name = processor_to_task.get(src_processor_id)
+            dst_task_name = processor_to_task.get(dst_processor_id)
+            
+            # Only create dependency if both tasks exist and are different
+            if src_task_name and dst_task_name and src_task_name != dst_task_name:
+                if dst_task_name not in task_dependencies:
+                    task_dependencies[dst_task_name] = []
+                if src_task_name not in task_dependencies[dst_task_name]:
+                    task_dependencies[dst_task_name].append(src_task_name)
+        
+        # Additional validation: remove any circular dependencies
+        def has_circular_dependency(task, deps, visited=None):
+            if visited is None:
+                visited = set()
+            if task in visited:
+                return True
+            visited.add(task)
+            for dep in deps:
+                if dep in task_dependencies:
+                    if has_circular_dependency(dep, task_dependencies[dep], visited.copy()):
+                        return True
+            return False
+        
+        # Remove circular dependencies by removing problematic edges
+        cleaned_dependencies = {}
         for task, deps in task_dependencies.items():
-            task_dependencies[task] = list(set(dep for dep in deps if dep != task))
+            clean_deps = []
+            for dep in deps:
+                temp_deps = clean_deps + [dep]
+                if not has_circular_dependency(task, temp_deps):
+                    clean_deps.append(dep)
+            if clean_deps:
+                cleaned_dependencies[task] = clean_deps
+        
+        task_dependencies = cleaned_dependencies
         
         # Create final workflow structure
         workflow = {
