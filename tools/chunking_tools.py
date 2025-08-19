@@ -358,8 +358,9 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
         JSON with reconstructed workflow including task dependencies and orchestration
     """
     try:
-        # Collect all tasks from chunks
+        # Collect all tasks from chunks, eliminating duplicates by processor ID
         all_tasks = []
+        seen_task_ids = set()  # Track unique task/processor IDs
         chunk_task_mapping = {}  # Maps chunk_id to list of task names
         
         for chunk_result in chunk_results:
@@ -368,8 +369,17 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
             
             chunk_task_mapping[chunk_id] = []
             for task in tasks:
-                all_tasks.append(task)
-                chunk_task_mapping[chunk_id].append(task.get("name", task.get("id")))
+                # Use processor ID or task ID to identify unique tasks
+                task_id = task.get("processor_id", task.get("id", task.get("name", "unknown")))
+                task_name = task.get("name", task.get("id", "unknown"))
+                
+                if task_id not in seen_task_ids:
+                    seen_task_ids.add(task_id)
+                    all_tasks.append(task)
+                    chunk_task_mapping[chunk_id].append(task_name)
+                else:
+                    # Task already exists, just add to chunk mapping for dependency tracking
+                    chunk_task_mapping[chunk_id].append(task_name)
         
         # Build task dependencies based on cross-chunk links
         task_dependencies = {}
