@@ -35,7 +35,8 @@ from tools.dlt_tools import generate_dlt_pipeline_config
 from tools.chunking_tools import (
     chunk_nifi_xml_by_process_groups,
     reconstruct_full_workflow,
-    estimate_chunk_size
+    estimate_chunk_size,
+    extract_complete_workflow_map
 )
 
 def _default_notebook_path(project: str) -> str:
@@ -549,8 +550,16 @@ def orchestrate_chunked_nifi_migration(
         if not notebook_path:
             notebook_path = _default_notebook_path(project)
         
-        # --- Read and chunk the XML ---
+        # --- Read and extract complete workflow map ---
         xml_text = _read_text(xml_path)
+        
+        # Step 0: Extract complete workflow structure for connectivity restoration
+        workflow_map_result = json.loads(extract_complete_workflow_map.func(xml_text))
+        if "error" in workflow_map_result:
+            return json.dumps({"error": f"Workflow map extraction failed: {workflow_map_result['error']}"})
+        
+        # Save complete workflow map for reference
+        _write_text(out / "conf/complete_workflow_map.json", json.dumps(workflow_map_result, indent=2))
         
         # Step 1: Chunk the XML by process groups
         chunking_result = json.loads(chunk_nifi_xml_by_process_groups.func(
@@ -599,10 +608,11 @@ def orchestrate_chunked_nifi_migration(
             # Save chunk processing result
             _write_text(out / f"chunks/chunk_{i}_result.json", json.dumps(chunk_result, indent=2))
         
-        # Step 3: Reconstruct the full workflow
+        # Step 3: Reconstruct the full workflow with complete connectivity map
         workflow_result = json.loads(reconstruct_full_workflow.func(
-            chunk_results=chunk_results,
-            cross_chunk_links=cross_chunk_links
+            chunk_results_json=json.dumps(chunk_results),
+            cross_chunk_links_json=json.dumps(cross_chunk_links),
+            workflow_map_json=json.dumps(workflow_map_result)
         ))
         
         if "error" in workflow_result:

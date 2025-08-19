@@ -13,7 +13,8 @@ __all__ = [
     "chunk_nifi_xml_by_process_groups",
     "chunk_large_process_group", 
     "reconstruct_full_workflow",
-    "estimate_chunk_size"
+    "estimate_chunk_size",
+    "extract_complete_workflow_map"
 ]
 
 @dataclass
@@ -55,6 +56,96 @@ def estimate_chunk_size(processors: List[Dict[str, Any]], connections: List[Dict
         "connection_count": len(connections),
         "recommendation": "small" if total_size < 5000 else "medium" if total_size < 15000 else "large"
     })
+
+@tool
+def extract_complete_workflow_map(xml_content: str) -> str:
+    """
+    Extract and save the complete NiFi workflow structure including all processors, 
+    connections, process groups, and controller services.
+    
+    This creates a comprehensive map that can be used to restore proper task 
+    connectivity after chunked processing.
+    
+    Returns:
+        JSON with complete workflow structure
+    """
+    try:
+        # Handle both file path and XML content
+        if xml_content.strip().startswith('<?xml') or xml_content.strip().startswith('<'):
+            root = ET.fromstring(xml_content)
+        else:
+            import os
+            if os.path.exists(xml_content):
+                with open(xml_content, 'r') as f:
+                    xml_text = f.read()
+                root = ET.fromstring(xml_text)
+            else:
+                root = ET.fromstring(xml_content)
+        
+        # Extract all components
+        all_processors, all_connections = _extract_all_processors_and_connections(root)
+        process_groups = _group_by_process_groups(root)
+        
+        # Extract controller services
+        controller_services = {}
+        for controller in root.findall(".//controllerServices"):
+            cs_id = (controller.findtext("id") or "").strip()
+            if cs_id:
+                controller_services[cs_id] = {
+                    "id": cs_id,
+                    "name": (controller.findtext("name") or "Unknown").strip(),
+                    "type": (controller.findtext("type") or "Unknown").strip(),
+                    "properties": {},
+                    "parent_group_id": (controller.findtext("parentGroupId") or "").strip()
+                }
+                
+                # Extract properties
+                props_node = controller.find(".//properties")
+                if props_node is not None:
+                    for entry in props_node.findall("entry"):
+                        key = entry.findtext("key")
+                        value = entry.findtext("value")
+                        if key is not None:
+                            controller_services[cs_id]["properties"][key] = value
+        
+        # Build processor dependency graph
+        processor_dependencies = {}
+        processor_dependents = {}
+        
+        for conn in all_connections:
+            src_id = conn["source"]
+            dst_id = conn["destination"]
+            
+            # Track dependencies (what each processor depends on)
+            if dst_id not in processor_dependencies:
+                processor_dependencies[dst_id] = []
+            processor_dependencies[dst_id].append(src_id)
+            
+            # Track dependents (what depends on each processor)
+            if src_id not in processor_dependents:
+                processor_dependents[src_id] = []
+            processor_dependents[src_id].append(dst_id)
+        
+        # Create complete workflow map
+        workflow_map = {
+            "processors": all_processors,
+            "connections": all_connections,
+            "process_groups": process_groups,
+            "controller_services": controller_services,
+            "processor_dependencies": processor_dependencies,
+            "processor_dependents": processor_dependents,
+            "summary": {
+                "total_processors": len(all_processors),
+                "total_connections": len(all_connections),
+                "total_process_groups": len(process_groups),
+                "total_controller_services": len(controller_services)
+            }
+        }
+        
+        return json.dumps(workflow_map, indent=2)
+        
+    except Exception as e:
+        return json.dumps({"error": f"Error extracting workflow map: {str(e)}"})
 
 def _extract_all_processors_and_connections(root: ET.Element) -> Tuple[Dict[str, Dict], List[Dict]]:
     """Extract all processors and connections from NiFi XML root."""
@@ -345,19 +436,34 @@ def chunk_large_process_group(processors: List[Dict[str, Any]], connections: Lis
     except Exception as e:
         return json.dumps({"error": f"Error chunking processors: {str(e)}"})
 
-@tool
-def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_links: List[Dict[str, Any]]) -> str:
+@tool  
+def reconstruct_full_workflow(chunk_results_json: str, cross_chunk_links_json: str, 
+                             workflow_map_json: str = None) -> str:
     """
     Reconstruct a complete Databricks workflow from individual chunk processing results.
     
     Args:
-        chunk_results: List of processing results from agent for each chunk
-        cross_chunk_links: Cross-chunk connection information from chunking
+        chunk_results_json: JSON string list of chunk result dicts
+        cross_chunk_links_json: JSON string list describing cross-chunk links
+        workflow_map_json: Optional JSON string with complete workflow map for connectivity
         
     Returns:
         JSON with reconstructed workflow including task dependencies and orchestration
     """
     try:
+        # Parse input JSON strings
+        try:
+            chunk_results = json.loads(chunk_results_json) if chunk_results_json else []
+        except Exception:
+            chunk_results = []
+        try:
+            cross_chunk_links = json.loads(cross_chunk_links_json) if cross_chunk_links_json else []
+        except Exception:
+            cross_chunk_links = []
+        try:
+            workflow_map = json.loads(workflow_map_json) if workflow_map_json else None
+        except Exception:
+            workflow_map = None
         # Collect all tasks from chunks, eliminating duplicates by processor ID
         all_tasks = []
         seen_task_ids = set()  # Track unique task/processor IDs
@@ -396,7 +502,7 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
                 all_tasks.append(task)
                 chunk_task_mapping[chunk_id].append(task_name)
         
-        # Build task dependencies based on cross-chunk links
+        # Build task dependencies using workflow map if available
         task_dependencies = {}
         
         # Create a processor ID to task name mapping for precise dependency tracking
@@ -406,20 +512,43 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
             if proc_id:
                 processor_to_task[proc_id] = task.get("name")
         
-        for link in cross_chunk_links:
-            src_processor_id = link.get("source_processor_id")
-            dst_processor_id = link.get("destination_processor_id")
+        # Use complete workflow map if provided for more accurate dependencies
+        if workflow_map and "processor_dependencies" in workflow_map:
+            processor_dependencies = workflow_map["processor_dependencies"]
             
-            # Find the actual task names for the connected processors
-            src_task_name = processor_to_task.get(src_processor_id)
-            dst_task_name = processor_to_task.get(dst_processor_id)
-            
-            # Only create dependency if both tasks exist and are different
-            if src_task_name and dst_task_name and src_task_name != dst_task_name:
-                if dst_task_name not in task_dependencies:
-                    task_dependencies[dst_task_name] = []
-                if src_task_name not in task_dependencies[dst_task_name]:
-                    task_dependencies[dst_task_name].append(src_task_name)
+            # Map processor dependencies to task dependencies
+            for task in all_tasks:
+                proc_id = task.get("processor_id", task.get("id"))
+                task_name = task.get("name")
+                
+                if proc_id in processor_dependencies:
+                    # Get all processors this one depends on
+                    dependent_proc_ids = processor_dependencies[proc_id]
+                    
+                    task_deps = []
+                    for dep_proc_id in dependent_proc_ids:
+                        dep_task_name = processor_to_task.get(dep_proc_id)
+                        if dep_task_name and dep_task_name != task_name:
+                            task_deps.append(dep_task_name)
+                    
+                    if task_deps:
+                        task_dependencies[task_name] = task_deps
+        else:
+            # Fallback to cross-chunk links approach
+            for link in cross_chunk_links:
+                src_processor_id = link.get("source_processor_id")
+                dst_processor_id = link.get("destination_processor_id")
+                
+                # Find the actual task names for the connected processors
+                src_task_name = processor_to_task.get(src_processor_id)
+                dst_task_name = processor_to_task.get(dst_processor_id)
+                
+                # Only create dependency if both tasks exist and are different
+                if src_task_name and dst_task_name and src_task_name != dst_task_name:
+                    if dst_task_name not in task_dependencies:
+                        task_dependencies[dst_task_name] = []
+                    if src_task_name not in task_dependencies[dst_task_name]:
+                        task_dependencies[dst_task_name].append(src_task_name)
         
         # Additional validation: remove any circular dependencies
         def has_circular_dependency(task, deps, visited=None):
