@@ -29,16 +29,45 @@ os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 
 # --- LLM & system prompt ---
-# Patch ChatDatabricks to fix additionalProperties in tool schemas
+# Patch ChatDatabricks to fix additionalProperties in tool schemas  
 class FixedChatDatabricks(ChatDatabricks):
-    def _format_tools_for_request(self, tools):
-        formatted_tools = super()._format_tools_for_request(tools)
-        for tool in formatted_tools:
-            if isinstance(tool, dict) and 'function' in tool:
-                func_def = tool['function']
-                if 'parameters' in func_def:
-                    _fix_additional_properties(func_def['parameters'])
-        return formatted_tools
+    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+        # Fix tools in the request data that's about to be sent to the API
+        if 'tools' in kwargs:
+            kwargs = kwargs.copy()  # Don't modify the original
+            tools_copy = []
+            for tool in kwargs['tools']:
+                if isinstance(tool, dict):
+                    tool_copy = self._deep_copy_and_fix_tool(tool)
+                    tools_copy.append(tool_copy)
+                else:
+                    tools_copy.append(tool)
+            kwargs['tools'] = tools_copy
+        
+        return super()._stream(messages, stop=stop, run_manager=run_manager, **kwargs)
+    
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        # Fix tools in the request data for non-streaming generation
+        if 'tools' in kwargs:
+            kwargs = kwargs.copy()  # Don't modify the original
+            tools_copy = []
+            for tool in kwargs['tools']:
+                if isinstance(tool, dict):
+                    tool_copy = self._deep_copy_and_fix_tool(tool)
+                    tools_copy.append(tool_copy)
+                else:
+                    tools_copy.append(tool)
+            kwargs['tools'] = tools_copy
+        
+        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+    
+    def _deep_copy_and_fix_tool(self, tool):
+        """Deep copy a tool dict and fix its schema"""
+        import copy
+        tool_copy = copy.deepcopy(tool)
+        if 'function' in tool_copy and 'parameters' in tool_copy['function']:
+            _fix_additional_properties(tool_copy['function']['parameters'])
+        return tool_copy
 
 llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an expert in Apache NiFi and Databricks migration.
@@ -74,19 +103,21 @@ The chunked approach will:
 
 def _fix_additional_properties(schema: dict) -> None:
     """Recursively remove or set additionalProperties to False in JSON schema."""
-    if isinstance(schema, dict):
-        # Remove additionalProperties or set to False
-        if "additionalProperties" in schema:
-            schema["additionalProperties"] = False
+    if not isinstance(schema, dict):
+        return
         
-        # Recursively fix nested schemas
-        for key, value in schema.items():
-            if isinstance(value, dict):
-                _fix_additional_properties(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        _fix_additional_properties(item)
+    # Set additionalProperties to False (don't remove it completely)
+    if "additionalProperties" in schema:
+        schema["additionalProperties"] = False
+    
+    # Recursively fix nested schemas
+    for key, value in schema.items():
+        if isinstance(value, dict):
+            _fix_additional_properties(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    _fix_additional_properties(item)
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     custom_inputs: Optional[dict[str, Any]]
