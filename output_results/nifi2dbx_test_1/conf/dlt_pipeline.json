@@ -7,7 +7,7 @@
   "libraries": [
     {
       "notebook": {
-        "path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main"
+        "path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main"
       }
     }
   ]

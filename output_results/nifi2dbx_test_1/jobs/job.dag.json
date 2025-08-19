@@ -4,7 +4,7 @@
     {
       "task_key": "step_10",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/10_GetFile.py"
         }
@@ -16,7 +16,7 @@
     {
       "task_key": "step_11",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/11_ListenHTTP.py"
         }
@@ -28,7 +28,7 @@
     {
       "task_key": "step_12",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/12_PutHDFS.py"
         }
@@ -45,7 +45,7 @@
     {
       "task_key": "step_13",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/13_EvaluateJsonPath.py"
         }
@@ -62,7 +62,7 @@
     {
       "task_key": "step_14",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/14_RouteOnAttribute.py"
         }
@@ -79,7 +79,7 @@
     {
       "task_key": "step_15",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/15_PutHDFS_Error.py"
         }
@@ -96,7 +96,7 @@
     {
       "task_key": "step_16",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/16_PutHDFS_Other.py"
         }
@@ -113,7 +113,7 @@
     {
       "task_key": "step_17",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {
           "STEP_MODULE": "src/steps/17_PutHDFS_Critical.py"
         }

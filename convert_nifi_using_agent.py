@@ -29,24 +29,18 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-from utils.xml_preprocess import summarize_nifi_template
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
-
-xml_summary = summarize_nifi_template(
-    "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml",
-    max_nodes=300
-)
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
     "content": (
         "Run orchestrate_nifi_migration with:\n"
         "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_embed_groups.xml\n"
-        "out_dir=/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results\n"
+        "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results\n"
         "project=nifi2dbx_test_1\n"
         "job=job_test_1\n"
-        "notebook_path=/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main\n"
+        "notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main\n"
         "existing_cluster_id=0722-181403-vd3u4c6r\n"
         "deploy=true"
     )

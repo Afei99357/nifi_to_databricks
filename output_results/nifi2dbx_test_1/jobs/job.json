@@ -4,7 +4,7 @@
     {
       "task_key": "job_test_1_task",
       "notebook_task": {
-        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main",
         "base_parameters": {}
       },
       "new_cluster": {

@@ -8,7 +8,7 @@ resources:
       tasks:
         - task_key: main
           notebook_task:
-            notebook_path: "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main"
+            notebook_path: "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks/output_results/nifi2dbx_test_1/main"
           new_cluster:
             spark_version: 16.4.x-scala2.12
             node_type_id: Standard_DS3_v2
