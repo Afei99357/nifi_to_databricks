@@ -14,12 +14,16 @@ SUBMODULES = [xml_tools, migration_tools, job_tools, pattern_tools, dlt_tools, e
 
 # Build TOOLS and optionally export names
 TOOLS = []
+_seen_tools = set()  # Track tool names to avoid duplicates
 __all__ = ["TOOLS"]
 
 for m in SUBMODULES:
     for name, obj in vars(m).items():
         if isinstance(obj, BaseTool):
-            # Re-export tool at package level (optional)
-            globals()[name] = obj
-            __all__.append(name)
-            TOOLS.append(obj)
+            # Only add if we haven't seen this tool name before
+            if obj.name not in _seen_tools:
+                _seen_tools.add(obj.name)
+                # Re-export tool at package level (optional)
+                globals()[name] = obj
+                __all__.append(name)
+                TOOLS.append(obj)
