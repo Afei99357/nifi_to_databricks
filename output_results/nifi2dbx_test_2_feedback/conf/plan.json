@@ -1,0 +1,426 @@
+{
+  "tasks": [
+    {
+      "id": "f2636a48-8130-3527-0000-000000000000",
+      "name": "Start Impala check query - NiFi Loading",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "c464453c-5bd2-379b-0000-000000000000",
+      "name": "Determine time frame (100 x 24 hours)",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "ce39589e-e6b8-3343-0000-000000000000",
+      "name": "SWS FB - Determine time frame",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "a6d643cd-6a39-37d8-0000-000000000000",
+      "name": "Start Impala check query - PMI-View",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "d61e06ea-d241-3f80-0000-000000000000",
+      "name": "Determine time frame (3 x 24 hours)",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "cfffff58-8202-308f-0000-000000000000",
+      "name": "Start Impala check query - PMI IQ",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "47959301-ecb6-3f55-0000-000000000000",
+      "name": "SWS FB - Manual feedback",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "3beb9a94-4a5e-3616-0000-000000000000",
+      "name": "Determine time frame (custom period)",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "27752e84-0109-35ed-0000-000000000000",
+      "name": "Start Impala check query - PMI DQ",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "1f2c1fa9-52be-3265-0000-000000000000",
+      "name": "Determine time frame (10 x 24 hours)",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "69584e65-d5a3-3c11-0000-000000000000",
+      "name": "Determine time frame (2017-12-30 06:30)",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "38620939-ea78-3954-0000-000000000000",
+      "name": "Get cross check request files",
+      "type": "org.apache.nifi.processors.standard.ListFile"
+    },
+    {
+      "id": "9dbd6e4a-d024-3b14-0000-000000000000",
+      "name": "PMI-View logging to table",
+      "type": "org.apache.nifi.processors.standard.GenerateFlowFile"
+    },
+    {
+      "id": "ca20b030-b677-31de-0000-000000000000",
+      "name": "Run Impala check query - NiFi Loading",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "293a0339-81a5-3b4c-0000-000000000000",
+      "name": "Run Impala check query - PMI-View",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "6efcb6cb-f02d-39bb-0000-000000000000",
+      "name": "Run Impala check query - PMI DQ",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "54b735bc-36af-3139-0000-000000000000",
+      "name": "SWS FB - Determine query and filename",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "dc681995-c9da-3e9d-0000-000000000000",
+      "name": "Run Impala check query - PMI DQ",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "26cfd505-ae8b-3593-0000-000000000000",
+      "name": "Clear not_in_stats folder",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "b9396a28-d5b0-3306-0000-000000000000",
+      "name": "Remove cross check request file",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "d59ee20f-ce68-3500-0000-000000000000",
+      "name": "PMI-View logging to table - shell script",
+      "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand"
+    },
+    {
+      "id": "4141b91d-cd68-3e9c-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "e55ecfda-9b26-31db-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "a3f4b9c6-dfc9-362e-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "e07e7747-0fff-3071-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "d41d1141-4727-3750-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "191672e6-b29a-3ff7-0000-000000000000",
+      "name": "Determine time frame of cross check request",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "cf9b547d-92f5-3cc5-0000-000000000000",
+      "name": "Dummy",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "3be3e6ac-4eac-3c59-0000-000000000000",
+      "name": "Log cross check request",
+      "type": "org.apache.nifi.processors.standard.LogMessage"
+    },
+    {
+      "id": "fdb5ef40-29a3-335d-0000-000000000000",
+      "name": "Determine query and filename",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    },
+    {
+      "id": "0978fb2d-40ba-3201-0000-000000000000",
+      "name": "Set flowfile priority",
+      "type": "org.apache.nifi.processors.attributes.UpdateAttribute"
+    }
+  ],
+  "edges": [
+    [
+      "00c0ff74-1db3-3b7b-0000-000000000000",
+      "4051c036-a52d-395b-0000-000000000000"
+    ],
+    [
+      "b9396a28-d5b0-3306-0000-000000000000",
+      "191672e6-b29a-3ff7-0000-000000000000"
+    ],
+    [
+      "6a2193fc-1bb2-3dd9-0000-000000000000",
+      "fdb5ef40-29a3-335d-0000-000000000000"
+    ],
+    [
+      "f2636a48-8130-3527-0000-000000000000",
+      "ca20b030-b677-31de-0000-000000000000"
+    ],
+    [
+      "4051c036-a52d-395b-0000-000000000000",
+      "6705fab8-a34e-3351-0000-000000000000"
+    ],
+    [
+      "c464453c-5bd2-379b-0000-000000000000",
+      "6a2193fc-1bb2-3dd9-0000-000000000000"
+    ],
+    [
+      "244432ad-4f62-393f-0000-000000000000",
+      "6be76809-509d-3c6f-0000-000000000000"
+    ],
+    [
+      "54b735bc-36af-3139-0000-000000000000",
+      "0978fb2d-40ba-3201-0000-000000000000"
+    ],
+    [
+      "ce39589e-e6b8-3343-0000-000000000000",
+      "54b735bc-36af-3139-0000-000000000000"
+    ],
+    [
+      "4051c036-a52d-395b-0000-000000000000",
+      "fd00da84-16bd-308f-0000-000000000000"
+    ],
+    [
+      "26cfd505-ae8b-3593-0000-000000000000",
+      "6a2193fc-1bb2-3dd9-0000-000000000000"
+    ],
+    [
+      "6705fab8-a34e-3351-0000-000000000000",
+      "8086577b-c16d-3a53-0000-000000000000"
+    ],
+    [
+      "6efcb6cb-f02d-39bb-0000-000000000000",
+      "a3f4b9c6-dfc9-362e-0000-000000000000"
+    ],
+    [
+      "fdb5ef40-29a3-335d-0000-000000000000",
+      "0978fb2d-40ba-3201-0000-000000000000"
+    ],
+    [
+      "a6d643cd-6a39-37d8-0000-000000000000",
+      "293a0339-81a5-3b4c-0000-000000000000"
+    ],
+    [
+      "d61e06ea-d241-3f80-0000-000000000000",
+      "26cfd505-ae8b-3593-0000-000000000000"
+    ],
+    [
+      "dc681995-c9da-3e9d-0000-000000000000",
+      "e07e7747-0fff-3071-0000-000000000000"
+    ],
+    [
+      "6705fab8-a34e-3351-0000-000000000000",
+      "a2fadb82-fad5-3941-0000-000000000000"
+    ],
+    [
+      "00c0ff74-1db3-3b7b-0000-000000000000",
+      "58afa421-7abf-37cc-0000-000000000000"
+    ],
+    [
+      "cfffff58-8202-308f-0000-000000000000",
+      "6efcb6cb-f02d-39bb-0000-000000000000"
+    ],
+    [
+      "58afa421-7abf-37cc-0000-000000000000",
+      "6705fab8-a34e-3351-0000-000000000000"
+    ],
+    [
+      "47959301-ecb6-3f55-0000-000000000000",
+      "54b735bc-36af-3139-0000-000000000000"
+    ],
+    [
+      "58afa421-7abf-37cc-0000-000000000000",
+      "fd00da84-16bd-308f-0000-000000000000"
+    ],
+    [
+      "d59ee20f-ce68-3500-0000-000000000000",
+      "cf9b547d-92f5-3cc5-0000-000000000000"
+    ],
+    [
+      "3beb9a94-4a5e-3616-0000-000000000000",
+      "fdb5ef40-29a3-335d-0000-000000000000"
+    ],
+    [
+      "27752e84-0109-35ed-0000-000000000000",
+      "dc681995-c9da-3e9d-0000-000000000000"
+    ],
+    [
+      "1f2c1fa9-52be-3265-0000-000000000000",
+      "26cfd505-ae8b-3593-0000-000000000000"
+    ],
+    [
+      "191672e6-b29a-3ff7-0000-000000000000",
+      "3be3e6ac-4eac-3c59-0000-000000000000"
+    ],
+    [
+      "0978fb2d-40ba-3201-0000-000000000000",
+      "00c0ff74-1db3-3b7b-0000-000000000000"
+    ],
+    [
+      "293a0339-81a5-3b4c-0000-000000000000",
+      "e55ecfda-9b26-31db-0000-000000000000"
+    ],
+    [
+      "69584e65-d5a3-3c11-0000-000000000000",
+      "6a2193fc-1bb2-3dd9-0000-000000000000"
+    ],
+    [
+      "3be3e6ac-4eac-3c59-0000-000000000000",
+      "fdb5ef40-29a3-335d-0000-000000000000"
+    ],
+    [
+      "38620939-ea78-3954-0000-000000000000",
+      "b9396a28-d5b0-3306-0000-000000000000"
+    ],
+    [
+      "9dbd6e4a-d024-3b14-0000-000000000000",
+      "d59ee20f-ce68-3500-0000-000000000000"
+    ],
+    [
+      "bbde53a7-967c-3b89-0000-000000000000",
+      "00c0ff74-1db3-3b7b-0000-000000000000"
+    ],
+    [
+      "26cfd505-ae8b-3593-0000-000000000000",
+      "d41d1141-4727-3750-0000-000000000000"
+    ],
+    [
+      "ca20b030-b677-31de-0000-000000000000",
+      "4141b91d-cd68-3e9c-0000-000000000000"
+    ],
+    [
+      "b0ed174d-763b-341e-0000-000000000000",
+      "bbde53a7-967c-3b89-0000-000000000000"
+    ],
+    [
+      "8e90ac48-a57b-3599-0000-000000000000",
+      "0f6ba0ba-3fde-38a5-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "e7ae702c-3ef8-337f-0000-000000000000"
+    ],
+    [
+      "58733d1e-7da0-3469-0000-000000000000",
+      "b0ed174d-763b-341e-0000-000000000000"
+    ],
+    [
+      "9e574967-10e3-3af0-0000-000000000000",
+      "244432ad-4f62-393f-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "dc075b22-c96e-3dd6-0000-000000000000"
+    ],
+    [
+      "ce009049-666f-39c2-0000-000000000000",
+      "bbde53a7-967c-3b89-0000-000000000000"
+    ],
+    [
+      "dc075b22-c96e-3dd6-0000-000000000000",
+      "90d36089-fde9-36c9-0000-000000000000"
+    ],
+    [
+      "fd00da84-16bd-308f-0000-000000000000",
+      "ad33bfa5-6aa4-317d-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "9263a1b6-f200-3f5e-0000-000000000000"
+    ],
+    [
+      "b0ed174d-763b-341e-0000-000000000000",
+      "9e574967-10e3-3af0-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "ae90fb8a-1a25-31fa-0000-000000000000"
+    ],
+    [
+      "58dbff24-a47c-30de-0000-000000000000",
+      "58733d1e-7da0-3469-0000-000000000000"
+    ],
+    [
+      "e7ae702c-3ef8-337f-0000-000000000000",
+      "0f6ba0ba-3fde-38a5-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "8e90ac48-a57b-3599-0000-000000000000"
+    ],
+    [
+      "377c81ac-e43d-32a7-0000-000000000000",
+      "c3c66220-b878-3307-0000-000000000000"
+    ],
+    [
+      "9263a1b6-f200-3f5e-0000-000000000000",
+      "ff19be10-cfdc-3fd9-0000-000000000000"
+    ],
+    [
+      "fb9c6072-317d-31de-0000-000000000000",
+      "0f6ba0ba-3fde-38a5-0000-000000000000"
+    ],
+    [
+      "c3c66220-b878-3307-0000-000000000000",
+      "b0ed174d-763b-341e-0000-000000000000"
+    ],
+    [
+      "13f37849-7201-38c2-0000-000000000000",
+      "58dbff24-a47c-30de-0000-000000000000"
+    ],
+    [
+      "ad33bfa5-6aa4-317d-0000-000000000000",
+      "ed570e48-44ca-3cf2-0000-000000000000"
+    ],
+    [
+      "ff19be10-cfdc-3fd9-0000-000000000000",
+      "c3c66220-b878-3307-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "13f37849-7201-38c2-0000-000000000000"
+    ],
+    [
+      "ed570e48-44ca-3cf2-0000-000000000000",
+      "fb9c6072-317d-31de-0000-000000000000"
+    ],
+    [
+      "90d36089-fde9-36c9-0000-000000000000",
+      "7134dd4d-0b9e-3c89-0000-000000000000"
+    ],
+    [
+      "56d1e04a-ea6f-3ec0-0000-000000000000",
+      "c3c66220-b878-3307-0000-000000000000"
+    ],
+    [
+      "7134dd4d-0b9e-3c89-0000-000000000000",
+      "377c81ac-e43d-32a7-0000-000000000000"
+    ],
+    [
+      "0f6ba0ba-3fde-38a5-0000-000000000000",
+      "ce009049-666f-39c2-0000-000000000000"
+    ],
+    [
+      "ae90fb8a-1a25-31fa-0000-000000000000",
+      "56d1e04a-ea6f-3ec0-0000-000000000000"
+    ]
+  ],
+  "note": "Use this order to compose Jobs tasks or DLT dependencies"
+}

@@ -1,0 +1,180 @@
+{
+  "processors": {
+    "GetFile": {
+      "category": "file_operations",
+      "databricks_equivalent": "Auto Loader",
+      "description": "Continuously monitors and ingests files from a directory",
+      "code_template": "spark.readStream.format('cloudFiles').option('cloudFiles.format', '{format}').load('{path}')",
+      "best_practices": [
+        "Use cloudFiles.schemaEvolutionMode for schema changes",
+        "Set cloudFiles.maxFilesPerTrigger to control batch size",
+        "Enable cloudFiles.includeExistingFiles for initial load"
+      ],
+      "common_issues": [
+        "File permissions in cloud storage",
+        "Schema inference for heterogeneous files"
+      ]
+    },
+    "PutHDFS": {
+      "category": "file_operations",
+      "databricks_equivalent": "Delta Lake Write",
+      "description": "Writes data to HDFS/cloud storage with ACID guarantees",
+      "code_template": "df.write.format('delta').mode('{mode}').save('{path}')",
+      "best_practices": [
+        "Use partitioning for query optimization",
+        "Enable auto-optimization for small files",
+        "Implement Z-ordering for frequently queried columns"
+      ]
+    },
+    "ListFile": {
+      "category": "file_operations",
+      "databricks_equivalent": "Auto Loader with file listing",
+      "description": "Lists files in a directory for processing",
+      "code_template": "spark.readStream.format('cloudFiles').option('cloudFiles.format', 'binaryFile').load('{path}')"
+    },
+    "FetchFile": {
+      "category": "file_operations",
+      "databricks_equivalent": "spark.read with specific file",
+      "description": "Fetches a specific file based on attributes",
+      "code_template": "spark.read.format('{format}').load('{specific_file_path}')"
+    },
+    "ExecuteSQL": {
+      "category": "database",
+      "databricks_equivalent": "Spark SQL",
+      "description": "Executes SQL queries against databases",
+      "code_template": "spark.sql('{query}')",
+      "variations": {
+        "jdbc_read": "spark.read.jdbc(url, table, properties)",
+        "streaming": "spark.readStream.format('jdbc').load()"
+      }
+    },
+    "PutSQL": {
+      "category": "database",
+      "databricks_equivalent": "DataFrame write to database",
+      "description": "Inserts/updates records in database",
+      "code_template": "df.write.jdbc(url, table, mode='{mode}', properties=props)"
+    },
+    "QueryDatabaseTable": {
+      "category": "database",
+      "databricks_equivalent": "JDBC source reader",
+      "description": "Incrementally fetches data from database tables",
+      "code_template": "spark.read.format('jdbc').option('dbtable', '(SELECT * FROM {table} WHERE {condition}) as t').load()"
+    },
+    "ConsumeKafka": {
+      "category": "streaming",
+      "databricks_equivalent": "Structured Streaming Kafka source",
+      "description": "Consumes messages from Kafka topics",
+      "code_template": "spark.readStream.format('kafka').option('kafka.bootstrap.servers', '{servers}').option('subscribe', '{topic}').load()",
+      "best_practices": [
+        "Use watermarking for late data handling",
+        "Implement checkpointing for exactly-once semantics",
+        "Consider maxOffsetsPerTrigger for rate limiting"
+      ]
+    },
+    "PublishKafka": {
+      "category": "streaming",
+      "databricks_equivalent": "Kafka sink",
+      "description": "Publishes messages to Kafka topics",
+      "code_template": "df.writeStream.format('kafka').option('kafka.bootstrap.servers', '{servers}').option('topic', '{topic}').start()"
+    },
+    "ConvertRecord": {
+      "category": "transformation",
+      "databricks_equivalent": "DataFrame format conversion",
+      "description": "Converts between data formats (CSV, JSON, Avro, Parquet)",
+      "code_template": "df.write.format('{target_format}').save('{path}')",
+      "variations": {
+        "csv_to_parquet": "spark.read.csv(path).write.parquet(output)",
+        "json_to_delta": "spark.read.json(path).write.format('delta').save(output)"
+      }
+    },
+    "JoltTransformJSON": {
+      "category": "transformation",
+      "databricks_equivalent": "DataFrame transformations with select/withColumn",
+      "description": "Transforms JSON structure using Jolt specifications",
+      "code_template": "df.select(from_json(col('value'), schema).alias('data')).select('data.*')"
+    },
+    "SplitText": {
+      "category": "transformation",
+      "databricks_equivalent": "explode() with split()",
+      "description": "Splits text content into multiple records",
+      "code_template": "df.select(explode(split(col('text'), '{delimiter}')).alias('line'))"
+    },
+    "MergeContent": {
+      "category": "transformation",
+      "databricks_equivalent": "coalesce() or repartition()",
+      "description": "Merges multiple FlowFiles into larger files",
+      "code_template": "df.coalesce(1).write.format('delta').save('{path}')"
+    },
+    "RouteOnAttribute": {
+      "category": "routing",
+      "databricks_equivalent": "DataFrame filter() operations",
+      "description": "Routes data based on attribute values",
+      "code_template": "df_route1 = df.filter(col('{attribute}') == '{value}')",
+      "example": {
+        "multiple_routes": [
+          "error_df = df.filter(col('status') == 'ERROR')",
+          "success_df = df.filter(col('status') == 'SUCCESS')",
+          "other_df = df.filter(~col('status').isin(['ERROR', 'SUCCESS']))"
+        ]
+      }
+    },
+    "UpdateAttribute": {
+      "category": "transformation",
+      "databricks_equivalent": "withColumn() operations",
+      "description": "Adds or updates FlowFile attributes",
+      "code_template": "df.withColumn('{attribute}', lit('{value}'))"
+    },
+    "InvokeHTTP": {
+      "category": "http",
+      "databricks_equivalent": "UDF with requests library",
+      "description": "Makes HTTP requests to external services",
+      "code_template": "@udf(returnType=StringType())\ndef call_api(param):\n    response = requests.get(f'https://api.example.com/{param}')\n    return response.text\n\ndf.withColumn('api_response', call_api(col('id')))"
+    },
+    "ListenHTTP": {
+      "category": "http",
+      "databricks_equivalent": "REST API endpoint or Event Hub",
+      "description": "Receives data via HTTP POST requests",
+      "alternative": "Use Azure Event Hubs or AWS Kinesis for HTTP ingestion"
+    },
+    "ExtractText": {
+      "category": "content_extraction",
+      "databricks_equivalent": "regexp_extract() or substring()",
+      "description": "Extracts text from content using regex",
+      "code_template": "df.withColumn('extracted', regexp_extract(col('content'), '{pattern}', 1))"
+    },
+    "EvaluateJsonPath": {
+      "category": "transformation",
+      "databricks_equivalent": "get_json_object() or from_json()",
+      "description": "Extracts values from JSON using JSONPath",
+      "code_template": "df.withColumn('value', get_json_object(col('json'), '$.{path}'))"
+    }
+  },
+  "complex_patterns": {
+    "CDC_MySQL_to_Delta": {
+      "description": "Change Data Capture from MySQL to Delta Lake",
+      "nifi_processors": ["CaptureChangeMySQL", "ConvertRecord", "PutDatabaseRecord"],
+      "databricks_solution": "Use Debezium + Kafka + Structured Streaming for CDC",
+      "implementation": "spark.readStream.format('kafka').option('subscribe', 'mysql.database.table').load()"
+    },
+    "File_ETL_Pipeline": {
+      "description": "Complete ETL pipeline for file processing",
+      "nifi_processors": ["GetFile", "ValidateRecord", "ConvertRecord", "PutHDFS"],
+      "databricks_solution": "Auto Loader → Validation → Transformation → Delta Lake",
+      "implementation": "readStream → filter(validation) → transform → writeStream"
+    },
+    "API_Integration": {
+      "description": "REST API data integration pattern",
+      "nifi_processors": ["InvokeHTTP", "EvaluateJsonPath", "PutDatabaseRecord"],
+      "databricks_solution": "Scheduled job with requests → DataFrame → Delta",
+      "implementation": "Databricks Job → Python requests → spark.createDataFrame → Delta write"
+    },
+    "Stream_Enrichment": {
+      "description": "Real-time stream enrichment with reference data",
+      "nifi_processors": ["ConsumeKafka", "LookupRecord", "PublishKafka"],
+      "databricks_solution": "Stream-static join pattern",
+      "implementation": "stream_df.join(broadcast(lookup_df), 'key')"
+    }
+  },
+  "version": "1.0.0",
+  "last_updated": "2025-08-14"
+}

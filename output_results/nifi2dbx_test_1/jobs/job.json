@@ -1,0 +1,28 @@
+{
+  "name": "job_test_1",
+  "tasks": [
+    {
+      "task_key": "job_test_1_task",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/output_results/nifi2dbx_test_1/main",
+        "base_parameters": {}
+      },
+      "new_cluster": {
+        "spark_version": "16.4.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "num_workers": 0,
+        "autotermination_minutes": 60,
+        "spark_conf": {
+          "spark.sql.adaptive.enabled": "true",
+          "spark.sql.adaptive.coalescePartitions.enabled": "true",
+          "spark.databricks.cluster.profile": "singleNode",
+          "spark.master": "local[*]"
+        }
+      },
+      "timeout_seconds": 3600,
+      "max_retries": 2,
+      "retry_on_timeout": true
+    }
+  ],
+  "max_concurrent_runs": 1
+}
