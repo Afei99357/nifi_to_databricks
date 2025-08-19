@@ -361,6 +361,7 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
         # Collect all tasks from chunks, eliminating duplicates by processor ID
         all_tasks = []
         seen_task_ids = set()  # Track unique task/processor IDs
+        seen_task_names = set()  # Track unique task names to avoid Databricks key conflicts
         chunk_task_mapping = {}  # Maps chunk_id to list of task names
         
         for chunk_result in chunk_results:
@@ -373,13 +374,27 @@ def reconstruct_full_workflow(chunk_results: List[Dict[str, Any]], cross_chunk_l
                 task_id = task.get("processor_id", task.get("id", task.get("name", "unknown")))
                 task_name = task.get("name", task.get("id", "unknown"))
                 
-                if task_id not in seen_task_ids:
-                    seen_task_ids.add(task_id)
-                    all_tasks.append(task)
+                # If task already processed by another chunk, skip it
+                if task_id in seen_task_ids:
                     chunk_task_mapping[chunk_id].append(task_name)
-                else:
-                    # Task already exists, just add to chunk mapping for dependency tracking
-                    chunk_task_mapping[chunk_id].append(task_name)
+                    continue
+                
+                # Ensure task name is unique for Databricks job keys
+                original_name = task_name
+                counter = 1
+                while task_name in seen_task_names:
+                    task_name = f"{original_name}_{counter}"
+                    counter += 1
+                
+                # Update task with unique name if changed
+                if task_name != original_name:
+                    task = task.copy()  # Don't modify original
+                    task["name"] = task_name
+                
+                seen_task_ids.add(task_id)
+                seen_task_names.add(task_name)
+                all_tasks.append(task)
+                chunk_task_mapping[chunk_id].append(task_name)
         
         # Build task dependencies based on cross-chunk links
         task_dependencies = {}
