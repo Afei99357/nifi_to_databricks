@@ -153,8 +153,14 @@ REQUIREMENTS:
 
 CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
 
+JSON ESCAPE RULES:
+- Use \\n for newlines (double backslash + n)
+- Use \\" for quotes (backslash + quote)  
+- Use \\\\ for literal backslashes (four backslashes)
+- DO NOT use single backslashes like \\t or \\r
+
 EXAMPLE FORMAT:
-{{"0": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)", "1": "# GetFile → Auto Loader\\nfrom pyspark.sql.functions import *\\n\\ndf = spark.readStream.format('cloudFiles').load('/path')"}}
+{{"0": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)", "1": "# GetFile → Auto Loader\\nfrom pyspark.sql.functions import *\\n\\ndf = spark.readStream.format('cloudFiles').load('/path/')"}}
 
 GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
