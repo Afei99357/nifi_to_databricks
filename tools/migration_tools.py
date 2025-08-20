@@ -85,7 +85,7 @@ PROCESSORS TO CONVERT:
 {json.dumps(processor_specs, indent=2)}
 
 REQUIREMENTS:
-1. Return a JSON object with processor index as key and generated code as value
+1. Return ONLY a valid JSON object with processor index as key and generated code as value
 2. Use proper Databricks patterns (Delta Lake, DataFrame operations, Auto Loader, Structured Streaming)
 3. Handle the specific properties for each processor appropriately
 4. Include comments explaining the logic
@@ -95,31 +95,84 @@ REQUIREMENTS:
 8. For ConsumeKafka: use Structured Streaming
 9. For JSON processors: use PySpark JSON functions
 
-RESPONSE FORMAT:
+CRITICAL JSON FORMATTING RULES:
+- Return ONLY the JSON object, no markdown, no explanations
+- Escape all backslashes as double backslashes (\\\\)
+- Escape all newlines as \\\\n 
+- Escape all quotes as \\\\"
+- Do not include any text outside the JSON object
+
+RESPONSE FORMAT (EXACT):
 {{
-  "0": "# ProcessorType1 → Databricks equivalent\\nfrom pyspark.sql.functions import *\\n\\n# Your PySpark code here",
-  "1": "# ProcessorType2 → Databricks equivalent\\nfrom pyspark.sql.functions import *\\n\\n# Your PySpark code here",
-  ...
+  "0": "# ProcessorType1 → Databricks equivalent\\\\nfrom pyspark.sql.functions import *\\\\n\\\\n# Your PySpark code here",
+  "1": "# ProcessorType2 → Databricks equivalent\\\\nfrom pyspark.sql.functions import *\\\\n\\\\n# Your PySpark code here"
 }}
 
-Generate the code for all {len(processor_specs)} processors:"""
+Generate the code for all {len(processor_specs)} processors as a valid JSON object:"""
 
         # Call LLM once for all processors
         response = llm.invoke(batch_prompt)
         print(f"✅ [LLM BATCH] Received response, parsing generated code...")
+        
+        # Log the first 200 chars of response for debugging
+        response_preview = response.content[:200].replace('\n', '\\n')
+        print(f"🔍 [LLM BATCH] Response preview: {response_preview}...")
         
         try:
             generated_code_map = json.loads(response.content.strip())
             print(f"🎯 [LLM BATCH] Successfully parsed {len(generated_code_map)} code snippets")
         except json.JSONDecodeError as e:
             print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
-            # Try to extract JSON from response if it's wrapped in markdown
+            # Try multiple approaches to extract JSON from response
             content = response.content.strip()
+            generated_code_map = None
+            
+            # Try 1: Extract from markdown code blocks
             if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
+                try:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                    generated_code_map = json.loads(content)
+                    print(f"🔧 [LLM BATCH] Recovered JSON from markdown block")
+                except:
+                    pass
             elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            generated_code_map = json.loads(content)
+                try:
+                    content = content.split("```")[1].split("```")[0].strip()
+                    generated_code_map = json.loads(content)
+                    print(f"🔧 [LLM BATCH] Recovered JSON from code block")
+                except:
+                    pass
+            
+            # Try 2: Look for JSON object boundaries
+            if generated_code_map is None:
+                try:
+                    # Find first { and last }
+                    start = content.find('{')
+                    end = content.rfind('}') + 1
+                    if start >= 0 and end > start:
+                        json_content = content[start:end]
+                        # Fix common escape issues
+                        json_content = json_content.replace('\\n', '\\\\n').replace('\\"', '\\\\"')
+                        generated_code_map = json.loads(json_content)
+                        print(f"🔧 [LLM BATCH] Recovered JSON by boundary detection")
+                except:
+                    pass
+            
+            # Try 3: Replace problematic characters and retry
+            if generated_code_map is None:
+                try:
+                    # Common fixes for LLM-generated JSON
+                    fixed_content = content.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r')
+                    fixed_content = fixed_content.replace('\\', '\\\\')  # Escape backslashes
+                    generated_code_map = json.loads(fixed_content)
+                    print(f"🔧 [LLM BATCH] Recovered JSON after escape fixes")
+                except:
+                    pass
+            
+            # If all parsing attempts fail, raise the original error
+            if generated_code_map is None:
+                print(f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation")
+                raise e
         
         # Build tasks from the batch response
         generated_tasks = []
