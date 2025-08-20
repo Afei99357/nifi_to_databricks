@@ -6,6 +6,7 @@ An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based 
 
 This project addresses the challenge of migrating legacy NiFi workflows to modern Databricks infrastructure. Instead of manual conversion, it uses:
 
+- **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and recommends optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming)
 - **AI-Powered Agent**: LangGraph-based conversational agent using Databricks Foundation Models
 - **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
 - **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
@@ -18,17 +19,40 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 ## 🏗️ Architecture
 
 ```
+                     🧠 Intelligent Architecture Decision
+                                    │
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│   NiFi XML     │───▶│   AI Agent       │───▶│   Databricks        │
-│   Templates    │    │   + Tools        │    │   Jobs & Assets     │
+│   NiFi XML     │───▶│ Architecture     │───▶│ Optimal Migration   │
+│   Templates    │    │ Analyzer         │    │ Strategy Selection  │
 └─────────────────┘    └──────────────────┘    └─────────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │ Pattern Registry │
-                    │  (Unity Catalog) │
-                    └──────────────────┘
+                              │                           │
+                              ▼                           ▼
+                    ┌──────────────────┐    ┌──────────────────────────┐
+                    │   AI Agent       │───▶│ Migration Execution      │
+                    │   + Tools        │    │ (Jobs/DLT/Streaming)     │
+                    └──────────────────┘    └──────────────────────────┘
+                              │                           │
+                              ▼                           ▼
+                    ┌──────────────────┐         ┌──────────────────┐
+                    │ Pattern Registry │         │   Databricks     │
+                    │  (Unity Catalog) │         │ Assets & Deploy  │
+                    └──────────────────┘         └──────────────────┘
 ```
+
+### 🧠 Intelligent Architecture Decision System
+
+The tool now automatically analyzes NiFi workflows and recommends the optimal Databricks architecture:
+
+**Architecture Options:**
+- **Databricks Jobs**: Batch orchestration for file-based ETL workflows
+- **DLT Pipeline**: Streaming ETL with transformations, JSON processing, and routing
+- **Structured Streaming**: Custom streaming logic for real-time data processing
+
+**Decision Factors:**
+- **Source Types**: Batch (GetFile) vs Streaming (ListenHTTP, ConsumeKafka)
+- **Transformations**: JSON processing, routing logic, complex transformations
+- **Sinks**: File outputs vs external systems
+- **Complexity**: Workflow size and interconnection complexity
 
 ### Core Components
 
@@ -226,8 +250,39 @@ The script creates:
 
 ### Basic Usage
 
+#### 🧠 **Intelligent Migration (Recommended)**
+Automatically analyzes your NiFi workflow and chooses the best Databricks architecture:
+
 ```python
-# In Databricks notebook - using the AI Agent (Recommended)
+# In Databricks notebook - using the AI Agent with Intelligent Decision
+from agents import AGENT
+from mlflow.types.responses import ResponsesAgentRequest
+
+req = ResponsesAgentRequest(input=[{
+    "role": "user", 
+    "content": """
+    Run orchestrate_intelligent_nifi_migration with:
+    xml_path=/Volumes/catalog/schema/nifi_files/my_workflow.xml
+    out_dir=/Workspace/Users/me@company.com/migrations/output
+    project=my_nifi_project
+    deploy=false
+    """
+}])
+
+response = AGENT.predict(req)
+```
+
+**What it does:**
+1. **Analyzes** your NiFi XML for processor types and complexity
+2. **Recommends** optimal architecture (Jobs vs DLT vs Streaming)
+3. **Executes** the appropriate migration strategy automatically
+4. **Saves** architecture analysis in `conf/architecture_analysis.json`
+
+#### **Manual Migration (Legacy)**
+For when you want to specify the approach manually:
+
+```python
+# In Databricks notebook - using the AI Agent (Manual Choice)
 from agents import AGENT
 from mlflow.types.responses import ResponsesAgentRequest
 
@@ -372,6 +427,64 @@ output_results/project_name/
 - **`job.chunked.json`**: Primary job configuration with proper task dependencies
 - **`complete_workflow_map.json`**: Full workflow analysis including funnel detection
 - **`reconstructed_workflow.json`**: Final connectivity map for debugging
+- **`architecture_analysis.json`**: Intelligent architecture decision analysis and reasoning
+
+## 🧠 Architecture Decision Logic
+
+The intelligent migration system applies these decision rules:
+
+### **Decision Tree**
+
+```
+NiFi XML Analysis
+       │
+       ▼
+┌─────────────────┐
+│ Detect Sources  │ ──→ Batch only (GetFile, ListFile) ──→ Databricks Jobs
+│ & Processors    │
+└─────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│ Streaming       │ ──→ + Complex transforms ──→ DLT Pipeline
+│ Detected?       │ ──→ + Simple processing ──→ Structured Streaming
+└─────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│ Mixed Sources   │ ──→ Batch + Streaming ──→ DLT Pipeline (unified)
+│ (Batch+Stream)  │
+└─────────────────┘
+       │
+       ▼
+┌─────────────────┐
+│ Heavy Trans-    │ ──→ Routing + JSON + Transforms ──→ DLT Pipeline
+│ formations?     │
+└─────────────────┘
+```
+
+### **Architecture Recommendations**
+
+| **NiFi Pattern** | **Detected Features** | **Recommended Architecture** | **Reasoning** |
+|------------------|----------------------|------------------------------|---------------|
+| **File ETL** | GetFile + PutHDFS, no streaming | **Databricks Jobs** | Simple batch orchestration sufficient |
+| **Log Processing** | ListenHTTP + EvaluateJsonPath + RouteOnAttribute | **DLT Pipeline** | Streaming + JSON processing + routing logic |
+| **Kafka Pipeline** | ConsumeKafka + transforms + PublishKafka | **DLT Pipeline** | Streaming ETL with transformations |
+| **Simple Streaming** | ListenHTTP + basic transforms | **Structured Streaming** | Custom streaming logic preferred |
+| **Mixed Workload** | GetFile + ListenHTTP + routing | **DLT Pipeline** | Unified batch/streaming processing |
+| **Complex ETL** | Multiple processors + routing + JSON | **DLT Pipeline** | Declarative transformations optimal |
+
+### **Feature Detection**
+
+The system analyzes your NiFi XML to detect:
+
+- **🔄 Streaming Sources**: ListenHTTP, ConsumeKafka, ListenTCP, ConsumeJMS, etc.
+- **📁 Batch Sources**: GetFile, ListFile, QueryDatabaseTable, etc.  
+- **🔧 Transformations**: EvaluateJsonPath, UpdateAttribute, ConvertRecord, etc.
+- **🔀 Routing Logic**: RouteOnAttribute, RouteOnContent, conditional processing
+- **📊 JSON Processing**: EvaluateJsonPath, SplitJson, JSON transformations
+- **🌐 External Sinks**: PublishKafka, InvokeHTTP, external system outputs
+- **📈 Complexity Factors**: Workflow size, multiple outputs, nested process groups
 
 ## 🔍 Common Migration Patterns
 

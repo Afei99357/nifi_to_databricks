@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system provides both programmatic APIs and an agent-based interface for automating the migration process.
+This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming). The system provides both programmatic APIs and an agent-based interface for automating the migration process.
 
 ### Core Components
 
@@ -13,11 +13,11 @@ This is a NiFi to Databricks migration tool that uses LangGraph agents to conver
   - `convert_nifi_using_agent.py`: Databricks notebook interface for agent usage
 
 - **Migration Tools**: Modular tools for different aspects of NiFi conversion
-  - `tools/xml_tools.py`: NiFi XML parsing and template extraction
-  - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks
+  - `tools/xml_tools.py`: NiFi XML parsing, template extraction, and intelligent architecture analysis
+  - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks with intelligent migration orchestration
   - `tools/chunking_tools.py`: Large NiFi XML file chunking and reconstruction utilities
   - `tools/job_tools.py`: Databricks Jobs API integration and job creation
-  - `tools/pattern_tools.py`: Pattern matching and code template management
+  - `tools/pattern_tools.py`: Pattern matching and code template management with LLM-powered code generation
   - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
   - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
@@ -49,6 +49,31 @@ This is a NiFi to Databricks migration tool that uses LangGraph agents to conver
 
 ### Testing the Migration Agent
 
+#### Intelligent Migration (Recommended)
+The agent automatically analyzes your NiFi workflow and chooses the optimal Databricks architecture:
+
+```python
+# In Databricks notebook - Intelligent Architecture Decision
+from agents import AGENT
+from mlflow.types.responses import ResponsesAgentRequest
+
+req = ResponsesAgentRequest(input=[{
+    "role": "user", 
+    "content": "Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
+}])
+
+resp = AGENT.predict(req)
+```
+
+This will:
+1. Analyze the NiFi XML for processor types and patterns
+2. Recommend optimal architecture (Databricks Jobs, DLT Pipeline, or Structured Streaming)
+3. Execute the appropriate migration strategy
+4. Save architecture analysis results
+
+#### Manual Migration (Legacy)
+For when you want to specify the approach manually:
+
 ```python
 # In Databricks notebook
 from agents import AGENT
@@ -71,6 +96,38 @@ resp = AGENT.predict(req)
 
 ### Running Migrations Programmatically
 
+#### Intelligent Migration (Recommended)
+```python
+from tools.migration_tools import orchestrate_intelligent_nifi_migration
+
+# Intelligent migration - automatically chooses best architecture
+result = orchestrate_intelligent_nifi_migration(
+    xml_path="nifi_pipeline_file/example.xml",
+    out_dir="output_results/intelligent_project",
+    project="my_intelligent_project",
+    notebook_path="/Workspace/Users/me@company.com/project/main",
+    deploy=False  # Set to True to deploy automatically
+)
+```
+
+#### Architecture Analysis Tools
+```python
+from tools.xml_tools import analyze_nifi_architecture_requirements, recommend_databricks_architecture
+
+# Analyze architecture requirements
+with open("nifi_pipeline_file/example.xml", 'r') as f:
+    xml_content = f.read()
+
+# Get feature analysis
+analysis = analyze_nifi_architecture_requirements.func(xml_content)
+print("Architecture Analysis:", analysis)
+
+# Get architecture recommendation  
+recommendation = recommend_databricks_architecture.func(xml_content)
+print("Recommendation:", recommendation)
+```
+
+#### Manual Migration (Legacy)
 ```python
 from tools.migration_tools import convert_flow, orchestrate_chunked_nifi_migration
 

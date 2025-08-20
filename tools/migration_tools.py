@@ -753,3 +753,183 @@ def orchestrate_chunked_nifi_migration(
         
     except Exception as e:
         return json.dumps({"error": f"Chunked migration failed: {str(e)}"})
+
+
+@tool
+def orchestrate_intelligent_nifi_migration(
+    xml_path: str,
+    out_dir: str,
+    project: str,
+    job: str = "",
+    notebook_path: str = "",
+    existing_cluster_id: str = "",
+    deploy: bool = False,
+    max_processors_per_chunk: int = 25
+) -> str:
+    """
+    Intelligently migrate NiFi workflow by analyzing XML and automatically choosing the best Databricks architecture.
+    
+    Uses AI-powered decision system to determine whether to generate:
+    - Databricks Job (batch orchestration)
+    - DLT Pipeline (streaming ETL)
+    - Structured Streaming (custom streaming logic)
+    
+    Args:
+        xml_path: Path to NiFi XML template file
+        out_dir: Output directory for generated files
+        project: Project name for generated assets
+        job: Job name (optional, defaults to project name)
+        notebook_path: Databricks notebook path for job execution
+        existing_cluster_id: Existing cluster to use (optional)
+        deploy: Whether to deploy the generated job/pipeline
+        max_processors_per_chunk: Max processors per chunk for large workflows
+    
+    Returns:
+        JSON with migration results, architecture decision, and deployment details
+    """
+    try:
+        from .xml_tools import analyze_nifi_architecture_requirements, recommend_databricks_architecture
+        
+        # Read XML content
+        if xml_path.startswith('/'):
+            xml_content = _read_text(xml_path)
+        else:
+            xml_content = xml_path  # Assume it's actual XML content
+            
+        # Analyze architecture requirements
+        logger.info(f"Analyzing NiFi architecture requirements for intelligent migration...")
+        analysis_result = analyze_nifi_architecture_requirements.func(xml_content)
+        analysis = json.loads(analysis_result)
+        
+        # Get architecture recommendation
+        recommendation_result = recommend_databricks_architecture.func(xml_content)
+        recommendation = json.loads(recommendation_result)
+        
+        logger.info(f"Architecture analysis complete:")
+        logger.info(f"  - Total processors: {analysis['processor_analysis']['total_count']}")
+        logger.info(f"  - Complexity: {analysis['complexity_level']}")
+        logger.info(f"  - Key features: {analysis['feature_flags']}")
+        logger.info(f"  - Recommendation: {recommendation['recommendation']} (confidence: {recommendation['confidence']})")
+        
+        # Execute migration based on recommendation
+        architecture_type = recommendation["recommendation"]
+        migration_result = {}
+        
+        if architecture_type == "databricks_job":
+            logger.info("Executing Databricks Job migration...")
+            
+            # Use chunked migration for better scalability
+            migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+                xml_path=xml_path,
+                out_dir=out_dir,
+                project=project,
+                job=job or f"{project}_job",
+                notebook_path=notebook_path,
+                existing_cluster_id=existing_cluster_id,
+                deploy=deploy,
+                max_processors_per_chunk=max_processors_per_chunk
+            ))
+            
+        elif architecture_type == "dlt_pipeline":
+            logger.info("Executing DLT Pipeline migration...")
+            
+            # Use DLT-specific migration approach
+            try:
+                from .dlt_tools import generate_dlt_pipeline_config
+                
+                dlt_result = json.loads(generate_dlt_pipeline_config.func(
+                    processors_json=json.dumps(analysis["processor_analysis"]),
+                    output_catalog="main",
+                    output_schema=f"{project}_dlt"
+                ))
+                
+                migration_result = {
+                    "migration_type": "dlt_pipeline",
+                    "dlt_config": dlt_result,
+                    "project_path": out_dir,
+                    "pipeline_name": f"{project}_dlt_pipeline"
+                }
+                
+            except Exception as dlt_error:
+                logger.warning(f"DLT generation failed: {dlt_error}")
+                logger.info("Falling back to Databricks Job migration...")
+                
+                # Fallback to job migration
+                migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+                    xml_path=xml_path,
+                    out_dir=out_dir,
+                    project=project,
+                    job=job or f"{project}_job",
+                    notebook_path=notebook_path,
+                    existing_cluster_id=existing_cluster_id,
+                    deploy=deploy,
+                    max_processors_per_chunk=max_processors_per_chunk
+                ))
+                
+        elif architecture_type == "structured_streaming":
+            logger.info("Executing Structured Streaming migration...")
+            
+            # For now, use job migration with streaming-optimized settings
+            # TODO: Implement dedicated structured streaming generation
+            migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+                xml_path=xml_path,
+                out_dir=out_dir,
+                project=project,
+                job=job or f"{project}_streaming_job",
+                notebook_path=notebook_path,
+                existing_cluster_id=existing_cluster_id,
+                deploy=deploy,
+                max_processors_per_chunk=max_processors_per_chunk
+            ))
+            
+            # Add streaming-specific notes
+            migration_result["streaming_notes"] = [
+                "Generated as Databricks Job with streaming-capable tasks",
+                "Consider converting to dedicated Structured Streaming application",
+                "Review generated code for streaming optimizations"
+            ]
+        
+        # Combine results
+        result = {
+            "intelligent_migration": True,
+            "architecture_analysis": analysis,
+            "architecture_recommendation": recommendation,
+            "migration_execution": migration_result,
+            "success": True
+        }
+        
+        # Save analysis results to output directory
+        try:
+            analysis_file = Path(out_dir) / _safe_name(project) / "conf" / "architecture_analysis.json"
+            analysis_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            combined_analysis = {
+                "analysis": analysis,
+                "recommendation": recommendation,
+                "execution_summary": {
+                    "architecture_chosen": architecture_type,
+                    "confidence": recommendation["confidence"],
+                    "reasoning": recommendation["reasoning"]
+                }
+            }
+            
+            _write_text(str(analysis_file), json.dumps(combined_analysis, indent=2))
+            result["analysis_file"] = str(analysis_file)
+            
+        except Exception as save_error:
+            logger.warning(f"Could not save analysis file: {save_error}")
+        
+        logger.info(f"Intelligent migration completed successfully!")
+        logger.info(f"Architecture chosen: {architecture_type}")
+        logger.info(f"Confidence: {recommendation['confidence']}")
+        
+        return json.dumps(result, indent=2)
+        
+    except Exception as e:
+        logger.error(f"Intelligent migration failed: {str(e)}")
+        return json.dumps({
+            "intelligent_migration": True,
+            "success": False,
+            "error": str(e),
+            "fallback_suggestion": "Try using orchestrate_chunked_nifi_migration directly"
+        })
