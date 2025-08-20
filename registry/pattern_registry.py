@@ -365,6 +365,73 @@ class PatternRegistryUC:
             """
         )
 
+    def _upsert_processors_bulk_uc(self, patterns: Dict[str, dict]) -> None:
+        from datetime import datetime
+        import os
+
+        current_time = datetime.utcnow()
+        current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
+
+        rows = []
+        for processor, pattern in patterns.items():
+            rows.append((
+                processor,
+                pattern.get("category", "llm_generated"),
+                pattern.get("databricks_equivalent", "Unknown"),
+                pattern.get("description", f"Pattern for {processor}"),
+                pattern.get("code_template", ""),
+                pattern.get("best_practices", []),
+                pattern.get("generated_from_properties", {}),
+                pattern.get("generation_source", "manual"),
+                json.dumps(pattern, ensure_ascii=False),
+                1,
+                current_time,
+                current_time,
+                current_time,
+                current_user
+            ))
+
+        schema = [
+            "processor", "category", "databricks_equivalent", "description",
+            "code_template", "best_practices", "generated_from_properties",
+            "generation_source", "pattern_json", "usage_count", "last_used",
+            "created_at", "updated_at", "created_by"
+        ]
+
+        sdf = self.spark.createDataFrame(rows, schema)
+        sdf.createOrReplaceTempView("_nifi_proc_upsert_bulk")
+
+        self.spark.sql(
+            f"""
+            MERGE INTO {self.processors_table} t
+            USING _nifi_proc_upsert_bulk s
+              ON t.processor = s.processor
+            WHEN MATCHED THEN UPDATE SET
+              t.category = s.category,
+              t.databricks_equivalent = s.databricks_equivalent,
+              t.description = s.description,
+              t.code_template = s.code_template,
+              t.best_practices = s.best_practices,
+              t.generated_from_properties = s.generated_from_properties,
+              t.generation_source = s.generation_source,
+              t.pattern_json = s.pattern_json,
+              t.usage_count = t.usage_count + 1,
+              t.last_used = s.last_used,
+              t.updated_at = s.updated_at
+            WHEN NOT MATCHED THEN INSERT (
+              processor, category, databricks_equivalent, description,
+              code_template, best_practices, generated_from_properties,
+              generation_source, pattern_json, usage_count, last_used,
+              created_at, updated_at, created_by
+            ) VALUES (
+              s.processor, s.category, s.databricks_equivalent, s.description,
+              s.code_template, s.best_practices, s.generated_from_properties,
+              s.generation_source, s.pattern_json, s.usage_count, s.last_used,
+              s.created_at, s.updated_at, s.created_by
+            )
+            """
+        )
+
     # ---------- Public API ----------
     def add_pattern(self, processor: str, pattern: dict) -> None:
         if "processors" not in self.patterns:
@@ -390,6 +457,19 @@ class PatternRegistryUC:
     def add_complex_pattern(self, name: str, pattern: dict) -> None:
         self.complex[name] = pattern
         self._upsert_complex_uc(name, pattern)
+
+    def add_patterns_bulk(self, patterns: Dict[str, dict]) -> None:
+        if not patterns:
+            return
+        # Update in-memory cache
+        for processor, pattern in patterns.items():
+            if "processors" not in self.patterns:
+                self.patterns["processors"] = {}
+            existing = self.patterns["processors"].get(processor, {})
+            merged = {**existing, **pattern}
+            self.patterns["processors"][processor] = merged
+        # Persist in one MERGE
+        self._upsert_processors_bulk_uc(patterns)
 
     # ---------- Operational helpers ----------
     def refresh_from_uc(self) -> None:

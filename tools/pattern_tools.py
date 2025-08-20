@@ -13,6 +13,7 @@ from registry import PatternRegistryUC as _UCRegistry
 
 # Lazy-initialized registry instance
 _registry = None
+_bulk_buffer: Dict[str, dict] = {}
 
 def _get_registry():
     """Get the pattern registry, initializing it lazily."""
@@ -27,6 +28,31 @@ def _get_registry():
             else:
                 raise
     return _registry
+
+def _buffer_generated_pattern(processor_class: str, pattern: dict) -> None:
+    global _bulk_buffer
+    _bulk_buffer[processor_class] = pattern
+
+def flush_patterns_to_registry() -> None:
+    """Flush buffered patterns to UC in a single MERGE when possible."""
+    global _bulk_buffer
+    if not _bulk_buffer:
+        return
+    try:
+        registry = _get_registry()
+        if hasattr(registry, 'add_patterns_bulk'):
+            registry.add_patterns_bulk(_bulk_buffer)
+            print(f"💾 [PATTERN BULK SAVED] {len(_bulk_buffer)} patterns → UC table")
+        else:
+            # Fallback: save individually
+            for proc, pat in _bulk_buffer.items():
+                if hasattr(registry, 'add_pattern'):
+                    registry.add_pattern(proc, pat)
+            print(f"💾 [PATTERN SAVED] {len(_bulk_buffer)} patterns (individual)")
+    except Exception as e:
+        print(f"❌ [DEBUG] Bulk save error: {e}")
+    finally:
+        _bulk_buffer = {}
 
 class _FallbackRegistry:
     """Fallback registry for when Unity Catalog is not available."""
@@ -448,9 +474,9 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
                     "generation_source": "llm_hybrid_approach"
                 }
                 
-                # Save to UC table
-                registry.add_pattern(processor_class, pattern)
-                print(f"💾 [PATTERN SAVED] {processor_class} → UC table")
+                # Buffer to save in bulk later
+                _buffer_generated_pattern(processor_class, pattern)
+                print(f"📝 [PATTERN BUFFERED] {processor_class}")
             else:
                 print(f"⚠️  [DEBUG] No SparkSession - UC tables cannot be created")
         else:
