@@ -128,8 +128,18 @@ RESPONSE FORMAT (EXACT):
 
 Generate the code for all {len(processor_specs)} processors as a valid JSON object:"""
 
-        # Call LLM once for all processors
-        response = llm.invoke(batch_prompt)
+        # Call LLM once for all processors (request strict JSON and low randomness)
+        try:
+            response = llm.invoke(
+                batch_prompt,
+                extra_body={
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0
+                },
+            )
+        except Exception:
+            # Fallback to standard invocation if endpoint doesn't support response_format
+            response = llm.invoke(batch_prompt)
         print(f"✅ [LLM BATCH] Received response, parsing generated code...")
         
         # Log the first 200 chars of response for debugging
