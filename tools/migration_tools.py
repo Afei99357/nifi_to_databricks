@@ -53,7 +53,7 @@ from tools.chunking_tools import (
 
 # Default max processors per chunk (batch size) via env var
 try:
-    MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "25"))
+    MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
 except Exception:
     MAX_PROCS_PER_CHUNK_DEFAULT = 25
 
@@ -831,7 +831,7 @@ def orchestrate_chunked_nifi_migration(
         project: Project name
         job: Job name
         notebook_path: Target notebook path in Databricks workspace
-        max_processors_per_chunk: Maximum processors per chunk (default: 25)
+        max_processors_per_chunk: Maximum processors per chunk (default: 20)
         existing_cluster_id: Existing cluster ID to use
         deploy: Whether to deploy the job to Databricks
         
@@ -966,6 +966,30 @@ def orchestrate_chunked_nifi_migration(
             if buf:
                 tmp_file = out / "conf/pending_patterns.final.json"
                 dump_buffer_to_file(str(tmp_file))
+                # Also write a raw snapshot and update meta in UC
+                try:
+                    from registry import PatternRegistryUC
+                    import hashlib, os
+                    reg = PatternRegistryUC()
+                    # Create snapshot payload
+                    raw_json = json.dumps(buf, ensure_ascii=False)
+                    nifi_xml_hash = hashlib.md5(xml_text.encode("utf-8")).hexdigest() if xml_text else None
+                    snapshot = {
+                        "snapshot_id": f"{project}_pending_{int(os.path.getmtime(str(tmp_file)))}",
+                        "snapshot_type": "pattern_buffer",
+                        "migration_id": project,
+                        "processor_count": 0,
+                        "patterns_count": len(buf),
+                        "nifi_xml_hash": nifi_xml_hash,
+                        "raw_json": raw_json,
+                        "file_size_bytes": len(raw_json.encode("utf-8")),
+                        "compression": "none",
+                        "created_by": os.environ.get("USER_EMAIL") or os.environ.get("USER")
+                    }
+                    reg.add_raw_snapshot(snapshot)
+                    reg.upsert_meta("last_run", json.dumps({"project": project}), category="run", description="Last migration run")
+                except Exception:
+                    pass
             flush_patterns_to_registry()
         except Exception:
             pass

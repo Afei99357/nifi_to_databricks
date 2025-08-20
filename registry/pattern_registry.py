@@ -471,6 +471,59 @@ class PatternRegistryUC:
         # Persist in one MERGE
         self._upsert_processors_bulk_uc(patterns)
 
+    def add_raw_snapshot(self, snapshot: Dict[str, Any]) -> None:
+        """Insert a raw snapshot record into the snapshots table."""
+        if not self.raw_snapshots_table:
+            return
+        # Order columns explicitly to match table
+        row = [
+            snapshot.get("snapshot_id"),
+            snapshot.get("snapshot_type", "pattern_buffer"),
+            snapshot.get("migration_id"),
+            int(snapshot.get("processor_count", 0)),
+            int(snapshot.get("patterns_count", 0)),
+            snapshot.get("nifi_xml_hash"),
+            snapshot.get("raw_json"),
+            int(snapshot.get("file_size_bytes", 0)),
+            snapshot.get("compression", "none"),
+            snapshot.get("created_at", datetime.utcnow()),
+            snapshot.get("created_by"),
+            snapshot.get("tags", {}),
+        ]
+        schema = [
+            "snapshot_id", "snapshot_type", "migration_id", "processor_count",
+            "patterns_count", "nifi_xml_hash", "raw_json", "file_size_bytes",
+            "compression", "created_at", "created_by", "tags"
+        ]
+        sdf = self.spark.createDataFrame([tuple(row)], schema)
+        sdf.write.mode("append").format("delta").saveAsTable(self.raw_snapshots_table)
+
+    def upsert_meta(self, key: str, value: str, category: str = "system", description: str = "") -> None:
+        """Upsert a metadata key/value into the meta table."""
+        if not self.meta_table:
+            return
+        now = datetime.utcnow()
+        data = [(key, value, category, description, now, now)]
+        sdf = self.spark.createDataFrame(
+            data,
+            ["key", "value", "category", "description", "created_at", "updated_at"],
+        )
+        sdf.createOrReplaceTempView("_nifi_meta_upsert")
+        self.spark.sql(
+            f"""
+            MERGE INTO {self.meta_table} t
+            USING _nifi_meta_upsert s
+              ON t.key = s.key
+            WHEN MATCHED THEN UPDATE SET
+              t.value = s.value,
+              t.category = s.category,
+              t.description = s.description,
+              t.updated_at = s.updated_at
+            WHEN NOT MATCHED THEN INSERT (key, value, category, description, created_at, updated_at)
+              VALUES (s.key, s.value, s.category, s.description, s.created_at, s.updated_at)
+            """
+        )
+
     # ---------- Operational helpers ----------
     def refresh_from_uc(self) -> None:
         self.patterns = self._load_processors_uc()
