@@ -475,8 +475,8 @@ class PatternRegistryUC:
         """Insert a raw snapshot record into the snapshots table."""
         if not self.raw_snapshots_table:
             return
-        # Order columns explicitly to match table
-        row = [
+        # Prepare one-row DataFrame and insert via SQL for UC compatibility
+        row = (
             snapshot.get("snapshot_id"),
             snapshot.get("snapshot_type", "pattern_buffer"),
             snapshot.get("migration_id"),
@@ -489,14 +489,24 @@ class PatternRegistryUC:
             snapshot.get("created_at", datetime.utcnow()),
             snapshot.get("created_by"),
             snapshot.get("tags", {}),
-        ]
-        schema = [
-            "snapshot_id", "snapshot_type", "migration_id", "processor_count",
-            "patterns_count", "nifi_xml_hash", "raw_json", "file_size_bytes",
-            "compression", "created_at", "created_by", "tags"
-        ]
-        sdf = self.spark.createDataFrame([tuple(row)], schema)
-        sdf.write.mode("append").format("delta").saveAsTable(self.raw_snapshots_table)
+        )
+        sdf = self.spark.createDataFrame([row],
+            [
+                "snapshot_id", "snapshot_type", "migration_id", "processor_count",
+                "patterns_count", "nifi_xml_hash", "raw_json", "file_size_bytes",
+                "compression", "created_at", "created_by", "tags"
+            ]
+        )
+        sdf.createOrReplaceTempView("_nifi_snapshot_upsert")
+        self.spark.sql(
+            f"""
+            INSERT INTO {self.raw_snapshots_table}
+            SELECT snapshot_id, snapshot_type, migration_id, processor_count,
+                   patterns_count, nifi_xml_hash, raw_json, file_size_bytes,
+                   compression, created_at, created_by, tags
+            FROM _nifi_snapshot_upsert
+            """
+        )
 
     def upsert_meta(self, key: str, value: str, category: str = "system", description: str = "") -> None:
         """Upsert a metadata key/value into the meta table."""
