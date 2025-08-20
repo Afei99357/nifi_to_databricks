@@ -202,7 +202,6 @@ class PatternRegistryUC:
                   created_by STRING COMMENT 'User who created this snapshot',
                   tags MAP<STRING, STRING> COMMENT 'Key-value tags for categorization'
                 ) USING DELTA
-                PARTITIONED BY (DATE(created_at))
                 TBLPROPERTIES (
                   'delta.enableChangeDataFeed' = 'true',
                   'delta.deletedFileRetentionDuration' = 'interval 30 days',
