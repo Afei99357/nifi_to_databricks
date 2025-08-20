@@ -89,22 +89,13 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
                 "last_seen_properties": properties or {},
             }
         else:
-            pattern = {
-                "databricks_equivalent": "Unknown",
+            # Pattern not found - don't create stub, let LLM generation handle it
+            return {
+                "equivalent": "Unknown",
                 "description": "",
                 "best_practices": [],
-                "code_template": (
-                    "# TODO: Implement conversion for {processor_class}\n"
-                    "# Properties seen: {properties}\n"
-                    "df = spark.read.format('delta').load('/path/to/input')\n"
-                    "# ... your logic here ...\n"
-                    "df.write.format('delta').mode('append').save('/path/to/output')"
-                ),
-                "last_seen_properties": properties or {},
+                "code": None,  # This will trigger LLM generation
             }
-
-        # Persist new stub into UC (and the in-memory cache)
-        registry.add_pattern(processor_class, pattern)
 
     # Render code with injected placeholders when present
     code = None
