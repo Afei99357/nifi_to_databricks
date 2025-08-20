@@ -464,18 +464,9 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
         # Use the global registry to ensure tables are created once
         registry = _get_registry()
         
-        # Debug: Show what type of registry we got
-        print(f"🔍 [DEBUG] Registry type: {type(registry).__name__}")
-        
         # Only save if we have a UC registry (not fallback)
         if hasattr(registry, 'add_pattern') and hasattr(registry, 'spark'):
             if registry.spark:
-                try:
-                    app_name = registry.spark.sparkContext.appName
-                    print(f"🔍 [DEBUG] SparkSession available: {app_name}")
-                except Exception:
-                    print(f"🔍 [DEBUG] SparkSession available (Spark Connect mode)")
-                
                 # Create a pattern from the generated code
                 pattern = {
                     "category": "llm_generated",
@@ -491,16 +482,15 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
                     "generation_source": "llm_hybrid_approach"
                 }
                 
-                # Buffer to save in bulk later
+                # Buffer to save in bulk later (no per-processor prints)
                 _buffer_generated_pattern(processor_class, pattern)
-                print(f"📝 [PATTERN BUFFERED] {processor_class}")
             else:
-                print(f"⚠️  [DEBUG] No SparkSession - UC tables cannot be created")
+                pass
         else:
-            print(f"⚠️  [DEBUG] Using fallback registry - no UC tables created")
+            pass
         
     except Exception as e:
-        print(f"❌ [DEBUG] Pattern save error: {e}")
+        # Silent fail - reduce noise
         # Silent fail - saving is optional
         pass
 

@@ -274,40 +274,84 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
         
     except Exception as e:
         logger.error(f"Batch code generation failed: {e}")
-        # Fallback to individual generation if batch fails
-        generated_tasks = []
-        for idx, processor in enumerate(processors):
-            proc_type = processor.get("type", "Unknown")
-            proc_name = processor.get("name", f"processor_{idx}")
-            props = processor.get("properties", {})
-            
-            # Use pattern-based generation or simple fallback
-            try:
-                code = generate_databricks_code.func(
-                    processor_type=proc_type,
-                    properties=json.dumps(props),
-                )
-            except Exception:
-                code = f"""# {proc_type} → Fallback Template
+        # Sub-batch fallback to reduce per-processor LLM calls
+        try:
+            import os
+            sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
+        except Exception:
+            sub_batch_size = 10
+
+        if len(processors) > sub_batch_size:
+            generated_tasks: List[Dict[str, Any]] = []
+            for start in range(0, len(processors), sub_batch_size):
+                subset = processors[start:start + sub_batch_size]
+                subset_id = f"{chunk_id}__sb{start // sub_batch_size}"
+                try:
+                    # Reuse batch pathway for each sub-batch
+                    sub_tasks = _generate_batch_processor_code(subset, subset_id, project)
+                    generated_tasks.extend(sub_tasks)
+                except Exception:
+                    # If sub-batch still fails, fall back to per-processor for this subset only
+                    for idx, processor in enumerate(subset):
+                        proc_type = processor.get("type", "Unknown")
+                        proc_name = processor.get("name", f"processor_{start+idx}")
+                        props = processor.get("properties", {})
+                        try:
+                            code = generate_databricks_code.func(
+                                processor_type=proc_type,
+                                properties=json.dumps(props),
+                            )
+                        except Exception:
+                            code = f"""# {proc_type} → Fallback Template
 # Properties: {json.dumps(props, indent=2)}
 
 df = spark.read.format('delta').load('/path/to/input')
 # TODO: Implement {proc_type} logic
 df.write.format('delta').mode('append').save('/path/to/output')
 """
-            
-            task = {
-                "id": processor.get("id", f"{chunk_id}_task_{idx}"),
-                "name": _safe_name(proc_name),
-                "type": proc_type,
-                "code": code,
-                "properties": props,
-                "chunk_id": chunk_id,
-                "processor_index": idx
-            }
-            generated_tasks.append(task)
-        
-        return generated_tasks
+                        task = {
+                            "id": processor.get("id", f"{subset_id}_task_{idx}"),
+                            "name": _safe_name(proc_name),
+                            "type": proc_type,
+                            "code": code,
+                            "properties": props,
+                            "chunk_id": subset_id,
+                            "processor_index": start + idx
+                        }
+                        generated_tasks.append(task)
+            return generated_tasks
+        else:
+            # Final fallback: individual generation for small sets
+            generated_tasks = []
+            for idx, processor in enumerate(processors):
+                proc_type = processor.get("type", "Unknown")
+                proc_name = processor.get("name", f"processor_{idx}")
+                props = processor.get("properties", {})
+                
+                try:
+                    code = generate_databricks_code.func(
+                        processor_type=proc_type,
+                        properties=json.dumps(props),
+                    )
+                except Exception:
+                    code = f"""# {proc_type} → Fallback Template
+# Properties: {json.dumps(props, indent=2)}
+
+df = spark.read.format('delta').load('/path/to/input')
+# TODO: Implement {proc_type} logic
+df.write.format('delta').mode('append').save('/path/to/output')
+"""
+                task = {
+                    "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                    "name": _safe_name(proc_name),
+                    "type": proc_type,
+                    "code": code,
+                    "properties": props,
+                    "chunk_id": chunk_id,
+                    "processor_index": idx
+                }
+                generated_tasks.append(task)
+            return generated_tasks
 
 def _default_notebook_path(project: str) -> str:
     user = os.environ.get("WORKSPACE_USER") or os.environ.get("USER_EMAIL") or "Shared"
