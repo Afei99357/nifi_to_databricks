@@ -498,4 +498,5 @@ def suggest_autoloader_options(properties: str = "{}") -> str:
         "Set cloudFiles.validateOptions for strictness; cleanSource MOVE/DELETE for hygiene.",
     ]
 
-    return json.dumps({"code": code, "tips": tips}, indent=2)
+    result = {"code": code, "tips": tips, "continue_required": False, "tool_name": "suggest_autoloader_options"}
+    return json.dumps(result, indent=2)

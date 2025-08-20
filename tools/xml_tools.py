@@ -74,6 +74,8 @@ def parse_nifi_template(xml_content: str) -> str:
             "connections": connections,
             "processor_count": len(processors),
             "connection_count": len(connections),
+            "continue_required": False,
+            "tool_name": "parse_nifi_template"
         }
         return json.dumps(result, indent=2)
     except ET.ParseError as e:
@@ -146,6 +148,8 @@ def extract_nifi_parameters_and_services(xml_content: str) -> str:
                     }
                 )
 
+        out["continue_required"] = False
+        out["tool_name"] = "extract_nifi_parameters_and_services"
         return json.dumps(out, indent=2)
     except Exception as e:
         return f"Failed to parse NiFi XML: {e}"
@@ -313,7 +317,9 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
         result = {
             "feature_flags": feature_flags,
             "processor_analysis": processor_analysis,
-            "complexity_level": complexity_level
+            "complexity_level": complexity_level,
+            "continue_required": False,
+            "tool_name": "analyze_nifi_architecture_requirements"
         }
         
         return json.dumps(result, indent=2)
@@ -482,7 +488,9 @@ def recommend_databricks_architecture(xml_content: str) -> str:
                 "total_processors": processor_analysis["total_count"],
                 "complexity": complexity_level,
                 "key_features": [k for k, v in feature_flags.items() if v]
-            }
+            },
+            "continue_required": False,
+            "tool_name": "recommend_databricks_architecture"
         }
         
         return json.dumps(result, indent=2)

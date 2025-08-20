@@ -341,6 +341,8 @@ def convert_flow(
         "output_dir": str(out),
         "steps_written": [str(p) for p in step_files],
         "notebook_path": notebook_path,
+        "continue_required": False,
+        "tool_name": "convert_flow"
     }
     return json.dumps(summary, indent=2)
 
@@ -403,9 +405,11 @@ def orchestrate_nifi_migration(
         "output_dir": str(project_out),
         "steps_written": summary["steps_written"],
         "job_config_path": str(dag_path),
+        "continue_required": False,
+        "tool_name": "orchestrate_nifi_migration"
     }
 
-    # --- 4) Optionally create the job (don’t run)
+    # --- 4) Optionally create the job (don't run)
     if deploy:
         deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
         try:
@@ -494,7 +498,9 @@ def process_nifi_chunk(
             "external_connections": external_connections,
             "processor_count": len(processors),
             "task_count": len(generated_tasks),
-            "project": project
+            "project": project,
+            "continue_required": False,
+            "tool_name": "process_nifi_chunk"
         }
         
         return json.dumps(result, indent=2)
@@ -746,7 +752,9 @@ def orchestrate_chunked_nifi_migration(
             "cross_chunk_links_count": len(cross_chunk_links),
             "final_job_config_path": str(out / "jobs/job.chunked.json"),
             "notebook_path": notebook_path,
-            "deploy_result": deploy_result
+            "deploy_result": deploy_result,
+            "continue_required": False,
+            "tool_name": "orchestrate_chunked_nifi_migration"
         }
         
         return json.dumps(result, indent=2)
@@ -754,6 +762,206 @@ def orchestrate_chunked_nifi_migration(
     except Exception as e:
         return json.dumps({"error": f"Chunked migration failed: {str(e)}"})
 
+
+def _analyze_nifi_requirements_internal(xml_content: str) -> dict:
+    """Internal helper to analyze NiFi architecture requirements without tool call."""
+    try:
+        root = ET.fromstring(xml_content)
+        
+        # Processor classification (copied from xml_tools.py)
+        streaming_sources = {
+            "ListenHTTP", "ConsumeKafka", "ListenTCP", "ListenUDP", "ListenSyslog",
+            "ConsumeJMS", "ConsumeMQTT", "ConsumeAMQP", "GetTwitter", "ListenRELP"
+        }
+        
+        batch_sources = {
+            "GetFile", "ListFile", "FetchFile", "GetFTP", "GetSFTP", 
+            "FetchS3Object", "ListS3", "GetHDFS", "QueryDatabaseTable"
+        }
+        
+        transform_processors = {
+            "EvaluateJsonPath", "UpdateAttribute", "ReplaceText", "TransformXml",
+            "ConvertRecord", "SplitText", "SplitJson", "MergeContent", "CompressContent",
+            "EncryptContent", "HashContent", "ValidateRecord", "LookupRecord"
+        }
+        
+        routing_processors = {
+            "RouteOnAttribute", "RouteOnContent", "RouteText", "RouteJSON",
+            "DistributeLoad", "ControlRate", "PriorizeAttribute"
+        }
+        
+        json_processors = {
+            "EvaluateJsonPath", "SplitJson", "ConvertJSONToSQL", "JoltTransformJSON"
+        }
+        
+        external_sinks = {
+            "PublishKafka", "InvokeHTTP", "PutEmail", "PutSFTP", "PutFTP",
+            "PublishJMS", "PublishMQTT", "PutElasticsearch", "PutSlack"
+        }
+        
+        feature_flags = {
+            "has_streaming": False,
+            "has_batch": False,
+            "has_transforms": False,
+            "has_external_sinks": False,
+            "has_routing": False,
+            "has_json_processing": False
+        }
+        
+        processor_analysis = {
+            "sources": [],
+            "transforms": [],
+            "sinks": [],
+            "total_count": 0
+        }
+        
+        # Analyze all processors
+        for processor in root.findall(".//processors"):
+            proc_type = (processor.findtext("type") or "").strip()
+            proc_name = (processor.findtext("name") or "Unknown").strip()
+            
+            class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
+            processor_analysis["total_count"] += 1
+            
+            if class_name in streaming_sources:
+                feature_flags["has_streaming"] = True
+                processor_analysis["sources"].append({
+                    "name": proc_name, "type": class_name, "category": "streaming_source"
+                })
+            elif class_name in batch_sources:
+                feature_flags["has_batch"] = True
+                processor_analysis["sources"].append({
+                    "name": proc_name, "type": class_name, "category": "batch_source"
+                })
+            elif class_name in transform_processors:
+                feature_flags["has_transforms"] = True
+                processor_analysis["transforms"].append({
+                    "name": proc_name, "type": class_name, "category": "transform"
+                })
+            elif class_name in routing_processors:
+                feature_flags["has_routing"] = True
+                processor_analysis["transforms"].append({
+                    "name": proc_name, "type": class_name, "category": "routing"
+                })
+            elif class_name in external_sinks:
+                feature_flags["has_external_sinks"] = True
+                processor_analysis["sinks"].append({
+                    "name": proc_name, "type": class_name, "category": "external_sink"
+                })
+            
+            if class_name in json_processors:
+                feature_flags["has_json_processing"] = True
+        
+        # Determine complexity level
+        complexity_factors = [
+            feature_flags["has_streaming"] and feature_flags["has_batch"],
+            feature_flags["has_routing"],
+            feature_flags["has_json_processing"],
+            len(processor_analysis["sinks"]) > 2,
+            processor_analysis["total_count"] > 10
+        ]
+        
+        complexity_score = sum(complexity_factors)
+        if complexity_score >= 3:
+            complexity_level = "complex"
+        elif complexity_score >= 1:
+            complexity_level = "moderate"
+        else:
+            complexity_level = "simple"
+        
+        return {
+            "feature_flags": feature_flags,
+            "processor_analysis": processor_analysis,
+            "complexity_level": complexity_level
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing NiFi requirements: {e}")
+        return {"error": str(e)}
+
+def _recommend_architecture_internal(analysis: dict) -> dict:
+    """Internal helper to recommend Databricks architecture without tool call."""
+    try:
+        feature_flags = analysis["feature_flags"]
+        processor_analysis = analysis["processor_analysis"] 
+        complexity_level = analysis["complexity_level"]
+        
+        reasoning = []
+        confidence = "high"
+        alternative_options = []
+        
+        # Decision Rule 1: Pure batch processing
+        if (feature_flags["has_batch"] and 
+            not feature_flags["has_streaming"] and 
+            not feature_flags["has_routing"]):
+            
+            recommendation = "databricks_job"
+            reasoning.append("Only batch file sources detected (GetFile, ListFile)")
+            reasoning.append("No streaming sources or complex routing logic")
+            reasoning.append("Simple batch orchestration is sufficient")
+            
+            architecture_details = {
+                "job_type": "scheduled_batch",
+                "source_pattern": "Auto Loader for file ingestion",
+                "sink_pattern": "Delta Lake writes",
+                "scheduling": "Triggered or scheduled execution"
+            }
+            
+        # Decision Rule 2: Streaming sources present
+        elif feature_flags["has_streaming"]:
+            
+            if (feature_flags["has_transforms"] or 
+                feature_flags["has_routing"] or 
+                feature_flags["has_json_processing"]):
+                
+                recommendation = "dlt_pipeline"
+                reasoning.append("Streaming sources detected (ListenHTTP, ConsumeKafka, etc.)")
+                reasoning.append("Complex transformations and/or routing logic present")
+                reasoning.append("DLT provides best streaming ETL capabilities")
+                
+                architecture_details = {
+                    "pipeline_type": "streaming_etl",
+                    "source_pattern": "Structured Streaming sources",
+                    "transform_pattern": "Declarative SQL/PySpark transformations",
+                    "sink_pattern": "Delta Live Tables with data quality"
+                }
+            else:
+                recommendation = "structured_streaming"
+                reasoning.append("Streaming sources present but minimal transformations")
+                reasoning.append("Custom Structured Streaming may be more appropriate")
+                
+                architecture_details = {
+                    "pipeline_type": "custom_streaming",
+                    "source_pattern": "readStream() operations",
+                    "sink_pattern": "writeStream() to Delta tables"
+                }
+        
+        # Default fallback
+        else:
+            recommendation = "databricks_job"
+            reasoning.append("Standard ETL pattern detected")
+            reasoning.append("Databricks Job provides good orchestration capabilities")
+            confidence = "medium"
+            
+            architecture_details = {
+                "job_type": "multi_task_etl",
+                "orchestration": "Task dependencies based on processor connections"
+            }
+        
+        return {
+            "recommendation": recommendation,
+            "confidence": confidence, 
+            "reasoning": reasoning,
+            "architecture_details": architecture_details,
+            "alternative_options": alternative_options,
+            "analysis_summary": {
+                "total_processors": processor_analysis["total_count"],
+                "complexity": complexity_level,
+                "key_features": [k for k, v in feature_flags.items() if v]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error recommending architecture: {e}")
+        return {"error": str(e)}
 
 @tool
 def orchestrate_intelligent_nifi_migration(
@@ -788,22 +996,20 @@ def orchestrate_intelligent_nifi_migration(
         JSON with migration results, architecture decision, and deployment details
     """
     try:
-        from .xml_tools import analyze_nifi_architecture_requirements, recommend_databricks_architecture
-        
         # Read XML content
         if xml_path.startswith('/'):
             xml_content = _read_text(xml_path)
         else:
             xml_content = xml_path  # Assume it's actual XML content
             
-        # Analyze architecture requirements
+        # Analyze architecture requirements (internal, no tool call)
         logger.info(f"Analyzing NiFi architecture requirements for intelligent migration...")
-        analysis_result = analyze_nifi_architecture_requirements.func(xml_content)
-        analysis = json.loads(analysis_result)
+        analysis = _analyze_nifi_requirements_internal(xml_content)
+        if "error" in analysis:
+            return json.dumps({"error": f"Analysis failed: {analysis['error']}"})
         
-        # Get architecture recommendation
-        recommendation_result = recommend_databricks_architecture.func(xml_content)
-        recommendation = json.loads(recommendation_result)
+        # Get architecture recommendation (internal, no tool call)
+        recommendation = _recommend_architecture_internal(analysis)
         
         logger.info(f"Architecture analysis complete:")
         logger.info(f"  - Total processors: {analysis['processor_analysis']['total_count']}")
@@ -811,15 +1017,15 @@ def orchestrate_intelligent_nifi_migration(
         logger.info(f"  - Key features: {analysis['feature_flags']}")
         logger.info(f"  - Recommendation: {recommendation['recommendation']} (confidence: {recommendation['confidence']})")
         
-        # Execute migration based on recommendation
+        # Execute migration based on recommendation (use internal function to avoid tool chaining)
         architecture_type = recommendation["recommendation"]
         migration_result = {}
         
         if architecture_type == "databricks_job":
             logger.info("Executing Databricks Job migration...")
             
-            # Use chunked migration for better scalability
-            migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+            # Call chunked migration using .func() but this is the final migration call
+            migration_result_str = orchestrate_chunked_nifi_migration.func(
                 xml_path=xml_path,
                 out_dir=out_dir,
                 project=project,
@@ -828,20 +1034,23 @@ def orchestrate_intelligent_nifi_migration(
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
                 max_processors_per_chunk=max_processors_per_chunk
-            ))
+            )
+            migration_result = json.loads(migration_result_str)
             
         elif architecture_type == "dlt_pipeline":
             logger.info("Executing DLT Pipeline migration...")
             
             # Use DLT-specific migration approach
             try:
-                from .dlt_tools import generate_dlt_pipeline_config
-                
-                dlt_result = json.loads(generate_dlt_pipeline_config.func(
-                    processors_json=json.dumps(analysis["processor_analysis"]),
-                    output_catalog="main",
-                    output_schema=f"{project}_dlt"
-                ))
+                # Create a simple DLT config without calling external tools
+                dlt_result = {
+                    "name": f"{project}_dlt_pipeline",
+                    "storage": f"/pipelines/{project}_dlt_pipeline",
+                    "target": f"main.{project}_dlt",
+                    "development": True,
+                    "continuous": True,
+                    "libraries": [{"notebook": {"path": notebook_path or f"/Workspace/Users/me@company.com/{project}/main"}}],
+                }
                 
                 migration_result = {
                     "migration_type": "dlt_pipeline",
@@ -854,8 +1063,8 @@ def orchestrate_intelligent_nifi_migration(
                 logger.warning(f"DLT generation failed: {dlt_error}")
                 logger.info("Falling back to Databricks Job migration...")
                 
-                # Fallback to job migration
-                migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+                # Fallback to job migration using .func()
+                migration_result_str = orchestrate_chunked_nifi_migration.func(
                     xml_path=xml_path,
                     out_dir=out_dir,
                     project=project,
@@ -864,14 +1073,14 @@ def orchestrate_intelligent_nifi_migration(
                     existing_cluster_id=existing_cluster_id,
                     deploy=deploy,
                     max_processors_per_chunk=max_processors_per_chunk
-                ))
+                )
+                migration_result = json.loads(migration_result_str)
                 
         elif architecture_type == "structured_streaming":
             logger.info("Executing Structured Streaming migration...")
             
-            # For now, use job migration with streaming-optimized settings
-            # TODO: Implement dedicated structured streaming generation
-            migration_result = json.loads(orchestrate_chunked_nifi_migration.func(
+            # Use job migration with streaming-optimized settings using .func()
+            migration_result_str = orchestrate_chunked_nifi_migration.func(
                 xml_path=xml_path,
                 out_dir=out_dir,
                 project=project,
@@ -880,7 +1089,8 @@ def orchestrate_intelligent_nifi_migration(
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
                 max_processors_per_chunk=max_processors_per_chunk
-            ))
+            )
+            migration_result = json.loads(migration_result_str)
             
             # Add streaming-specific notes
             migration_result["streaming_notes"] = [
@@ -895,7 +1105,9 @@ def orchestrate_intelligent_nifi_migration(
             "architecture_analysis": analysis,
             "architecture_recommendation": recommendation,
             "migration_execution": migration_result,
-            "success": True
+            "success": True,
+            "continue_required": False,
+            "tool_name": "orchestrate_intelligent_nifi_migration"
         }
         
         # Save analysis results to output directory

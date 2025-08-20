@@ -72,6 +72,14 @@ class FixedChatDatabricks(ChatDatabricks):
 llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an expert in Apache NiFi and Databricks migration.
 
+CRITICAL INSTRUCTION: When a user requests a migration, use the appropriate orchestration tool and STOP:
+- For intelligent migration: Use ONLY `orchestrate_intelligent_nifi_migration` - this handles everything internally
+- For manual large files: Use ONLY `orchestrate_chunked_nifi_migration` - this is complete by itself  
+- For manual small files: Use ONLY `orchestrate_nifi_migration` - this is complete by itself
+- DO NOT call additional tools after orchestration tools complete successfully
+- DO NOT try to "help" or "continue" the migration - the orchestration tools are comprehensive
+- When you see "continue_required": false in a tool result, that means the migration is DONE
+
 Core Migration Patterns:
 - Use Auto Loader for GetFile/ListFile
 - Use Delta Lake for PutHDFS/PutFile  
@@ -81,20 +89,21 @@ Core Migration Patterns:
 Handling Large NiFi Files:
 - For large NiFi XML files (>50 processors or complex workflows), use `orchestrate_chunked_nifi_migration` instead of `orchestrate_nifi_migration`
 - The chunked approach prevents context limit issues by processing NiFi workflows in manageable chunks while preserving graph relationships
-- Use `chunk_nifi_xml_by_process_groups` to analyze the structure before processing if needed
 - Cross-chunk dependencies are automatically handled in the final Databricks job configuration
 
-When to use chunked processing:
-1. NiFi XML files with 50+ processors
-2. Complex workflows with multiple process groups
-3. When context limits are encountered during processing
-4. Large enterprise NiFi templates
+Migration Strategy:
+1. For intelligent/automatic migration: `orchestrate_intelligent_nifi_migration` (RECOMMENDED - analyzes and chooses best approach)
+2. For manual large workflows: `orchestrate_chunked_nifi_migration` 
+3. For manual small workflows: `orchestrate_nifi_migration`
 
-The chunked approach will:
-1. Split the NiFi workflow by process groups and processor batches  
-2. Process each chunk individually to generate Databricks code
-3. Reconstruct the complete workflow with proper task dependencies
-4. Generate a multi-task Databricks job that respects the original NiFi execution order
+Each orchestration tool is COMPLETE and handles:
+1. XML parsing and analysis
+2. Code generation for all processors
+3. Job configuration and dependencies  
+4. Asset bundling and deployment (if requested)
+5. All necessary sub-tasks internally
+
+DO NOT chain multiple tools - each orchestration tool is self-contained and final.
 """
 
 # -------------------------
@@ -122,24 +131,111 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     custom_inputs: Optional[dict[str, Any]]
     custom_outputs: Optional[dict[str, Any]]
+    rounds: Optional[int]
 
 def create_tool_calling_agent(
     model: LanguageModelLike,
     tools: Union[ToolNode, Sequence[BaseTool]],
     system_prompt: Optional[str] = None,
-):
+    max_rounds: int = 10,
+) -> Any:
     model = model.bind_tools(tools)
 
     def should_continue(state: AgentState):
-        last_message = state["messages"][-1]
-        return "continue" if isinstance(last_message, AIMessage) and last_message.tool_calls else "end"
+        # Determine whether the agent requested a tool call in the last model message
+        try:
+            last_message = state["messages"][-1]
+        except Exception:
+            logger.debug("Agent state has no messages; ending")
+            return "end"
+        # Check if the model asked for tool calls and log details
+        wants_tool = isinstance(last_message, AIMessage) and last_message.tool_calls
+
+        # If model requested tool calls, log which tools and arguments
+        if wants_tool:
+            try:
+                for tc in last_message.tool_calls:
+                    tname = getattr(tc, "name", tc.get("name") if isinstance(tc, dict) else str(tc))
+                    targs = getattr(tc, "args", tc.get("args") if isinstance(tc, dict) else None)
+                    logger.info(f"Model requested tool call: {tname} args={targs}")
+                    print(f"[agent] Model requested tool: {tname} args={targs}")
+            except Exception:
+                logger.debug("Could not introspect tool_calls for logging")
+
+        # Inspect recent tool outputs for an explicit continue flag
+        tool_signaled_continue = False
+        signaled_tools = []
+        try:
+            # Walk messages in reverse to find latest tool outputs
+            for msg in reversed(state.get("messages", [])):
+                # Extract role & content in a robust way
+                role = getattr(msg, "type", None) or getattr(msg, "role", None)
+                content = None
+                try:
+                    content = getattr(msg, "content", None)
+                except Exception:
+                    content = None
+
+                if role == "tool" or role == "function_call_output" or (isinstance(role, str) and role.lower() == "tool"):
+                    # Try to parse content as JSON to find continue_required
+                    if isinstance(content, (dict, list)):
+                        parsed = content
+                    else:
+                        try:
+                            parsed = json.loads(content) if content else None
+                        except Exception:
+                            parsed = None
+
+                    if isinstance(parsed, dict) and parsed.get("continue_required") is not None:
+                        if parsed.get("continue_required"):
+                            tool_signaled_continue = True
+                        # collect tool name if present
+                        signaled_tools.append(parsed.get("tool_name") or parsed.get("name") or "<unknown_tool>")
+                        break
+
+                    # Also support simple string flags like 'continue_required: true'
+                    if isinstance(content, str) and "continue_required" in content:
+                        # crude detection
+                        if "true" in content.lower():
+                            tool_signaled_continue = True
+                            signaled_tools.append("<tool_with_string_flag>")
+                            break
+        except Exception as e:
+            logger.debug(f"Error while inspecting tool outputs for continue flag: {e}")
+
+        rounds = state.get("rounds", 0) or 0
+        logger.debug(f"Agent continuation check: wants_tool={wants_tool}, tool_signaled_continue={tool_signaled_continue}, rounds={rounds}, max_rounds={max_rounds}")
+
+        # If a tool explicitly requested continuation, honor it (subject to max_rounds)
+        if tool_signaled_continue and rounds < max_rounds:
+            state["rounds"] = rounds + 1
+            logger.info(f"Tool(s) {signaled_tools} requested continuation — invoking tools round {state['rounds']} of {max_rounds}")
+            print(f"[agent] Tool signaled continue: {signaled_tools}; round {state['rounds']} of {max_rounds}")
+            return "continue"
+
+        # Otherwise, continue only when model explicitly requests tool calls and rounds not exceeded
+        if wants_tool and rounds < max_rounds:
+            state["rounds"] = rounds + 1
+            logger.info(f"Agent invoking tool round {state['rounds']} of {max_rounds}")
+            print(f"[agent] Model requested tool; round {state['rounds']} of {max_rounds}")
+            return "continue"
+
+        # Otherwise end the workflow
+        if (wants_tool or tool_signaled_continue) and rounds >= max_rounds:
+            logger.warning(f"Max agent-tool rounds reached ({rounds}/{max_rounds}); stopping further tool calls")
+            print(f"[agent] Max rounds reached ({rounds}/{max_rounds}); stopping")
+        else:
+            logger.debug("Agent not requesting further tool calls; ending")
+        return "end"
 
     pre = RunnableLambda(lambda s: [{"role": "system", "content": system_prompt}] + s["messages"]) if system_prompt \
          else RunnableLambda(lambda s: s["messages"])
     runnable = pre | model
 
     def call_model(state: AgentState, config: RunnableConfig):
+        logger.debug(f"Calling model with {len(state.get('messages', []))} messages")
         resp = runnable.invoke(state, config)
+        logger.debug("Model returned response; forwarding to graph")
         return {"messages": [resp]}
 
     workflow = StateGraph(AgentState)
@@ -223,7 +319,22 @@ try:
 except Exception as e:
     logger.warning(f"MLflow autolog not available: {e}")
 
-agent = create_tool_calling_agent(llm, TOOLS, system_prompt)
+# Allow dynamic configuration of agent max rounds via env var AGENT_MAX_ROUNDS
+try:
+    _env_max = os.environ.get("AGENT_MAX_ROUNDS")
+    if _env_max is not None:
+        try:
+            _max_rounds = int(_env_max)
+        except Exception:
+            logger.warning(f"Invalid AGENT_MAX_ROUNDS='{_env_max}', falling back to default=10")
+            _max_rounds = 10
+    else:
+        _max_rounds = 10
+except Exception:
+    _max_rounds = 10
+
+logger.info(f"Creating agent with max_rounds={_max_rounds}")
+agent = create_tool_calling_agent(llm, TOOLS, system_prompt, max_rounds=_max_rounds)
 AGENT = LangGraphResponsesAgent(agent)
 
 try:
