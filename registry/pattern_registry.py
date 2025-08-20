@@ -114,10 +114,10 @@ class PatternRegistryUC:
               generated_from_properties MAP<STRING, STRING> COMMENT 'Properties that generated this pattern',
               generation_source STRING COMMENT 'Source of generation (llm_hybrid_approach, manual, etc)',
               pattern_json STRING COMMENT 'Full pattern JSON for backward compatibility',
-              usage_count BIGINT DEFAULT 0 COMMENT 'Number of times this pattern has been used',
+              usage_count BIGINT COMMENT 'Number of times this pattern has been used',
               last_used TIMESTAMP COMMENT 'Last time this pattern was used in migration',
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'When pattern was first created',
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'When pattern was last updated',
+              created_at TIMESTAMP COMMENT 'When pattern was first created',
+              updated_at TIMESTAMP COMMENT 'When pattern was last updated',
               created_by STRING COMMENT 'User who created this pattern'
             ) USING DELTA
             TBLPROPERTIES (
@@ -150,11 +150,11 @@ class PatternRegistryUC:
               configuration MAP<STRING, STRING> COMMENT 'Configuration parameters needed',
               dependencies ARRAY<STRING> COMMENT 'External dependencies required',
               pattern_json STRING COMMENT 'Full complex pattern JSON',
-              success_rate DOUBLE DEFAULT 0.0 COMMENT 'Success rate of this pattern (0.0-1.0)',
-              usage_count BIGINT DEFAULT 0 COMMENT 'Number of times pattern was used',
+              success_rate DOUBLE COMMENT 'Success rate of this pattern (0.0-1.0)',
+              usage_count BIGINT COMMENT 'Number of times pattern was used',
               last_used TIMESTAMP COMMENT 'Last usage timestamp',
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Creation timestamp',
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Last update timestamp',
+              created_at TIMESTAMP COMMENT 'Creation timestamp',
+              updated_at TIMESTAMP COMMENT 'Last update timestamp',
               created_by STRING COMMENT 'User who created this pattern'
             ) USING DELTA
             TBLPROPERTIES (
@@ -174,8 +174,8 @@ class PatternRegistryUC:
                   value STRING COMMENT 'Metadata value as JSON string',
                   category STRING COMMENT 'Metadata category (system, user, migration)',
                   description STRING COMMENT 'Description of this metadata entry',
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Creation timestamp',
-                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Last update timestamp'
+                  created_at TIMESTAMP COMMENT 'Creation timestamp',
+                  updated_at TIMESTAMP COMMENT 'Last update timestamp'
                 ) USING DELTA
                 TBLPROPERTIES (
                   'delta.enableChangeDataFeed' = 'true'
@@ -197,8 +197,8 @@ class PatternRegistryUC:
                   nifi_xml_hash STRING COMMENT 'Hash of source NiFi XML for deduplication',
                   raw_json STRING COMMENT 'Complete raw JSON snapshot data',
                   file_size_bytes BIGINT COMMENT 'Size of the snapshot in bytes',
-                  compression STRING DEFAULT 'none' COMMENT 'Compression method used',
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Snapshot creation time',
+                  compression STRING COMMENT 'Compression method used',
+                  created_at TIMESTAMP COMMENT 'Snapshot creation time',
                   created_by STRING COMMENT 'User who created this snapshot',
                   tags MAP<STRING, STRING> COMMENT 'Key-value tags for categorization'
                 ) USING DELTA
@@ -301,7 +301,7 @@ class PatternRegistryUC:
             generated_from_properties,
             generation_source,
             pattern_json,
-            1,  # usage_count
+            1,  # usage_count - start with 1 since we're using it
             current_time,  # last_used
             current_time,  # created_at
             current_time,  # updated_at
