@@ -112,7 +112,7 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
         code = pattern["code_template"]
         injections = {
             "processor_class": processor_class,
-            "properties": json.dumps(properties or {}, indent=2),
+            "properties": _format_properties_as_comments(properties or {}),
             **{k: v for k, v in (properties or {}).items()},
         }
         for k, v in injections.items():
@@ -243,6 +243,25 @@ df_processed = df  # Add your transformations here
 
 df_processed.write.format('delta').mode('append').save('/path/to/output')
 """
+
+
+def _format_properties_as_comments(properties: dict) -> str:
+    """Format properties dictionary as properly commented Python code."""
+    if not properties:
+        return "# No properties configured"
+    
+    # Generate properly commented JSON-like format
+    lines = ["# {"]
+    for key, value in properties.items():
+        if isinstance(value, str):
+            lines.append(f'#   "{key}": "{value}",')
+        elif value is None:
+            lines.append(f'#   "{key}": null,')
+        else:
+            lines.append(f'#   "{key}": {value},')
+    lines.append("# }")
+    
+    return "\n".join(lines)
 
 
 def _generate_property_comments(properties: dict) -> str:
