@@ -47,6 +47,9 @@ for item in resp.output:
 
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
+import time 
+
+current = time.time()
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
@@ -54,9 +57,9 @@ req = ResponsesAgentRequest(input=[{
         "Run orchestrate_chunked_nifi_migration with:\n"
         "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml\n"
         "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results\n"
-        "project=nifi2dbx_feedback\n"
-        "job=job_test_feedback\n"
-        "notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_feedback/main\n"
+        f"""project=nifi2dbx_feedback_{current}\n"""
+        f"""job=job_test_feedback_{current}\n"""
+        f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_feedback_{current}/main\n"""
         "max_processors_per_chunk=25\n"
         "existing_cluster_id=0722-181403-vd3u4c6r\n"
         "deploy=true"
