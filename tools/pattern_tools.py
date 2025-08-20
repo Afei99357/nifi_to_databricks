@@ -150,13 +150,146 @@ def generate_databricks_code(processor_type: str, properties: str = "{}") -> str
             code += "\n\n# Best Practices:\n" + "\n".join([f"# - {bp}" for bp in rendered["best_practices"]])
         return code
 
-    return (
-        f"# Generic processor conversion for: {processor_type}\n"
-        f"# Properties: {json.dumps(properties, indent=2)}\n\n"
-        "# TODO: Implement specific logic for this processor\n"
-        "df = spark.read.format('delta').load('/path/to/data')\n"
-        "# ... your transformations ...\n"
-    )
+    # Pattern not found in UC table - use LLM generation
+    return _generate_with_llm(processor_class, properties)
+
+
+def _generate_with_llm(processor_class: str, properties: dict) -> str:
+    """
+    Generate processor-specific PySpark code using LLM when pattern is not in UC table.
+    
+    Args:
+        processor_class: NiFi processor class name (e.g., "ControlRate", "ValidateRecord")
+        properties: Processor configuration properties
+        
+    Returns:
+        Generated PySpark code with comments and logic
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from langchain_databricks import ChatDatabricks
+        import os
+        
+        # Get the model endpoint from environment
+        model_endpoint = os.environ.get("MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
+        llm = ChatDatabricks(endpoint=model_endpoint)
+        
+        # Create a comprehensive prompt for code generation
+        prompt = f"""You are a NiFi to Databricks migration expert. Generate specific PySpark code for the NiFi processor: {processor_class}
+
+Processor: {processor_class}
+Properties: {json.dumps(properties, indent=2)}
+
+Requirements:
+1. Research what this NiFi processor does based on its name and properties
+2. Generate equivalent PySpark/Databricks code that performs the same function
+3. Include detailed comments explaining the logic
+4. Use proper Databricks patterns (Delta Lake, Structured Streaming when appropriate)
+5. Handle the specific properties provided
+6. Add error handling where relevant
+7. Return ONLY the Python code, no markdown or explanations
+
+Example format:
+```python
+# {processor_class} → [Databricks equivalent]
+# [Description of what this processor does]
+
+# Extract configuration from properties
+property_1 = {properties.get('Property1', 'default_value')}
+
+# [Implementation logic]
+df = spark.read.format('delta').load('/path/to/input')
+
+# [Processor-specific transformations based on properties]
+
+# Write output
+df.write.format('delta').mode('append').save('/path/to/output')
+```
+
+Generate the code:"""
+
+        # Call the LLM to generate code
+        response = llm.invoke(prompt)
+        generated_code = response.content.strip()
+        
+        # Clean up the response - remove markdown if present
+        if generated_code.startswith('```python'):
+            generated_code = generated_code.replace('```python\n', '').replace('\n```', '')
+        elif generated_code.startswith('```'):
+            generated_code = generated_code.replace('```\n', '').replace('\n```', '')
+        
+        # Add header comment
+        header = f"# {processor_class} → LLM Generated Code\n# Generated based on processor properties and NiFi documentation\n\n"
+        
+        # Optionally save the generated pattern to UC table for future use
+        _save_generated_pattern(processor_class, properties, generated_code)
+        
+        return header + generated_code
+        
+    except Exception as e:
+        # Fallback to improved generic template if LLM fails
+        return f"""# {processor_class} → LLM Generation Failed
+# Error: {str(e)}
+# Properties: {json.dumps(properties, indent=2)}
+
+# Fallback implementation - please customize based on processor functionality
+df = spark.read.format('delta').load('/path/to/input')
+
+# TODO: Implement {processor_class} logic based on properties:
+{_generate_property_comments(properties)}
+
+# Basic passthrough - customize based on {processor_class} behavior
+df_processed = df  # Add your transformations here
+
+df_processed.write.format('delta').mode('append').save('/path/to/output')
+"""
+
+
+def _generate_property_comments(properties: dict) -> str:
+    """Generate helpful comments about processor properties."""
+    if not properties:
+        return "# No properties configured"
+    
+    comments = []
+    for key, value in properties.items():
+        if value is not None:
+            comments.append(f"# - {key}: {value}")
+        else:
+            comments.append(f"# - {key}: (not set)")
+    
+    return "\n".join(comments)
+
+
+def _save_generated_pattern(processor_class: str, properties: dict, generated_code: str) -> None:
+    """
+    Optionally save the LLM-generated pattern to UC table for future reuse.
+    This builds up the pattern registry over time.
+    """
+    try:
+        from registry.pattern_registry import PatternRegistryUC
+        
+        # Create a pattern from the generated code
+        pattern = {
+            "category": "llm_generated",
+            "databricks_equivalent": "LLM Generated Solution",
+            "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
+            "code_template": generated_code,
+            "best_practices": [
+                "Review and customize the generated code",
+                "Test thoroughly before production use",
+                "Consider processor-specific optimizations"
+            ],
+            "generated_from_properties": properties,
+            "generation_source": "llm_hybrid_approach"
+        }
+        
+        # Save to UC table
+        registry = PatternRegistryUC()
+        registry.add_pattern(processor_class, pattern)
+        
+    except Exception:
+        # Silent fail - saving is optional
+        pass
 
 
 @tool
