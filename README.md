@@ -7,9 +7,12 @@ An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based 
 This project addresses the challenge of migrating legacy NiFi workflows to modern Databricks infrastructure. Instead of manual conversion, it uses:
 
 - **AI-Powered Agent**: LangGraph-based conversational agent using Databricks Foundation Models
+- **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
+- **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
 - **Pattern Registry**: Unity Catalog-backed repository of NiFi-to-Databricks conversion patterns
 - **Automated Code Generation**: Converts NiFi processors to PySpark with proper error handling and best practices
-- **Job Orchestration**: Creates Databricks Jobs with DAG-aware dependencies that mirror NiFi flow structure
+- **Job Orchestration**: Creates Databricks Jobs with precise task dependencies that mirror NiFi flow structure
+- **Funnel Handling**: Intelligent detection and bypass of NiFi funnels to prevent disconnected tasks
 - **Comprehensive Tooling**: Modular tools for XML parsing, pattern matching, job creation, and validation
 
 ## 🏗️ Architecture
@@ -102,23 +105,20 @@ reg.seed_from_file("migration_nifi_patterns.json")
 
 ### Basic Usage
 
-#### Using the AI Agent (Recommended)
-
 ```python
-# In Databricks notebook
+# In Databricks notebook - using the AI Agent (Recommended)
 from agents import AGENT
 from mlflow.types.responses import ResponsesAgentRequest
 
-# Migrate a NiFi workflow
 req = ResponsesAgentRequest(input=[{
     "role": "user",
     "content": """
-    Run orchestrate_nifi_migration with:
+    Run orchestrate_chunked_nifi_migration with:
     xml_path=/Volumes/catalog/schema/nifi_files/my_workflow.xml
     out_dir=/Workspace/Users/me@company.com/migrations/output
     project=my_nifi_project
     job=my_migration_job
-    notebook_path=/Workspace/Users/me@company.com/migrations/orchestrator
+    max_processors_per_chunk=25
     existing_cluster_id=your-cluster-id
     deploy=true
     """
@@ -127,56 +127,84 @@ req = ResponsesAgentRequest(input=[{
 response = AGENT.predict(req)
 ```
 
-#### Programmatic Usage
+**Key Parameters:**
+- `max_processors_per_chunk=25`: Optimal chunk size (adjust 15-30 based on complexity)
+- `existing_cluster_id`: Reuse existing cluster or omit to create new one
+- `deploy=true`: Automatically deploy the job to Databricks
 
+**Alternative: Direct Function Call**
 ```python
-from tools.migration_tools import convert_flow
+# For programmatic usage without agent
+from tools.migration_tools import orchestrate_chunked_nifi_migration
 
-# Direct conversion without agent
-result = convert_flow(
-    xml_path="nifi_pipeline_file/example.xml",
-    out_dir="output_results/my_project",
+result = orchestrate_chunked_nifi_migration(
+    xml_path="/Volumes/catalog/schema/nifi_files/my_workflow.xml",
+    out_dir="/Workspace/Users/me@company.com/migrations/output",
     project="my_project",
     job="migration_job",
-    notebook_path="/Workspace/Users/me@company.com/project/main",
-    existing_cluster_id="your-cluster-id",  # Optional: reuse existing cluster
-    deploy_job=True  # Create and optionally run the job
+    max_processors_per_chunk=25,
+    existing_cluster_id="your-cluster-id",
+    deploy=True
 )
 ```
 
 ## 📁 Input Files
 
-Place your NiFi XML template files in the `nifi_pipeline_file/` directory:
+Store your NiFi XML template files in **Databricks Catalog Volumes** for secure and organized access:
 
-- `json_log_process_pipeline.xml` - Example JSON log processing workflow
-- `nifi_pipeline_eric_1.xml` - Sample NiFi pipeline template  
-- `nifi_pipeline_eric_embed_groups.xml` - Complex workflow with nested groups
+### Recommended Storage Structure
+```
+/Volumes/your_catalog/your_schema/nifi_files/
+├── production_workflows/
+│   ├── data_ingestion_pipeline.xml
+│   ├── etl_processing_flow.xml
+│   └── analytics_pipeline.xml
+├── test_workflows/
+│   ├── sample_workflow.xml
+│   └── validation_pipeline.xml
+└── archived/
+    └── legacy_workflows/
+```
+
+### Usage Examples
+```python
+# Reference files in catalog volumes
+xml_path = "/Volumes/my_catalog/migration/nifi_files/production_workflows/main_pipeline.xml"
+out_dir = "/Workspace/Users/me@company.com/migrations/output"
+```
+
+**Benefits of Catalog Volumes:**
+- ✅ **Security**: Governed access control through Unity Catalog
+- ✅ **Organization**: Structured storage with proper versioning
+- ✅ **Collaboration**: Team access to shared NiFi templates
+- ✅ **Scalability**: No repository size limitations
 
 ## 📊 Migration Process
 
-### 1. XML Analysis
-- Parses NiFi template XML to extract processors, connections, and properties
-- Identifies parameter contexts and controller services
-- Builds dependency graph from processor connections
+### Unified Chunked Migration Process (handles all workflow sizes)
+1. **Complete Workflow Mapping**: Extracts full NiFi structure including processors, connections, funnels, and controller services
+2. **Funnel Detection & Bypass**: Identifies NiFi funnels and creates bypass mappings to preserve connectivity
+3. **Intelligent Chunking**: Splits workflow by process groups (if needed) while preserving graph relationships
+4. **Chunk Processing**: Processes each chunk individually to avoid context limits
+5. **Pattern Matching**: Maps NiFi processors to Databricks equivalents using UC patterns
+6. **Code Generation**: Creates PySpark code for processors with proper dependencies and error handling
+7. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job using original connectivity map
+8. **Asset Bundling**: Creates enhanced project structure with analysis, dependencies, and configurations
 
-### 2. Pattern Matching
-- Maps each NiFi processor to Databricks equivalent using pattern registry
-- Handles common patterns like:
-  - **GetFile/ListFile** → Auto Loader with cloudFiles format
-  - **PutHDFS/PutFile** → Delta Lake writes
-  - **ConsumeKafka** → Structured Streaming Kafka source
-  - **RouteOnAttribute** → DataFrame filter operations
-  - **ExecuteSQL** → Spark SQL or JDBC operations
+**Advantages of unified approach:**
+- **Scalable**: Automatically handles both small (1-10 processors) and large (100+ processors) workflows
+- **Robust**: Better error handling and context management
+- **Complete**: Preserves all NiFi connectivity including complex funnel routing
+- **Debuggable**: Comprehensive workflow maps and chunk analysis for troubleshooting
 
-### 3. Code Generation
-- Generates PySpark code for each processor with error handling
-- Applies best practices and optimization patterns
-- Creates modular step files for easier maintenance
-
-### 4. Job Creation
-- Builds Databricks Jobs with DAG-aware task dependencies
-- Supports both new cluster creation and existing cluster reuse
-- Generates asset bundles for infrastructure-as-code deployment
+### Key Migration Patterns
+- **GetFile/ListFile** → Auto Loader with cloudFiles format
+- **PutHDFS/PutFile** → Delta Lake writes with ACID guarantees
+- **ConsumeKafka/PublishKafka** → Structured Streaming with Kafka source/sink
+- **RouteOnAttribute** → DataFrame filter operations with multiple outputs
+- **ConvertRecord** → Format conversions using DataFrame read/write
+- **ExecuteSQL** → Spark SQL operations or JDBC connections
+- **Funnels** → Bypass logic with union operations in downstream processors
 
 ## 🔧 Available Tools
 
@@ -184,7 +212,8 @@ The agent has access to specialized tools in the `tools/` folder:
 
 ### Core Migration Tools
 - **`xml_tools.py`**: NiFi XML parsing and template extraction
-- **`migration_tools.py`**: Main conversion logic and orchestration
+- **`migration_tools.py`**: Main conversion logic and orchestration (both standard and chunked)
+- **`chunking_tools.py`**: Large XML file chunking, workflow mapping, and reconstruction utilities
 - **`pattern_tools.py`**: Pattern registry operations and template rendering
 
 ### Databricks Integration
@@ -192,33 +221,40 @@ The agent has access to specialized tools in the `tools/` folder:
 - **`dlt_tools.py`**: Delta Live Tables pipeline generation
 - **`eval_tools.py`**: Pipeline validation and data comparison utilities
 
-## 📋 Generated Output Structure
+### Key Functions
+- **`orchestrate_nifi_migration`**: Standard migration for smaller workflows
+- **`orchestrate_chunked_nifi_migration`**: Advanced chunked processing for large workflows
+- **`extract_complete_workflow_map`**: Captures full NiFi structure including funnels
+- **`chunk_nifi_xml_by_process_groups`**: Intelligent workflow chunking
+- **`reconstruct_full_workflow`**: Merges chunks with preserved connectivity
 
-Each migration creates a complete Databricks project:
+## 📋 Generated Output Structure
 
 ```
 output_results/project_name/
-├── src/
-│   └── steps/              # Individual processor conversions
-│       ├── 10_GetFile.py
-│       ├── 11_ListenHTTP.py
-│       └── ...
-├── notebooks/
-│   └── main.py            # Orchestrator notebook
-├── jobs/
-│   ├── job.json           # Simple job configuration
-│   └── job.dag.json       # DAG-aware job with dependencies
-├── conf/
-│   ├── plan.json          # Migration execution plan
-│   ├── parameter_contexts.json
-│   └── dlt_pipeline.json  # Delta Live Tables config
-├── databricks.yml         # Asset bundle configuration
-└── README.md              # Project-specific documentation
+├── src/steps/              # Processor conversions (organized by chunks for larger workflows)
+├── chunks/                 # Individual chunk processing results and analysis (if chunked)
+├── notebooks/              # Enhanced orchestrator with intelligent execution logic
+├── jobs/                   # Multi-task job configurations with precise dependencies
+│   ├── job.json            # Standard job configuration
+│   └── job.chunked.json    # Enhanced multi-task job (primary output)
+├── conf/                   # Comprehensive migration analysis and planning
+│   ├── complete_workflow_map.json     # Full NiFi structure with funnels and connections
+│   ├── chunking_result.json           # Chunking analysis (if applicable)
+│   ├── reconstructed_workflow.json    # Final merged workflow with dependencies
+│   └── parameter_contexts.json        # NiFi parameters and controller services
+├── databricks.yml         # Asset bundle configuration for deployment
+└── README.md              # Project documentation with migration statistics
 ```
+
+**Key Files:**
+- **`job.chunked.json`**: Primary job configuration with proper task dependencies
+- **`complete_workflow_map.json`**: Full workflow analysis including funnel detection
+- **`reconstructed_workflow.json`**: Final connectivity map for debugging
 
 ## 🔍 Common Migration Patterns
 
-| NiFi Processor | Databricks Equivalent | Key Considerations |
+| NiFi Component | Databricks Equivalent | Key Considerations |
 |----------------|----------------------|-------------------|
 | GetFile/ListFile | Auto Loader | Schema evolution, file format detection |
 | PutHDFS/PutFile | Delta Lake | Partitioning, optimization, ACID properties |
@@ -228,6 +264,8 @@ output_results/project_name/
 | ConvertRecord | Format conversions | CSV↔JSON↔Parquet↔Delta transformations |
 | ExecuteSQL | Spark SQL / JDBC | Connection pooling, query optimization |
 | InvokeHTTP | UDF with requests | API rate limiting, error handling |
+| **Funnel** | **Union operations** | **Automatic bypass, no task created, union logic in downstream** |
+| Process Groups | Task grouping | Logical organization, dependency management |
 
 ## 🧪 Testing and Validation
 
@@ -290,6 +328,16 @@ def my_custom_tool(parameter: str) -> str:
 2. **Pattern Not Found**: Check if processor pattern exists in registry or JSON file
 3. **Job Creation Failures**: Ensure cluster permissions and workspace access
 4. **XML Parsing Errors**: Validate NiFi template XML structure
+5. **Duplicate Task Keys**: Use chunked migration for large workflows to avoid conflicts
+6. **Circular Dependencies**: Check `reconstructed_workflow.json` for dependency issues
+7. **Disconnected Tasks**: Review `complete_workflow_map.json` for funnel bypass issues
+
+### Chunked Migration Troubleshooting
+
+1. **Context Limit Errors**: Reduce `max_processors_per_chunk` (try 15-20)
+2. **Missing Connections**: Check `funnel_bypasses` in workflow map for proper routing
+3. **Job Deployment Failures**: Verify task dependencies in `job.chunked.json`
+4. **Large Workflow Issues**: Use `extract_complete_workflow_map` to analyze structure
 
 ### Debug Mode
 
@@ -297,6 +345,16 @@ Enable detailed logging:
 ```python
 import logging
 logging.getLogger().setLevel(logging.DEBUG)
+```
+
+### Workflow Analysis
+
+```python
+# Analyze large workflows before migration
+from tools.chunking_tools import extract_complete_workflow_map
+result = extract_complete_workflow_map("path/to/large_workflow.xml")
+print(f"Processors: {result['summary']['total_processors']}")
+print(f"Funnels: {result['summary']['total_funnels']}")
 ```
 
 ## 📚 Additional Resources
