@@ -221,7 +221,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             # Prepare pattern for bulk save later
             try:
                 processor_class = spec["type"].split(".")[-1] if "." in spec["type"] else spec["type"]
-                bulk_patterns[processor_class] = {
+                pattern_obj = {
                     "category": "llm_generated",
                     "databricks_equivalent": "LLM Generated Solution",
                     "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
@@ -234,6 +234,13 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                     "generated_from_properties": spec["properties"],
                     "generation_source": "llm_hybrid_approach"
                 }
+                bulk_patterns[processor_class] = pattern_obj
+                # Also buffer immediately so a later flush will persist and init UC
+                try:
+                    from tools.pattern_tools import _buffer_generated_pattern
+                    _buffer_generated_pattern(processor_class, pattern_obj)
+                except Exception:
+                    pass
             except Exception:
                 pass
             
@@ -248,7 +255,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             }
             generated_tasks.append(task)
         
-        # Flush patterns once per chunk
+        # Flush patterns once per chunk (creates tables on first run)
         try:
             from tools.pattern_tools import flush_patterns_to_registry
             flush_patterns_to_registry()
