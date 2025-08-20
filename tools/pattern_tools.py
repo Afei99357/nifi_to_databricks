@@ -118,10 +118,15 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
 
 
 @tool
-def generate_databricks_code(processor_type: str, properties: str = "{}") -> str:
+def generate_databricks_code(processor_type: str, properties: str = "{}", force_regenerate: bool = False) -> str:
     """
     Generate equivalent Databricks/PySpark code for a NiFi processor type.
     Returns a Python code string with best-practice comments when available.
+    
+    Args:
+        processor_type: NiFi processor class name
+        properties: JSON string of processor properties  
+        force_regenerate: If True, skip UC table lookup and force LLM generation
     """
     if isinstance(properties, str):
         try:
@@ -130,6 +135,11 @@ def generate_databricks_code(processor_type: str, properties: str = "{}") -> str
             properties = {}
 
     processor_class = processor_type.split(".")[-1] if "." in processor_type else processor_type
+    
+    # If force_regenerate is True, skip UC table lookup and use LLM directly
+    if force_regenerate:
+        return _generate_with_llm(processor_class, properties)
+    
     rendered = _render_pattern(processor_class, properties)
 
     if rendered["code"]:
