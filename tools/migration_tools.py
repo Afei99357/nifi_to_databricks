@@ -269,6 +269,28 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             if buf:
                 tmp_file = out / f"chunks/{chunk_id}_pending_patterns.json"
                 dump_buffer_to_file(str(tmp_file))
+                # Also write a raw snapshot for this chunk
+                try:
+                    from registry import PatternRegistryUC
+                    import hashlib
+                    reg = PatternRegistryUC()
+                    raw_json = json.dumps(buf, ensure_ascii=False)
+                    nifi_xml_hash = hashlib.md5(xml_text.encode("utf-8")).hexdigest() if 'xml_text' in locals() else None
+                    snapshot = {
+                        "snapshot_id": f"{project}_{chunk_id}_pending",
+                        "snapshot_type": "pattern_buffer_chunk",
+                        "migration_id": project,
+                        "processor_count": len(chunk.get("processors", [])),
+                        "patterns_count": len(buf),
+                        "nifi_xml_hash": nifi_xml_hash,
+                        "raw_json": raw_json,
+                        "file_size_bytes": len(raw_json.encode("utf-8")),
+                        "compression": "none",
+                        "created_by": os.environ.get("USER_EMAIL") or os.environ.get("USER")
+                    }
+                    reg.add_raw_snapshot(snapshot)
+                except Exception:
+                    pass
             # Attempt UC bulk write
             flush_patterns_to_registry()
         except Exception:
@@ -972,17 +994,16 @@ def orchestrate_chunked_nifi_migration(
             if buf:
                 tmp_file = out / "conf/pending_patterns.final.json"
                 dump_buffer_to_file(str(tmp_file))
-                # Also write a raw snapshot and update meta in UC
+                # Also write a raw snapshot
                 try:
                     from registry import PatternRegistryUC
                     import hashlib
                     reg = PatternRegistryUC()
-                    # Create snapshot payload
                     raw_json = json.dumps(buf, ensure_ascii=False)
                     nifi_xml_hash = hashlib.md5(xml_text.encode("utf-8")).hexdigest() if xml_text else None
                     snapshot = {
-                        "snapshot_id": f"{project}_pending_{int(os.path.getmtime(str(tmp_file)))}",
-                        "snapshot_type": "pattern_buffer",
+                        "snapshot_id": f"{project}_final_pending",
+                        "snapshot_type": "pattern_buffer_final",
                         "migration_id": project,
                         "processor_count": 0,
                         "patterns_count": len(buf),
@@ -993,10 +1014,17 @@ def orchestrate_chunked_nifi_migration(
                         "created_by": os.environ.get("USER_EMAIL") or os.environ.get("USER")
                     }
                     reg.add_raw_snapshot(snapshot)
-                    reg.upsert_meta("last_run", json.dumps({"project": project}), category="run", description="Last migration run")
                 except Exception:
                     pass
             flush_patterns_to_registry()
+        except Exception:
+            pass
+
+        # Always upsert meta for last run
+        try:
+            from registry import PatternRegistryUC
+            reg = PatternRegistryUC()
+            reg.upsert_meta("last_run", json.dumps({"project": project}), category="run", description="Last migration run")
         except Exception:
             pass
 
