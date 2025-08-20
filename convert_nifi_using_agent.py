@@ -14,6 +14,9 @@ dbutils.library.restartPython()
 
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
+import time
+
+current = time.time()
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
