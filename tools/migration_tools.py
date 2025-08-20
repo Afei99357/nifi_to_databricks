@@ -159,7 +159,7 @@ CRITICAL JSON ESCAPE RULES (MUST FOLLOW EXACTLY):
 - Use \\\\ for literal backslashes (four backslashes)
 - For SQL queries: Replace ALL internal quotes with \\" 
 - For multi-line SQL: Use \\n instead of actual newlines
-- NEVER use triple quotes (""") in JSON values
+- NEVER use triple quotes in JSON values
 - NEVER use unescaped $ signs - use \\$ instead  
 - Replace \\t with \\\\t and \\r with \\\\r
 - DO NOT include multiple JSON objects - return ONE object only
