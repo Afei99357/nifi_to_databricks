@@ -23,7 +23,6 @@ This is a NiFi to Databricks migration tool that uses LangGraph agents to conver
 
 - **Pattern Registry**: Unity Catalog-backed pattern storage
   - `registry/pattern_registry.py`: UC table management for migration patterns
-  - `migration_nifi_patterns.json`: JSON-based pattern definitions and templates
 
 - **Configuration**: Environment and settings management
   - `config/settings.py`: Environment variable loading and logging setup
@@ -101,9 +100,9 @@ result = orchestrate_chunked_nifi_migration(
 from registry import PatternRegistryUC
 
 reg = PatternRegistryUC()
-reg.seed_from_file("migration_nifi_patterns.json")  # Initialize patterns
-pattern = reg.get_pattern("GetFile")                # Retrieve pattern
-reg.add_pattern("CustomProcessor", {...})           # Add new pattern
+# Patterns are managed directly in Delta tables
+pattern = reg.get_pattern("GetFile")                # Retrieve pattern from UC table
+reg.add_pattern("CustomProcessor", {...})           # Add new pattern to UC table
 ```
 
 ## Environment Setup

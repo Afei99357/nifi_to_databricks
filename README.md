@@ -35,6 +35,7 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 - **Agent System** (`agents/`, `nifi_databricks_agent.py`): LangGraph-based conversational interface
 - **Migration Tools** (`tools/`): Specialized tools for each aspect of the conversion process
 - **Pattern Registry** (`registry/`): UC-backed pattern storage and retrieval
+  - `init_delta_tables.sql`: SQL script to create required Unity Catalog tables
 - **Configuration** (`config/`): Environment management and logging
 - **Utilities** (`utils/`): File operations, XML processing, and helper functions
 
@@ -92,16 +93,136 @@ NOTIFICATION_EMAIL=your-email@company.com
 - `META_TABLE`: Unity Catalog table for pattern metadata and versioning
 - `RAW_TABLE`: Unity Catalog table for raw pattern snapshots
 
-2. **Initialize Pattern Registry**:
+2. **Initialize Unity Catalog Tables**:
+```sql
+-- Run the SQL initialization script in Databricks
+%sql
+%run ./init_delta_tables
+```
+
+3. **Initialize Pattern Registry**:
 ```python
 from registry import PatternRegistryUC
 
 # Initialize with Unity Catalog tables
 reg = PatternRegistryUC()
 
-# Optionally seed from the JSON file (one-time setup)
-reg.seed_from_file("migration_nifi_patterns.json")
+# Patterns are managed directly in Delta tables - no JSON seeding needed
+# Use reg.add_pattern() to add new processor patterns as needed
 ```
+
+## 📊 Unity Catalog Table Schema
+
+The migration tool uses four Delta tables in Unity Catalog to store patterns and track migrations. These tables are created by running `init_delta_tables.sql`.
+
+### Table Schema Details
+
+#### 1. `migration_patterns` Table
+**Purpose**: Stores processor conversion patterns and code templates  
+**Location**: `nifi_migration.patterns.migration_patterns`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `processor_class` | STRING (PK) | NiFi processor class name (e.g., "GetFile", "EvaluateJsonPath") |
+| `databricks_equivalent` | STRING | Equivalent Databricks service/technology |
+| `description` | STRING | Human-readable description of the conversion |
+| `best_practices` | ARRAY<STRING> | List of recommended practices |
+| `code_template` | STRING | PySpark code template with placeholders |
+| `last_seen_properties` | MAP<STRING, STRING> | Sample properties from recent usage |
+| `created_at` | TIMESTAMP | Pattern creation timestamp |
+| `updated_at` | TIMESTAMP | Last modification timestamp |
+
+**Example Data**:
+```
+processor_class: "EvaluateJsonPath"
+databricks_equivalent: "JSON Functions"
+description: "Extract JSON values using PySpark JSON functions"
+code_template: "df.select(from_json(col('json_data'), schema).alias('parsed'))"
+```
+
+#### 2. `processor_mappings` Table
+**Purpose**: Maps NiFi processors to Databricks services with complexity indicators  
+**Location**: `nifi_migration.patterns.processor_mappings`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `nifi_processor` | STRING | NiFi processor name |
+| `databricks_service` | STRING | Target Databricks service |
+| `complexity_level` | STRING | Migration complexity (Low/Medium/High) |
+| `migration_notes` | STRING | Special considerations for migration |
+| `example_properties` | MAP<STRING, STRING> | Common property examples |
+| `created_at` | TIMESTAMP | Record creation time |
+
+**Example Data**:
+```
+nifi_processor: "ConsumeKafka"
+databricks_service: "Structured Streaming"
+complexity_level: "Medium"
+migration_notes: "Requires Kafka cluster configuration and checkpointing"
+```
+
+#### 3. `migration_history` Table
+**Purpose**: Tracks migration execution results and statistics  
+**Location**: `nifi_migration.patterns.migration_history`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `migration_id` | STRING | Unique migration execution ID |
+| `xml_file_path` | STRING | Source NiFi XML template path |
+| `project_name` | STRING | Generated project name |
+| `processor_count` | INTEGER | Total processors in workflow |
+| `success_count` | INTEGER | Successfully converted processors |
+| `failure_count` | INTEGER | Failed conversions |
+| `migration_type` | STRING | "standard" or "chunked" |
+| `started_at` | TIMESTAMP | Migration start time |
+| `completed_at` | TIMESTAMP | Migration completion time |
+| `errors` | ARRAY<STRING> | List of errors encountered |
+| `generated_files` | ARRAY<STRING> | List of output files created |
+
+**Example Data**:
+```
+migration_id: "migration_20241220_143052"
+xml_file_path: "/Volumes/catalog/schema/nifi_files/workflow.xml"
+processor_count: 45
+success_count: 42
+failure_count: 3
+migration_type: "chunked"
+```
+
+#### 4. `controller_services` Table
+**Purpose**: Maps NiFi controller services to Databricks configurations  
+**Location**: `nifi_migration.patterns.controller_services`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `service_type` | STRING | NiFi controller service type |
+| `databricks_equivalent` | STRING | Equivalent Databricks configuration |
+| `configuration_mapping` | MAP<STRING, STRING> | Property mappings |
+| `setup_instructions` | STRING | Setup guidance |
+| `dependencies` | ARRAY<STRING> | Required dependencies |
+| `created_at` | TIMESTAMP | Record creation time |
+
+**Example Data**:
+```
+service_type: "DBCPConnectionPool"
+databricks_equivalent: "JDBC Connection"
+configuration_mapping: {"Database Connection URL": "spark.conf jdbc.url"}
+setup_instructions: "Configure JDBC connection in cluster settings"
+```
+
+### Table Initialization
+
+To create these tables, run the SQL script in Databricks:
+
+```sql
+%run ./init_delta_tables
+```
+
+The script creates:
+- Tables with proper schemas and constraints
+- Sample data for common processors (GetFile, PutFile, ConsumeKafka, etc.)
+- Primary key constraints and Delta table properties
+- Change data feed enablement for auditing
 
 ### Basic Usage
 

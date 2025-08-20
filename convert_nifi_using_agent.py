@@ -1,26 +1,4 @@
 # Databricks notebook source
-# MAGIC %md
-# MAGIC ### Optional: Initiate the pattern tables from json files
-
-# COMMAND ----------
-
-from pattern_registry import PatternRegistryUC
-
-# Make sure envs point at your UC tables (or pass in ctor):
-# PATTERN_TABLE="eliao.nifi_to_databricks.processors"
-# COMPLEX_TABLE="eliao.nifi_to_databricks.complex_patterns"
-
-reg = PatternRegistryUC()
-
-# If you have a file:
-reg.seed_from_file("/Workspace/Users/eliao@bpcs.com/Agent_for_migrate_nifi_to_databricks/migration_nifi_patterns.json")
-
-# OR, if you have the dict in-memory:
-# reg.seed_from_blob(your_dict)
-
-
-# COMMAND ----------
-
 # MAGIC %pip install -U -qqqq backoff databricks-langchain langgraph==0.5.3 uv databricks-agents mlflow-skinny[databricks]
 
 # COMMAND ----------
@@ -31,11 +9,6 @@ dbutils.library.restartPython()
 
 # MAGIC %md
 # MAGIC Simpler file
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Complex NIFI Workflow
 
 # COMMAND ----------
 
