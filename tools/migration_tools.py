@@ -128,18 +128,37 @@ RESPONSE FORMAT (EXACT):
 
 Generate the code for all {len(processor_specs)} processors as a valid JSON object:"""
 
-        # Call LLM once for all processors (request strict JSON and low randomness)
-        try:
-            response = llm.invoke(
-                batch_prompt,
-                extra_body={
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0
-                },
-            )
-        except Exception:
-            # Fallback to standard invocation if endpoint doesn't support response_format
-            response = llm.invoke(batch_prompt)
+        # Create LLM with low temperature for consistent JSON output
+        llm_json = ChatDatabricks(
+            endpoint=model_endpoint,
+            temperature=0.1
+        )
+        
+        # Enhanced prompt that forces JSON-only output
+        json_enforced_prompt = f"""RESPOND WITH ONLY VALID JSON. NO MARKDOWN. NO EXPLANATIONS. NO TEXT BEFORE OR AFTER THE JSON.
+
+You are a NiFi to Databricks migration expert. Generate PySpark code for the processors listed below.
+
+PROCESSORS TO CONVERT:
+{json.dumps(processor_specs, indent=2)}
+
+REQUIREMENTS:
+1. Return processor index as string key, PySpark code as string value
+2. Use Databricks patterns (Delta Lake, Auto Loader, Structured Streaming)
+3. Include comments in the code explaining the logic
+4. For GetFile/ListFile: use Auto Loader with cloudFiles format
+5. For PutFile/PutHDFS: use Delta Lake writes
+6. For ConsumeKafka: use Structured Streaming
+7. For JSON processors: use PySpark JSON functions
+
+CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
+
+EXAMPLE FORMAT:
+{{"0": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)", "1": "# GetFile → Auto Loader\\nfrom pyspark.sql.functions import *\\n\\ndf = spark.readStream.format('cloudFiles').load('/path')"}}
+
+GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
+
+        response = llm_json.invoke(json_enforced_prompt)
         print(f"✅ [LLM BATCH] Received response, parsing generated code...")
         
         # Log the first 200 chars of response for debugging
@@ -150,81 +169,34 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             generated_code_map = json.loads(response.content.strip())
             print(f"🎯 [LLM BATCH] Successfully parsed {len(generated_code_map)} code snippets")
         except json.JSONDecodeError as e:
-            print(f"⚠️  [LLM BATCH] Strict JSON parse failed: {e}")
-            print(f"↪️  [LLM BATCH] Recovery steps: markdown json → fenced code → boundary detection → escape fixes → regex extraction")
-            # Try multiple approaches to extract JSON from response
+            print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
             content = response.content.strip()
             generated_code_map = None
             
-            # Try 1: Extract from markdown code blocks
+            # Try extracting JSON from markdown blocks
             if "```json" in content:
                 try:
-                    content = content.split("```json")[1].split("```")[0].strip()
-                    generated_code_map = json.loads(content)
-                    print(f"✅ [LLM BATCH] Recovered via markdown json block")
-                except:
-                    pass
-            elif "```" in content:
-                try:
-                    content = content.split("```")[1].split("```")[0].strip()
-                    generated_code_map = json.loads(content)
-                    print(f"✅ [LLM BATCH] Recovered via fenced code block")
+                    extracted = content.split("```json")[1].split("```")[0].strip()
+                    generated_code_map = json.loads(extracted)
+                    print(f"🔧 [LLM BATCH] Recovered JSON from markdown block")
                 except:
                     pass
             
-            # Try 2: Look for JSON object boundaries
+            # Try finding JSON object boundaries
             if generated_code_map is None:
                 try:
-                    # Find first { and last }
                     start = content.find('{')
                     end = content.rfind('}') + 1
                     if start >= 0 and end > start:
                         json_content = content[start:end]
-                        # Fix common escape issues
-                        json_content = json_content.replace('\\n', '\\\\n').replace('\\"', '\\\\"')
                         generated_code_map = json.loads(json_content)
-                        print(f"✅ [LLM BATCH] Recovered via boundary detection")
+                        print(f"🔧 [LLM BATCH] Recovered JSON from boundaries")
                 except:
                     pass
             
-            # Try 3: Replace problematic characters and retry
+            # If recovery fails, fall back to individual generation
             if generated_code_map is None:
-                try:
-                    # Common fixes for LLM-generated JSON
-                    fixed_content = content.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r')
-                    # Don't double-escape already escaped backslashes
-                    if '\\\\' not in fixed_content:
-                        fixed_content = fixed_content.replace('\\', '\\\\')
-                    generated_code_map = json.loads(fixed_content)
-                    print(f"✅ [LLM BATCH] Recovered via escape fixes")
-                except:
-                    pass
-            
-            # Try 4: More aggressive JSON extraction and cleaning
-            if generated_code_map is None:
-                try:
-                    import re
-                    # Find JSON-like patterns and clean them
-                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-                    matches = re.findall(json_pattern, content, re.DOTALL)
-                    for match in matches:
-                        try:
-                            # Clean the match
-                            clean_match = match.strip()
-                            # Fix common JSON issues
-                            clean_match = re.sub(r'",\s*}', '"}', clean_match)  # Remove trailing commas
-                            clean_match = re.sub(r'",\s*]', '"]', clean_match)  # Remove trailing commas in arrays
-                            generated_code_map = json.loads(clean_match)
-                            print(f"✅ [LLM BATCH] Recovered via regex extraction")
-                            break
-                        except:
-                            continue
-                except:
-                    pass
-            
-            # If all parsing attempts fail, raise the original error
-            if generated_code_map is None:
-                print(f"❌ [LLM BATCH] All recovery attempts failed → falling back to sub-batches/per-processor as needed")
+                print(f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation")
                 raise e
         
         # Build tasks from the batch response
