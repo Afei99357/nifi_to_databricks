@@ -149,7 +149,7 @@ def create_tool_calling_agent(
             logger.debug("Agent state has no messages; ending")
             return "end"
         # Check if the model asked for tool calls and log details
-        wants_tool = isinstance(last_message, AIMessage) and last_message.tool_calls
+        wants_tool = isinstance(last_message, AIMessage) and bool(last_message.tool_calls)
 
         # If model requested tool calls, log which tools and arguments
         if wants_tool:
@@ -207,7 +207,6 @@ def create_tool_calling_agent(
 
         rounds = state.get("rounds", 0) or 0
         logger.debug(f"Agent continuation check: wants_tool={wants_tool}, tool_signaled_continue={tool_signaled_continue}, rounds={rounds}, max_rounds={max_rounds}")
-        print(f"🔍 [DEBUG] Current state rounds: {rounds}, wants_tool: {wants_tool}, tool_signaled_continue: {tool_signaled_continue}")
 
         # If a tool explicitly requested continuation, honor it (subject to max_rounds)
         if tool_signaled_continue and rounds < max_rounds:

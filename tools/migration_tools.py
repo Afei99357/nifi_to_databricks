@@ -175,9 +175,33 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                 try:
                     # Common fixes for LLM-generated JSON
                     fixed_content = content.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r')
-                    fixed_content = fixed_content.replace('\\', '\\\\')  # Escape backslashes
+                    # Don't double-escape already escaped backslashes
+                    if '\\\\' not in fixed_content:
+                        fixed_content = fixed_content.replace('\\', '\\\\')
                     generated_code_map = json.loads(fixed_content)
                     print(f"🔧 [LLM BATCH] Recovered JSON after escape fixes")
+                except:
+                    pass
+            
+            # Try 4: More aggressive JSON extraction and cleaning
+            if generated_code_map is None:
+                try:
+                    import re
+                    # Find JSON-like patterns and clean them
+                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+                    matches = re.findall(json_pattern, content, re.DOTALL)
+                    for match in matches:
+                        try:
+                            # Clean the match
+                            clean_match = match.strip()
+                            # Fix common JSON issues
+                            clean_match = re.sub(r'",\s*}', '"}', clean_match)  # Remove trailing commas
+                            clean_match = re.sub(r'",\s*]', '"]', clean_match)  # Remove trailing commas in arrays
+                            generated_code_map = json.loads(clean_match)
+                            print(f"🔧 [LLM BATCH] Recovered JSON using regex pattern matching")
+                            break
+                        except:
+                            continue
                 except:
                     pass
             
