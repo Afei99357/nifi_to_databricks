@@ -839,6 +839,12 @@ def orchestrate_chunked_nifi_migration(
         JSON summary with chunking statistics, processing results, and final workflow
     """
     try:
+        # Resolve effective max processors per chunk with env override
+        try:
+            env_max = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "")) if os.environ.get("MAX_PROCESSORS_PER_CHUNK") else None
+        except Exception:
+            env_max = None
+        effective_max = env_max if env_max else max_processors_per_chunk
         # --- Setup output directory ---
         root = Path(out_dir)
         proj_name = _safe_name(project)
@@ -867,7 +873,7 @@ def orchestrate_chunked_nifi_migration(
         # Step 1: Chunk the XML by process groups
         chunking_result = json.loads(chunk_nifi_xml_by_process_groups.func(
             xml_content=xml_text,
-            max_processors_per_chunk=max_processors_per_chunk
+            max_processors_per_chunk=effective_max
         ))
         
         if "error" in chunking_result:
@@ -885,7 +891,7 @@ def orchestrate_chunked_nifi_migration(
         all_step_files = []
         
         print(f"📋 [MIGRATION] Processing {len(chunks)} chunks with {summary['total_processors']} total processors")
-        print(f"🎯 [MIGRATION] Target: max {max_processors_per_chunk} processors per chunk")
+        print(f"🎯 [MIGRATION] Target: max {effective_max} processors per chunk")
         
         for i, chunk in enumerate(chunks):
             chunk_processor_count = len(chunk.get("processors", []))
