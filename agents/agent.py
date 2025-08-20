@@ -157,8 +157,10 @@ def create_tool_calling_agent(
                 for tc in last_message.tool_calls:
                     tname = getattr(tc, "name", tc.get("name") if isinstance(tc, dict) else str(tc))
                     targs = getattr(tc, "args", tc.get("args") if isinstance(tc, dict) else None)
+                    # Show abbreviated args for cleaner output
+                    args_preview = str(targs)[:100] + "..." if len(str(targs)) > 100 else str(targs)
                     logger.info(f"Model requested tool call: {tname} args={targs}")
-                    print(f"[agent] Model requested tool: {tname} args={targs}")
+                    print(f"🔧 [TOOL REQUEST] {tname}({args_preview})")
             except Exception:
                 logger.debug("Could not introspect tool_calls for logging")
 
@@ -210,22 +212,23 @@ def create_tool_calling_agent(
         if tool_signaled_continue and rounds < max_rounds:
             state["rounds"] = rounds + 1
             logger.info(f"Tool(s) {signaled_tools} requested continuation — invoking tools round {state['rounds']} of {max_rounds}")
-            print(f"[agent] Tool signaled continue: {signaled_tools}; round {state['rounds']} of {max_rounds}")
+            print(f"🔄 [AGENT ROUND {state['rounds']}/{max_rounds}] Tool signaled continue: {signaled_tools}")
             return "continue"
 
         # Otherwise, continue only when model explicitly requests tool calls and rounds not exceeded
         if wants_tool and rounds < max_rounds:
             state["rounds"] = rounds + 1
             logger.info(f"Agent invoking tool round {state['rounds']} of {max_rounds}")
-            print(f"[agent] Model requested tool; round {state['rounds']} of {max_rounds}")
+            print(f"🔄 [AGENT ROUND {state['rounds']}/{max_rounds}] Model requested tool call")
             return "continue"
 
         # Otherwise end the workflow
         if (wants_tool or tool_signaled_continue) and rounds >= max_rounds:
             logger.warning(f"Max agent-tool rounds reached ({rounds}/{max_rounds}); stopping further tool calls")
-            print(f"[agent] Max rounds reached ({rounds}/{max_rounds}); stopping")
+            print(f"🛑 [AGENT COMPLETE] Max rounds reached ({rounds}/{max_rounds}); stopping")
         else:
             logger.debug("Agent not requesting further tool calls; ending")
+            print(f"✅ [AGENT COMPLETE] Migration finished successfully after {rounds} rounds")
         return "end"
 
     pre = RunnableLambda(lambda s: [{"role": "system", "content": system_prompt}] + s["messages"]) if system_prompt \

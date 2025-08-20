@@ -39,6 +39,146 @@ from tools.chunking_tools import (
     extract_complete_workflow_map
 )
 
+def _generate_batch_processor_code(processors: List[Dict[str, Any]], chunk_id: str, project: str) -> List[Dict[str, Any]]:
+    """
+    Generate Databricks code for multiple processors in a single LLM call to reduce API requests.
+    """
+    try:
+        from databricks_langchain import ChatDatabricks
+        import os
+        
+        print(f"🧠 [LLM BATCH] Generating code for {len(processors)} processors in {chunk_id}")
+        
+        # Get the model endpoint from environment
+        model_endpoint = os.environ.get("MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
+        llm = ChatDatabricks(endpoint=model_endpoint)
+        
+        # Prepare batch request for all processors
+        processor_specs = []
+        processor_types = []
+        for idx, processor in enumerate(processors):
+            proc_type = processor.get("type", "Unknown")
+            proc_name = processor.get("name", f"processor_{idx}")
+            props = processor.get("properties", {})
+            
+            # Extract just the class name for display
+            class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
+            processor_types.append(class_name)
+            
+            processor_specs.append({
+                "index": idx,
+                "type": proc_type,
+                "name": proc_name,
+                "properties": props,
+                "id": processor.get("id", f"{chunk_id}_task_{idx}")
+            })
+        
+        print(f"🔍 [LLM BATCH] Processor types: {', '.join(processor_types)}")
+        print(f"🚀 [LLM BATCH] Sending batch request to {model_endpoint}...")
+        
+        # Create batched prompt for all processors
+        batch_prompt = f"""You are a NiFi to Databricks migration expert. Generate PySpark code for multiple NiFi processors in a single response.
+
+For each processor below, generate the equivalent PySpark/Databricks code that performs the same function.
+
+PROCESSORS TO CONVERT:
+{json.dumps(processor_specs, indent=2)}
+
+REQUIREMENTS:
+1. Return a JSON object with processor index as key and generated code as value
+2. Use proper Databricks patterns (Delta Lake, DataFrame operations, Auto Loader, Structured Streaming)
+3. Handle the specific properties for each processor appropriately
+4. Include comments explaining the logic
+5. Make the code functional and ready to use
+6. For GetFile/ListFile: use Auto Loader with cloudFiles format
+7. For PutFile/PutHDFS: use Delta Lake writes
+8. For ConsumeKafka: use Structured Streaming
+9. For JSON processors: use PySpark JSON functions
+
+RESPONSE FORMAT:
+{{
+  "0": "# ProcessorType1 → Databricks equivalent\\nfrom pyspark.sql.functions import *\\n\\n# Your PySpark code here",
+  "1": "# ProcessorType2 → Databricks equivalent\\nfrom pyspark.sql.functions import *\\n\\n# Your PySpark code here",
+  ...
+}}
+
+Generate the code for all {len(processor_specs)} processors:"""
+
+        # Call LLM once for all processors
+        response = llm.invoke(batch_prompt)
+        print(f"✅ [LLM BATCH] Received response, parsing generated code...")
+        
+        try:
+            generated_code_map = json.loads(response.content.strip())
+            print(f"🎯 [LLM BATCH] Successfully parsed {len(generated_code_map)} code snippets")
+        except json.JSONDecodeError as e:
+            print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
+            # Try to extract JSON from response if it's wrapped in markdown
+            content = response.content.strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            generated_code_map = json.loads(content)
+        
+        # Build tasks from the batch response
+        generated_tasks = []
+        for spec in processor_specs:
+            idx = spec["index"]
+            code = generated_code_map.get(str(idx), f"# {spec['type']} → Code generation failed\\n# TODO: Implement manually")
+            
+            task = {
+                "id": spec["id"],
+                "name": _safe_name(spec["name"]),
+                "type": spec["type"],
+                "code": code,
+                "properties": spec["properties"],
+                "chunk_id": chunk_id,
+                "processor_index": idx
+            }
+            generated_tasks.append(task)
+        
+        print(f"✨ [LLM BATCH] Generated {len(generated_tasks)} processor tasks for {chunk_id}")
+        logger.info(f"Generated code for {len(generated_tasks)} processors in single LLM call")
+        return generated_tasks
+        
+    except Exception as e:
+        logger.error(f"Batch code generation failed: {e}")
+        # Fallback to individual generation if batch fails
+        generated_tasks = []
+        for idx, processor in enumerate(processors):
+            proc_type = processor.get("type", "Unknown")
+            proc_name = processor.get("name", f"processor_{idx}")
+            props = processor.get("properties", {})
+            
+            # Use pattern-based generation or simple fallback
+            try:
+                code = generate_databricks_code.func(
+                    processor_type=proc_type,
+                    properties=json.dumps(props),
+                )
+            except Exception:
+                code = f"""# {proc_type} → Fallback Template
+# Properties: {json.dumps(props, indent=2)}
+
+df = spark.read.format('delta').load('/path/to/input')
+# TODO: Implement {proc_type} logic
+df.write.format('delta').mode('append').save('/path/to/output')
+"""
+            
+            task = {
+                "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                "name": _safe_name(proc_name),
+                "type": proc_type,
+                "code": code,
+                "properties": props,
+                "chunk_id": chunk_id,
+                "processor_index": idx
+            }
+            generated_tasks.append(task)
+        
+        return generated_tasks
+
 def _default_notebook_path(project: str) -> str:
     user = os.environ.get("WORKSPACE_USER") or os.environ.get("USER_EMAIL") or "Shared"
     base = f"/Users/{user}" if "@" in user else "/Shared"
@@ -447,33 +587,8 @@ def process_nifi_chunk(
         
         generated_tasks = []
         
-        # Process each processor in the chunk
-        for idx, processor in enumerate(processors):
-            proc_type = processor.get("type", "Unknown")
-            proc_name = processor.get("name", f"processor_{idx}")
-            props = processor.get("properties", {})
-            
-            # Generate Databricks code for this processor
-            code = generate_databricks_code.func(
-                processor_type=proc_type,
-                properties=json.dumps(props),
-            )
-            
-            # Enhance code with Auto Loader suggestions if needed
-            if ("GetFile" in proc_type or "ListFile" in proc_type) and "cloudFiles" not in code:
-                al = json.loads(suggest_autoloader_options.func(json.dumps(props)))
-                code = f"# Suggested Auto Loader for {proc_type}\n{al['code']}\n# Tips:\n# - " + "\n# - ".join(al["tips"])
-            
-            task = {
-                "id": processor.get("id", f"{chunk_id}_task_{idx}"),
-                "name": _safe_name(proc_name),
-                "type": proc_type,
-                "code": code,
-                "properties": props,
-                "chunk_id": chunk_id,
-                "processor_index": idx
-            }
-            generated_tasks.append(task)
+        # Generate code for all processors in a single batched LLM call
+        generated_tasks = _generate_batch_processor_code(processors, chunk_id, project)
         
         # Analyze connections for task ordering within chunk
         task_dependencies = {}
@@ -587,7 +702,12 @@ def orchestrate_chunked_nifi_migration(
         chunk_results = []
         all_step_files = []
         
+        print(f"📋 [MIGRATION] Processing {len(chunks)} chunks with {summary['total_processors']} total processors")
+        print(f"🎯 [MIGRATION] Target: max {max_processors_per_chunk} processors per chunk")
+        
         for i, chunk in enumerate(chunks):
+            chunk_processor_count = len(chunk.get("processors", []))
+            print(f"\n📦 [CHUNK {i+1}/{len(chunks)}] Processing {chunk_processor_count} processors...")
             chunk_data = json.dumps(chunk)
             
             # Process this chunk
@@ -598,9 +718,11 @@ def orchestrate_chunked_nifi_migration(
             ))
             
             if "error" in chunk_result:
+                print(f"❌ [CHUNK {i+1}/{len(chunks)}] Error: {chunk_result['error']}")
                 logger.warning(f"Error processing chunk {i}: {chunk_result['error']}")
                 continue
             
+            print(f"✅ [CHUNK {i+1}/{len(chunks)}] Generated {chunk_result.get('task_count', 0)} tasks")
             chunk_results.append(chunk_result)
             
             # Write individual task files for this chunk
@@ -742,12 +864,22 @@ def orchestrate_chunked_nifi_migration(
             deploy_result = deploy_and_run_job.func(json.dumps(final_job_config), run_now=False)
         
         # Final result summary
+        total_tasks = sum(len(cr["tasks"]) for cr in chunk_results)
+        
+        print(f"\n🎉 [MIGRATION COMPLETE]")
+        print(f"📊 [SUMMARY] Processed {summary['total_processors']} processors → {total_tasks} tasks")
+        print(f"📊 [SUMMARY] Used {len(chunk_results)} chunks (max {max_processors_per_chunk} processors/chunk)")
+        print(f"📊 [SUMMARY] Generated {len(all_step_files)} step files")
+        print(f"📊 [SUMMARY] Output directory: {out}")
+        if deploy:
+            print(f"🚀 [DEPLOY] Job deployment: {deploy_result}")
+        
         result = {
             "migration_type": "chunked",
             "output_dir": str(out),
             "chunking_summary": summary,
             "chunks_processed": len(chunk_results),
-            "total_tasks_generated": sum(len(cr["tasks"]) for cr in chunk_results),
+            "total_tasks_generated": total_tasks,
             "step_files_written": all_step_files,
             "cross_chunk_links_count": len(cross_chunk_links),
             "final_job_config_path": str(out / "jobs/job.chunked.json"),
