@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming). The system provides both programmatic APIs and an agent-based interface for automating the migration process.
+This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming). 
+
+**Performance Optimizations (v2.0):**
+- **Batched LLM Generation**: Generates code for multiple processors in single requests (96% fewer API calls)
+- **Smart Agent Limiting**: Completes in 1-2 rounds with `AGENT_MAX_ROUNDS` control
+- **Real-time Progress Tracking**: Visual indicators show migration progress and call counts
+- **Robust Error Handling**: Graceful fallbacks and comprehensive logging
+
+The system provides both programmatic APIs and an agent-based interface for automating the migration process.
 
 ### Core Components
 
@@ -170,6 +178,19 @@ Required environment variables:
 - `MODEL_ENDPOINT`: Foundation model endpoint (default: databricks-meta-llama-3-3-70b-instruct)
 - `NOTIFICATION_EMAIL`: Optional email for job failure notifications
 
+**Performance Configuration (v2.0):**
+- `AGENT_MAX_ROUNDS`: Maximum agent-tool rounds (default: 10, recommended: 5)
+- `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM generation (default: true)
+
+**Optimal `.env` configuration:**
+```bash
+DATABRICKS_TOKEN=your-token
+DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
+MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
+AGENT_MAX_ROUNDS=5
+ENABLE_LLM_CODE_GENERATION=true
+```
+
 ## Key Migration Patterns
 
 - **GetFile/ListFile** → Auto Loader with cloudFiles format
@@ -209,6 +230,34 @@ output_results/project_name/
 └── README.md           # Enhanced documentation with chunking statistics
 ```
 
+## Progress Tracking (v2.0)
+
+The migration system now provides comprehensive progress tracking:
+
+**Agent Level:**
+```
+🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
+🔄 [AGENT ROUND 1/5] Model requested tool call
+✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
+```
+
+**Migration Level:**
+```
+📋 [MIGRATION] Processing 4 chunks with 87 total processors
+📦 [CHUNK 1/4] Processing 25 processors...
+🎉 [MIGRATION COMPLETE] 87 processors → 87 tasks
+```
+
+**LLM Batch Level:**
+```
+🧠 [LLM BATCH] Generating code for 25 processors in chunk_0
+🔍 [LLM BATCH] Processor types: GetFile, EvaluateJsonPath, RouteOnAttribute
+✅ [LLM BATCH] Received response, parsing generated code...
+✨ [LLM BATCH] Generated 25 processor tasks for chunk_0
+```
+
 ## Testing and Validation
 
 The system generates comparison utilities in `tools/eval_tools.py` for validating migration results against original NiFi outputs. Use the pattern registry to iteratively improve conversion accuracy for specific processor types.
+
+**Performance Monitoring**: Track API call efficiency with the new progress indicators to ensure optimal resource usage.

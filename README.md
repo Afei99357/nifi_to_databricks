@@ -71,6 +71,17 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 - Python environment with required dependencies
 - NiFi XML template files for migration
 
+### 🔥 **Performance Improvements** (v2.0)
+
+The migration system now includes significant performance optimizations:
+
+- **⚡ Batched LLM Generation**: Generate code for multiple processors in single requests (up to 96% fewer API calls)
+- **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops  
+- **📊 Real-time Progress Tracking**: Visual progress indicators show exactly what's happening
+- **🛡️ Robust Error Handling**: Graceful fallbacks prevent migration failures
+
+**Example Performance**: 100-processor workflow goes from 100+ LLM calls → 4-6 batched calls
+
 ### Environment Setup
 
 1. **Create `.env` file in the project root**:
@@ -85,6 +96,10 @@ MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
 
 # Email Configuration (Optional)
 NOTIFICATION_EMAIL=your-email@company.com
+
+# Agent Configuration (Controls LLM call behavior)
+AGENT_MAX_ROUNDS=5                    # Max agent-tool rounds (default: 10)
+ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
 # Unity Catalog Pattern Registry (Optional - uses defaults if not specified)
 # Uncomment and customize these if you want to use different UC table locations
@@ -109,6 +124,10 @@ NOTIFICATION_EMAIL=your-email@company.com
 - `DATABRICKS_TOKEN`: Personal access token or service principal token for authentication
 - `DATABRICKS_HOSTNAME`: Full URL to your Databricks workspace (include https://)
 - `MODEL_ENDPOINT`: Foundation model endpoint for the AI agent (uses Llama 3.3 70B by default)
+
+**Agent Configuration Variables:**
+- `AGENT_MAX_ROUNDS`: Maximum agent-tool rounds (default: 10, recommended: 5 for efficiency)
+- `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM code generation (default: true)
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
@@ -277,6 +296,17 @@ response = AGENT.predict(req)
 2. **Recommends** optimal architecture (Jobs vs DLT vs Streaming)
 3. **Executes** the appropriate migration strategy automatically
 4. **Saves** architecture analysis in `conf/architecture_analysis.json`
+
+**Progress Tracking**: You'll see real-time progress like:
+```
+🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
+📋 [MIGRATION] Processing 4 chunks with 87 total processors
+📦 [CHUNK 1/4] Processing 25 processors...
+🧠 [LLM BATCH] Generating code for 25 processors in chunk_0
+✅ [CHUNK 1/4] Generated 25 tasks
+🎉 [MIGRATION COMPLETE] 87 processors → 87 tasks
+✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
+```
 
 #### **Manual Migration (Legacy)**
 For when you want to specify the approach manually:
@@ -565,6 +595,12 @@ def my_custom_tool(parameter: str) -> str:
 5. **Duplicate Task Keys**: Use chunked migration for large workflows to avoid conflicts
 6. **Circular Dependencies**: Check `reconstructed_workflow.json` for dependency issues
 7. **Disconnected Tasks**: Review `complete_workflow_map.json` for funnel bypass issues
+
+### Performance Issues (Fixed in v2.0)
+
+8. **Excessive LLM Calls**: Set `AGENT_MAX_ROUNDS=5` and `ENABLE_LLM_CODE_GENERATION=true` for optimal performance
+9. **Slow Code Generation**: The system now uses batched LLM generation (1 call per chunk vs 1 per processor)
+10. **Agent Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
 
 ### Chunked Migration Troubleshooting
 
