@@ -177,6 +177,31 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
         print(f"✅ [LLM BATCH] Received response, parsing generated code...")
         
         # Log the first 200 chars of response for debugging
+        def clean_json_escape_sequences(content: str) -> str:
+            """Fix common escape sequence issues in JSON strings"""
+            import re
+            
+            # Extract JSON object boundaries first
+            start = content.find('{')
+            end = content.rfind('}') + 1
+            if start >= 0 and end > start:
+                content = content[start:end]
+            
+            # Fix specific escape sequence patterns that cause issues
+            # 1. Fix unescaped single quotes in string values
+            content = re.sub(r"(:\\s*\"[^\"]*)'([^\"]*\")", r"\1\\'\\2", content)
+            
+            # 2. Fix unescaped dollar signs in ${...} patterns  
+            content = re.sub(r'(?<!\\)\$\{', r'\\${', content)
+            
+            # 3. Fix path separators that aren't properly escaped
+            content = re.sub(r'(?<!\\)\\(?![\\"/nrt])', r'\\\\', content)
+            
+            # 4. Fix newline sequences that should be escaped
+            content = content.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r')
+            
+            return content
+
         response_preview = response.content[:200].replace('\n', '\\n')
         print(f"🔍 [LLM BATCH] Response preview: {response_preview}...")
         
@@ -206,6 +231,15 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                         json_content = content[start:end]
                         generated_code_map = json.loads(json_content)
                         print(f"🔧 [LLM BATCH] Recovered JSON from boundaries")
+                except:
+                    pass
+            
+            # Try cleaning escape sequences
+            if generated_code_map is None:
+                try:
+                    cleaned_content = clean_json_escape_sequences(content)
+                    generated_code_map = json.loads(cleaned_content)
+                    print(f"🔧 [LLM BATCH] Recovered JSON after escape sequence cleaning")
                 except:
                     pass
             
