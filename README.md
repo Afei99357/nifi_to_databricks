@@ -101,12 +101,12 @@ NOTIFICATION_EMAIL=your-email@company.com
 AGENT_MAX_ROUNDS=5                    # Max agent-tool rounds (default: 10)
 ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
-# Unity Catalog Pattern Registry (Optional - uses defaults if not specified)
-# Uncomment and customize these if you want to use different UC table locations
-# PATTERN_TABLE=your_catalog.your_schema.processors
-# COMPLEX_TABLE=your_catalog.your_schema.complex_patterns
-# META_TABLE=your_catalog.your_schema.patterns_meta
-# RAW_TABLE=your_catalog.your_schema.patterns_raw_snapshots
+# Unity Catalog Pattern Registry (Optional - improves performance over time)
+# Uncomment these to enable pattern learning and reuse across migrations
+PATTERN_TABLE=eliao.nifi_to_databricks.processors
+COMPLEX_TABLE=eliao.nifi_to_databricks.complex_patterns
+META_TABLE=eliao.nifi_to_databricks.patterns_meta
+RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
 ```
 
 **How to configure:**
@@ -131,10 +131,16 @@ ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
-- `PATTERN_TABLE`: Unity Catalog table for processor patterns
+- `PATTERN_TABLE`: Unity Catalog table for processor patterns (enables pattern learning)
 - `COMPLEX_TABLE`: Unity Catalog table for complex migration patterns  
 - `META_TABLE`: Unity Catalog table for pattern metadata and versioning
 - `RAW_TABLE`: Unity Catalog table for raw pattern snapshots
+
+**Unity Catalog Pattern Registry Benefits:**
+- **Pattern Learning**: Saves LLM-generated patterns for reuse in future migrations
+- **Performance**: Reduces LLM calls from N to 0 for known processors (cost & speed)
+- **Team Sharing**: Multiple users benefit from collectively learned patterns
+- **Auto-Creation**: Tables are created automatically when configured
 
 2. **Initialize Unity Catalog Tables**:
 ```sql
