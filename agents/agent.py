@@ -223,12 +223,14 @@ def create_tool_calling_agent(
             return "continue"
 
         # Otherwise end the workflow
+        # Use the current round count from state (which reflects completed rounds)
+        completed_rounds = state.get("rounds", 0) or 0
         if (wants_tool or tool_signaled_continue) and rounds >= max_rounds:
-            logger.warning(f"Max agent-tool rounds reached ({rounds}/{max_rounds}); stopping further tool calls")
-            print(f"🛑 [AGENT COMPLETE] Max rounds reached ({rounds}/{max_rounds}); stopping")
+            logger.warning(f"Max agent-tool rounds reached ({completed_rounds}/{max_rounds}); stopping further tool calls")
+            print(f"🛑 [AGENT COMPLETE] Max rounds reached ({completed_rounds}/{max_rounds}); stopping")
         else:
             logger.debug("Agent not requesting further tool calls; ending")
-            print(f"✅ [AGENT COMPLETE] Migration finished successfully after {rounds} rounds")
+            print(f"✅ [AGENT COMPLETE] Migration finished successfully after {completed_rounds} rounds")
         return "end"
 
     pre = RunnableLambda(lambda s: [{"role": "system", "content": system_prompt}] + s["messages"]) if system_prompt \
