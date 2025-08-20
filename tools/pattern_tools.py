@@ -418,28 +418,31 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
     This builds up the pattern registry over time.
     """
     try:
-        from registry.pattern_registry import PatternRegistryUC
+        # Use the global registry to ensure tables are created once
+        registry = _get_registry()
         
-        # Create a pattern from the generated code
-        pattern = {
-            "category": "llm_generated",
-            "databricks_equivalent": "LLM Generated Solution",
-            "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
-            "code_template": generated_code,
-            "best_practices": [
-                "Review and customize the generated code",
-                "Test thoroughly before production use",
-                "Consider processor-specific optimizations"
-            ],
-            "generated_from_properties": properties,
-            "generation_source": "llm_hybrid_approach"
-        }
+        # Only save if we have a UC registry (not fallback)
+        if hasattr(registry, 'add_pattern') and hasattr(registry, 'spark'):
+            # Create a pattern from the generated code
+            pattern = {
+                "category": "llm_generated",
+                "databricks_equivalent": "LLM Generated Solution",
+                "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
+                "code_template": generated_code,
+                "best_practices": [
+                    "Review and customize the generated code",
+                    "Test thoroughly before production use",
+                    "Consider processor-specific optimizations"
+                ],
+                "generated_from_properties": properties,
+                "generation_source": "llm_hybrid_approach"
+            }
+            
+            # Save to UC table
+            registry.add_pattern(processor_class, pattern)
+            print(f"💾 [PATTERN SAVED] {processor_class} → UC table")
         
-        # Save to UC table
-        registry = PatternRegistryUC()
-        registry.add_pattern(processor_class, pattern)
-        
-    except Exception:
+    except Exception as e:
         # Silent fail - saving is optional
         pass
 

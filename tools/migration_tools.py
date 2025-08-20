@@ -216,6 +216,14 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             idx = spec["index"]
             code = generated_code_map.get(str(idx), f"# {spec['type']} → Code generation failed\\n# TODO: Implement manually")
             
+            # Save generated pattern to UC table for future reuse
+            try:
+                from tools.pattern_tools import _save_generated_pattern
+                processor_class = spec["type"].split(".")[-1] if "." in spec["type"] else spec["type"]
+                _save_generated_pattern(processor_class, spec["properties"], code)
+            except Exception:
+                pass  # Silent fail - saving is optional
+            
             task = {
                 "id": spec["id"],
                 "name": _safe_name(spec["name"]),
