@@ -257,7 +257,13 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
         
         # Flush patterns once per chunk (creates tables on first run)
         try:
-            from tools.pattern_tools import flush_patterns_to_registry
+            from tools.pattern_tools import flush_patterns_to_registry, dump_buffer_to_file, get_buffered_patterns
+            # Always persist temp JSON snapshot for this chunk
+            buf = get_buffered_patterns()
+            if buf:
+                tmp_file = out / f"chunks/{chunk_id}_pending_patterns.json"
+                dump_buffer_to_file(str(tmp_file))
+            # Attempt UC bulk write
             flush_patterns_to_registry()
         except Exception:
             pass
@@ -902,7 +908,19 @@ def orchestrate_chunked_nifi_migration(
         
         _write_text(out / "jobs/job.chunked.json", json.dumps(final_job_config, indent=2))
         
-        # Step 5: Generate project artifacts
+        # Step 5: Finalize pattern persistence at end of migration
+        try:
+            from tools.pattern_tools import flush_patterns_to_registry, dump_buffer_to_file, get_buffered_patterns
+            # Persist any remaining buffered patterns to temp file and UC
+            buf = get_buffered_patterns()
+            if buf:
+                tmp_file = out / "conf/pending_patterns.final.json"
+                dump_buffer_to_file(str(tmp_file))
+            flush_patterns_to_registry()
+        except Exception:
+            pass
+
+        # Step 6: Generate project artifacts
         # Bundle + README
         bundle_yaml = scaffold_asset_bundle.func(project, job, notebook_path)
         _write_text(out / "databricks.yml", bundle_yaml)
@@ -933,11 +951,11 @@ def orchestrate_chunked_nifi_migration(
         ]
         _write_text(out / "README.md", "\n".join(readme))
         
-        # Step 6: Save parameter contexts and controller services
+        # Step 7: Save parameter contexts and controller services
         params_js = extract_nifi_parameters_and_services_impl(xml_text)
         _write_text(out / "conf/parameter_contexts.json", json.dumps(params_js, indent=2))
         
-        # Step 7: Generate orchestrator notebook (enhanced for chunked processing)
+        # Step 8: Generate orchestrator notebook (enhanced for chunked processing)
         orchestrator = textwrap.dedent(f"""\
         # Databricks notebook source
         # Orchestrator notebook for chunked NiFi migration
@@ -986,7 +1004,7 @@ def orchestrate_chunked_nifi_migration(
         """)
         _write_text(out / "notebooks/main", orchestrator)
         
-        # Step 8: Optional deployment
+        # Step 9: Optional deployment
         deploy_result = None
         if deploy:
             deploy_result = deploy_and_run_job.func(json.dumps(final_job_config), run_now=False)

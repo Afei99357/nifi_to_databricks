@@ -54,6 +54,23 @@ def flush_patterns_to_registry() -> None:
     finally:
         _bulk_buffer = {}
 
+def get_buffered_patterns() -> Dict[str, dict]:
+    """Return a snapshot of the currently buffered patterns (not flushed)."""
+    return dict(_bulk_buffer)
+
+def dump_buffer_to_file(path: str) -> None:
+    """Write the buffered patterns to a JSON file for deferred persistence/audit."""
+    try:
+        payload = {
+            "processors": get_buffered_patterns(),
+            "tool_name": "pattern_tools.dump_buffer",
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(payload, indent=2))
+        print(f"🗂️  [PATTERN BUFFER FILE] Wrote pending patterns → {path}")
+    except Exception as e:
+        print(f"⚠️  [DEBUG] Could not write pattern buffer file: {e}")
+
 class _FallbackRegistry:
     """Fallback registry for when Unity Catalog is not available."""
     def __init__(self):
