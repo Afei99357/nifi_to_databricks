@@ -73,58 +73,161 @@ class PatternRegistryUC:
 
     # ---------- UC table bootstrap ----------
     def _ensure_tables(self) -> None:
+        # 1. Main processor patterns table with comprehensive schema
         self.spark.sql(
             f"""
             CREATE TABLE IF NOT EXISTS {self.processors_table} (
-              processor STRING,
-              pattern_json STRING,
-              updated_at TIMESTAMP
+              processor STRING NOT NULL COMMENT 'NiFi processor class name (e.g., ControlRate, GetFile)',
+              category STRING COMMENT 'Pattern category (builtin, llm_generated, custom)',
+              databricks_equivalent STRING COMMENT 'Databricks service equivalent (e.g., Auto Loader, Delta Lake)',
+              description STRING COMMENT 'Description of what this processor does',
+              code_template STRING COMMENT 'PySpark code template with placeholders',
+              best_practices ARRAY<STRING> COMMENT 'Array of best practice recommendations',
+              generated_from_properties MAP<STRING, STRING> COMMENT 'Properties that generated this pattern',
+              generation_source STRING COMMENT 'Source of generation (llm_hybrid_approach, manual, etc)',
+              pattern_json STRING COMMENT 'Full pattern JSON for backward compatibility',
+              usage_count BIGINT DEFAULT 0 COMMENT 'Number of times this pattern has been used',
+              last_used TIMESTAMP COMMENT 'Last time this pattern was used in migration',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'When pattern was first created',
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'When pattern was last updated',
+              created_by STRING COMMENT 'User who created this pattern'
             ) USING DELTA
+            TBLPROPERTIES (
+              'delta.enableChangeDataFeed' = 'true',
+              'delta.autoOptimize.optimizeWrite' = 'true',
+              'delta.autoOptimize.autoCompact' = 'true'
+            )
+            COMMENT 'NiFi processor to Databricks migration patterns with usage tracking'
             """
         )
+        
+        # Add constraints and indexes for better performance
+        try:
+            self.spark.sql(f"ALTER TABLE {self.processors_table} ADD CONSTRAINT pk_processors PRIMARY KEY (processor)")
+        except Exception:
+            pass  # Constraint might already exist
+            
+        # 2. Complex migration patterns table  
         self.spark.sql(
             f"""
             CREATE TABLE IF NOT EXISTS {self.complex_table} (
-              pattern_name STRING,
-              pattern_json STRING,
-              updated_at TIMESTAMP
+              pattern_name STRING NOT NULL COMMENT 'Unique name for complex pattern (e.g., kafka_to_delta_streaming)',
+              pattern_type STRING COMMENT 'Type of complex pattern (workflow, integration, etc)',
+              description STRING COMMENT 'Description of the complex migration pattern',
+              involved_processors ARRAY<STRING> COMMENT 'List of NiFi processors involved',
+              databricks_services ARRAY<STRING> COMMENT 'List of Databricks services used',
+              complexity_level STRING COMMENT 'LOW, MEDIUM, HIGH complexity rating',
+              migration_strategy STRING COMMENT 'Strategy used (chunked, streaming, batch, etc)',
+              code_snippets MAP<STRING, STRING> COMMENT 'Code snippets by processor type',
+              configuration MAP<STRING, STRING> COMMENT 'Configuration parameters needed',
+              dependencies ARRAY<STRING> COMMENT 'External dependencies required',
+              pattern_json STRING COMMENT 'Full complex pattern JSON',
+              success_rate DOUBLE DEFAULT 0.0 COMMENT 'Success rate of this pattern (0.0-1.0)',
+              usage_count BIGINT DEFAULT 0 COMMENT 'Number of times pattern was used',
+              last_used TIMESTAMP COMMENT 'Last usage timestamp',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Creation timestamp',
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Last update timestamp',
+              created_by STRING COMMENT 'User who created this pattern'
             ) USING DELTA
+            TBLPROPERTIES (
+              'delta.enableChangeDataFeed' = 'true',
+              'delta.autoOptimize.optimizeWrite' = 'true'
+            )
+            COMMENT 'Complex multi-processor migration patterns and workflows'
             """
         )
+        
+        # 3. Optional metadata table for registry versioning
         if self.meta_table:
             self.spark.sql(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.meta_table} (
-                  version STRING,
-                  last_updated TIMESTAMP
+                  key STRING NOT NULL COMMENT 'Metadata key (version, last_migration, stats, etc)',
+                  value STRING COMMENT 'Metadata value as JSON string',
+                  category STRING COMMENT 'Metadata category (system, user, migration)',
+                  description STRING COMMENT 'Description of this metadata entry',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Creation timestamp',
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Last update timestamp'
                 ) USING DELTA
+                TBLPROPERTIES (
+                  'delta.enableChangeDataFeed' = 'true'
+                )
+                COMMENT 'Registry metadata and versioning information'
                 """
             )
+            
+        # 4. Optional raw snapshots table for debugging and rollback
         if self.raw_snapshots_table:
             self.spark.sql(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.raw_snapshots_table} (
-                  snapshot_ts TIMESTAMP,
-                  raw_json STRING
+                  snapshot_id STRING NOT NULL COMMENT 'Unique snapshot identifier',
+                  snapshot_type STRING COMMENT 'Type: migration_run, pattern_backup, etc',
+                  migration_id STRING COMMENT 'Associated migration run ID',
+                  processor_count INT COMMENT 'Number of processors in snapshot',
+                  patterns_count INT COMMENT 'Number of patterns captured',
+                  nifi_xml_hash STRING COMMENT 'Hash of source NiFi XML for deduplication',
+                  raw_json STRING COMMENT 'Complete raw JSON snapshot data',
+                  file_size_bytes BIGINT COMMENT 'Size of the snapshot in bytes',
+                  compression STRING DEFAULT 'none' COMMENT 'Compression method used',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() COMMENT 'Snapshot creation time',
+                  created_by STRING COMMENT 'User who created this snapshot',
+                  tags MAP<STRING, STRING> COMMENT 'Key-value tags for categorization'
                 ) USING DELTA
+                PARTITIONED BY (DATE(created_at))
+                TBLPROPERTIES (
+                  'delta.enableChangeDataFeed' = 'true',
+                  'delta.deletedFileRetentionDuration' = 'interval 30 days',
+                  'delta.logRetentionDuration' = 'interval 90 days'
+                )
+                COMMENT 'Raw snapshots for debugging, rollback, and historical analysis'
                 """
             )
+            
+        print(f"🔧 [UC SETUP] Created Delta tables with comprehensive schema:")
+        print(f"  📊 Processors: {self.processors_table}")
+        print(f"  🔗 Complex patterns: {self.complex_table}")
+        if self.meta_table:
+            print(f"  📋 Metadata: {self.meta_table}")
+        if self.raw_snapshots_table:
+            print(f"  📸 Snapshots: {self.raw_snapshots_table}")
 
     # ---------- Loads ----------
     def _load_processors_uc(self) -> dict:
-        rows = (
-            self.spark.table(self.processors_table)
-            .select("processor", "pattern_json")
-            .collect()
-        )
-        processors: Dict[str, dict] = {}
-        for r in rows:
-            if r["pattern_json"]:
-                try:
-                    processors[r["processor"]] = json.loads(r["pattern_json"])
-                except Exception:
-                    continue
-        return {"processors": processors}
+        try:
+            rows = (
+                self.spark.table(self.processors_table)
+                .select(
+                    "processor", "category", "databricks_equivalent", "description", 
+                    "code_template", "best_practices", "pattern_json", "usage_count"
+                )
+                .collect()
+            )
+            processors: Dict[str, dict] = {}
+            for r in rows:
+                # Try to use structured fields first, fall back to pattern_json
+                if r["code_template"] and r["databricks_equivalent"]:
+                    # Use structured data
+                    pattern = {
+                        "category": r["category"] or "unknown",
+                        "databricks_equivalent": r["databricks_equivalent"],
+                        "description": r["description"] or "",
+                        "code_template": r["code_template"],
+                        "best_practices": r["best_practices"] or [],
+                        "usage_count": r["usage_count"] or 0
+                    }
+                    processors[r["processor"]] = pattern
+                elif r["pattern_json"]:
+                    # Fall back to JSON field for backward compatibility
+                    try:
+                        processors[r["processor"]] = json.loads(r["pattern_json"])
+                    except Exception:
+                        continue
+            print(f"📚 [UC LOAD] Loaded {len(processors)} processor patterns from UC table")
+            return {"processors": processors}
+        except Exception as e:
+            print(f"⚠️  [UC LOAD] Failed to load patterns: {e}")
+            return {"processors": {}}
 
     def _load_complex_uc(self) -> dict:
         rows = (
@@ -143,19 +246,78 @@ class PatternRegistryUC:
 
     # ---------- Upserts ----------
     def _upsert_processor_uc(self, processor: str, pattern: dict) -> None:
-        data = [(processor, json.dumps(pattern, ensure_ascii=False), datetime.utcnow())]
-        sdf = self.spark.createDataFrame(data, ["processor", "pattern_json", "updated_at"])
+        import os
+        from datetime import datetime
+        
+        current_time = datetime.utcnow()
+        current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
+        
+        # Extract fields from pattern dict
+        category = pattern.get("category", "llm_generated")
+        databricks_equivalent = pattern.get("databricks_equivalent", "Unknown")
+        description = pattern.get("description", f"Pattern for {processor}")
+        code_template = pattern.get("code_template", "")
+        best_practices = pattern.get("best_practices", [])
+        generated_from_properties = pattern.get("generated_from_properties", {})
+        generation_source = pattern.get("generation_source", "manual")
+        pattern_json = json.dumps(pattern, ensure_ascii=False)
+        
+        # Create DataFrame with comprehensive schema
+        data = [(
+            processor,
+            category,
+            databricks_equivalent, 
+            description,
+            code_template,
+            best_practices,
+            generated_from_properties,
+            generation_source,
+            pattern_json,
+            1,  # usage_count
+            current_time,  # last_used
+            current_time,  # created_at
+            current_time,  # updated_at
+            current_user   # created_by
+        )]
+        
+        schema = [
+            "processor", "category", "databricks_equivalent", "description", 
+            "code_template", "best_practices", "generated_from_properties",
+            "generation_source", "pattern_json", "usage_count", "last_used",
+            "created_at", "updated_at", "created_by"
+        ]
+        
+        sdf = self.spark.createDataFrame(data, schema)
         sdf.createOrReplaceTempView("_nifi_proc_upsert")
+        
         self.spark.sql(
             f"""
             MERGE INTO {self.processors_table} t
             USING _nifi_proc_upsert s
               ON t.processor = s.processor
             WHEN MATCHED THEN UPDATE SET
+              t.category = s.category,
+              t.databricks_equivalent = s.databricks_equivalent,
+              t.description = s.description,
+              t.code_template = s.code_template,
+              t.best_practices = s.best_practices,
+              t.generated_from_properties = s.generated_from_properties,
+              t.generation_source = s.generation_source,
               t.pattern_json = s.pattern_json,
-              t.updated_at   = s.updated_at
-            WHEN NOT MATCHED THEN INSERT (processor, pattern_json, updated_at)
-              VALUES (s.processor, s.pattern_json, s.updated_at)
+              t.usage_count = t.usage_count + 1,
+              t.last_used = s.last_used,
+              t.updated_at = s.updated_at
+            WHEN NOT MATCHED THEN INSERT (
+              processor, category, databricks_equivalent, description,
+              code_template, best_practices, generated_from_properties,
+              generation_source, pattern_json, usage_count, last_used,
+              created_at, updated_at, created_by
+            ) VALUES (
+              s.processor, s.category, s.databricks_equivalent, s.description,
+              s.code_template, s.best_practices, s.generated_from_properties,
+              s.generation_source, s.pattern_json, s.usage_count, s.last_used,
+              s.created_at, s.updated_at, s.created_by
+            )
             """
         )
 
