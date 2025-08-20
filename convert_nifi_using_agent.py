@@ -14,9 +14,9 @@ dbutils.library.restartPython()
 
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
-import time
+from datetime import datetime
 
-current = time.time()
+current = datetime.now().strftime("%Y%m%d%H%M%S")
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
@@ -50,9 +50,9 @@ for item in resp.output:
 
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
-import time 
+from datetime import datetime
 
-current = time.time()
+current = datetime.now().strftime("%Y%m%d%H%M%S")
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
