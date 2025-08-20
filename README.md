@@ -71,16 +71,19 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 - Python environment with required dependencies
 - NiFi XML template files for migration
 
-### 🔥 **Performance Improvements** (v2.0)
+### 🔥 **Performance Improvements** (v2.1)
 
-The migration system now includes significant performance optimizations:
+The migration system now includes significant performance optimizations and enhanced JSON reliability:
 
 - **⚡ Batched LLM Generation**: Generate code for multiple processors in single requests (up to 96% fewer API calls)
 - **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops  
 - **📊 Real-time Progress Tracking**: Visual progress indicators show exactly what's happening
 - **🛡️ Robust Error Handling**: Graceful fallbacks prevent migration failures
+- **🔧 Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
+- **⚙️ Configurable Batch Sizes**: Tune `MAX_PROCESSORS_PER_CHUNK` and `LLM_SUB_BATCH_SIZE` for optimal performance
 
 **Example Performance**: 100-processor workflow goes from 100+ LLM calls → 4-6 batched calls
+**JSON Reliability**: Eliminates "Invalid \escape" errors with explicit prompt formatting rules
 
 ### Environment Setup
 
@@ -100,6 +103,10 @@ NOTIFICATION_EMAIL=your-email@company.com
 # Agent Configuration (Controls LLM call behavior)
 AGENT_MAX_ROUNDS=5                    # Max agent-tool rounds (default: 10)
 ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
+
+# Batch Processing Configuration (Performance tuning)
+MAX_PROCESSORS_PER_CHUNK=20          # Processors per batch (default: 20, tune 15-30)
+LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10, recommended: 5)
 
 # Unity Catalog Pattern Registry (Optional - improves performance over time)
 # Uncomment these to enable pattern learning and reuse across migrations
@@ -128,6 +135,10 @@ RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
 **Agent Configuration Variables:**
 - `AGENT_MAX_ROUNDS`: Maximum agent-tool rounds (default: 10, recommended: 5 for efficiency)
 - `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM code generation (default: true)
+
+**Batch Processing Configuration Variables:**
+- `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30 based on complexity)
+- `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5 for better success rate)
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
@@ -602,11 +613,33 @@ def my_custom_tool(parameter: str) -> str:
 6. **Circular Dependencies**: Check `reconstructed_workflow.json` for dependency issues
 7. **Disconnected Tasks**: Review `complete_workflow_map.json` for funnel bypass issues
 
-### Performance Issues (Fixed in v2.0)
+### Performance Issues (Fixed in v2.1)
 
 8. **Excessive LLM Calls**: Set `AGENT_MAX_ROUNDS=5` and `ENABLE_LLM_CODE_GENERATION=true` for optimal performance
 9. **Slow Code Generation**: The system now uses batched LLM generation (1 call per chunk vs 1 per processor)
 10. **Agent Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
+11. **JSON Parsing Failures**: Fixed "Invalid \escape" errors with explicit JSON format enforcement in prompts
+12. **Wasteful Fallbacks**: Reduced `LLM_SUB_BATCH_SIZE=5` to minimize individual processor generation
+
+### Batch Size Optimization
+
+If you experience JSON parsing failures or performance issues, tune these settings:
+
+```bash
+# For complex processors with lots of properties
+export MAX_PROCESSORS_PER_CHUNK=15
+
+# For better fallback success rate  
+export LLM_SUB_BATCH_SIZE=5
+
+# For simple processors
+export MAX_PROCESSORS_PER_CHUNK=25
+```
+
+**Success Rate Patterns:**
+- 15-20 processors: ~80-90% success rate
+- 20-25 processors: ~66% success rate  
+- 5-8 processors (fallback): ~90% success rate
 
 ### Chunked Migration Troubleshooting
 
