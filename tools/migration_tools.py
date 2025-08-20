@@ -128,10 +128,10 @@ RESPONSE FORMAT (EXACT):
 
 Generate the code for all {len(processor_specs)} processors as a valid JSON object:"""
 
-        # Create LLM with low temperature for consistent JSON output
+        # Create LLM with very low temperature for consistent JSON output
         llm_json = ChatDatabricks(
             endpoint=model_endpoint,
-            temperature=0.1
+            temperature=0.05
         )
         
         # Enhanced prompt that forces JSON-only output
@@ -162,10 +162,12 @@ CRITICAL JSON ESCAPE RULES (MUST FOLLOW EXACTLY):
 - NEVER use triple quotes in JSON values
 - NEVER use unescaped $ signs - use \\$ instead  
 - Replace \\t with \\\\t and \\r with \\\\r
+- For paths like /etc/security: use /etc/security (no escaping needed)
+- For log messages with quotes: use \\" for each quote
 - DO NOT include multiple JSON objects - return ONE object only
 
-EXAMPLE WITH COMPLEX SQL:
-{{"0": "# UpdateAttribute → SQL Query\\nfrom pyspark.sql import SparkSession\\n\\nsql_query = \\"SELECT * FROM table WHERE column = \\'value\\' AND timestamp = \\'2024-01-01\\';\\"\\nresult = spark.sql(sql_query)", "1": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)"}}
+EXAMPLES OF CORRECT JSON ESCAPING:
+{{"0": "# LogMessage → Warning Log\\nprint(\\"Warning: Analysis failed\\")\\nlog_msg = \\"Failed to open file\\"", "1": "# ExecuteStreamCommand → Kinit\\ncommand = \\"/bin/kinit -kt /etc/security/keytab/file\\"\\nresult = subprocess.run(command, shell=True)"}}
 
 VALIDATE: Your JSON must parse correctly. Test before responding.
 
