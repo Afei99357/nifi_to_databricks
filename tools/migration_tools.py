@@ -51,6 +51,12 @@ from tools.chunking_tools import (
     extract_complete_workflow_map
 )
 
+# Default max processors per chunk (batch size) via env var
+try:
+    MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "25"))
+except Exception:
+    MAX_PROCS_PER_CHUNK_DEFAULT = 25
+
 def _generate_batch_processor_code(processors: List[Dict[str, Any]], chunk_id: str, project: str) -> List[Dict[str, Any]]:
     """
     Generate Databricks code for multiple processors in a single LLM call to reduce API requests.
@@ -806,7 +812,7 @@ def orchestrate_chunked_nifi_migration(
     project: str,
     job: str,
     notebook_path: str = "",
-    max_processors_per_chunk: int = 25,
+    max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
     existing_cluster_id: str = "",
     deploy: bool = False
 ) -> str:
@@ -1294,7 +1300,7 @@ def orchestrate_intelligent_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     deploy: bool = False,
-    max_processors_per_chunk: int = 25
+    max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT
 ) -> str:
     """
     Intelligently migrate NiFi workflow by analyzing XML and automatically choosing the best Databricks architecture.
