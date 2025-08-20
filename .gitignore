@@ -9,6 +9,13 @@ outputs/
 migrations/
 generated/
 
+# Temporary and scratch files
+scratch.txt
+scratch.*
+
+# NiFi pipeline files - often contain sensitive data
+nifi_pipeline_file/
+
 # Python
 __pycache__/
 *.py[cod]
