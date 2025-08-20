@@ -975,7 +975,7 @@ def orchestrate_chunked_nifi_migration(
                 # Also write a raw snapshot and update meta in UC
                 try:
                     from registry import PatternRegistryUC
-                    import hashlib, os
+                    import hashlib
                     reg = PatternRegistryUC()
                     # Create snapshot payload
                     raw_json = json.dumps(buf, ensure_ascii=False)
