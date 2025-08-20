@@ -151,8 +151,26 @@ def generate_databricks_code(processor_type: str, properties: str = "{}", force_
             code += "\n\n# Best Practices:\n" + "\n".join([f"# - {bp}" for bp in rendered["best_practices"]])
         return code
 
-    # Pattern not found in UC table - use LLM generation
-    return _generate_with_llm(processor_class, properties)
+    # Pattern not found in UC table - check if LLM generation is enabled
+    import os
+    enable_llm_generation = os.environ.get("ENABLE_LLM_CODE_GENERATION", "false").lower() == "true"
+    
+    if enable_llm_generation:
+        return _generate_with_llm(processor_class, properties)
+    else:
+        # Use simple fallback template to avoid excessive LLM calls
+        return f"""# {processor_class} → Fallback Template (LLM generation disabled)
+# Properties: {json.dumps(properties, indent=2)}
+# To enable LLM generation, set ENABLE_LLM_CODE_GENERATION=true in .env
+
+# TODO: Implement {processor_class} logic based on properties
+df = spark.read.format('delta').load('/path/to/input')
+
+# Add your {processor_class} transformations here
+df_processed = df  # Customize based on {processor_class} behavior
+
+df_processed.write.format('delta').mode('append').save('/path/to/output')
+"""
 
 
 def _get_processor_specific_guidance(processor_class: str, properties: dict) -> str:
