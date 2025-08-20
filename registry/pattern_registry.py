@@ -34,8 +34,23 @@ def _spark():
     """Return active SparkSession if running on Databricks / PySpark context, else None."""
     try:
         from pyspark.sql import SparkSession  # type: ignore
-        return SparkSession.getActiveSession()
-    except Exception:
+        
+        # Try to get existing active session first
+        spark = SparkSession.getActiveSession()
+        if spark:
+            return spark
+            
+        # If no active session, try to create one (for Databricks environment)
+        try:
+            spark = SparkSession.builder.appName("NiFi_Migration_Pattern_Registry").getOrCreate()
+            print(f"🔧 [SPARK] Created new SparkSession: {spark.sparkContext.appName}")
+            return spark
+        except Exception as create_error:
+            print(f"⚠️  [SPARK] Could not create SparkSession: {create_error}")
+            return None
+            
+    except Exception as import_error:
+        print(f"⚠️  [SPARK] PySpark not available: {import_error}")
         return None
 
 
@@ -53,6 +68,7 @@ class PatternRegistryUC:
         raw_snapshots_table: Optional[str] = None,
     ):
         # Spark / UC wiring
+        print(f"🔧 [UC INIT] Initializing Unity Catalog pattern registry...")
         self.spark = _spark()
         if not self.spark:
             raise RuntimeError("SparkSession not available. PatternRegistryUC requires Databricks / Spark.")
@@ -61,6 +77,12 @@ class PatternRegistryUC:
         self.complex_table = complex_table or COMPLEX_TABLE
         self.meta_table = meta_table or META_TABLE
         self.raw_snapshots_table = raw_snapshots_table or RAW_TABLE
+        
+        print(f"🔧 [UC INIT] Target tables:")
+        print(f"  📊 Processors: {self.processors_table}")
+        print(f"  🔗 Complex: {self.complex_table}")
+        print(f"  📋 Meta: {self.meta_table}")
+        print(f"  📸 Snapshots: {self.raw_snapshots_table}")
 
         # runtime/cache fields
         self.cache: Dict[str, dict] = {}
