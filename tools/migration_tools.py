@@ -213,28 +213,39 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             content = response.content.strip()
             generated_code_map = None
             
+            # Try json-repair as first recovery step
+            try:
+                from json_repair import repair_json
+                repaired_json = repair_json(content)
+                generated_code_map = json.loads(repaired_json)
+                print(f"🔧 [LLM BATCH] Recovered JSON using json-repair")
+            except Exception as repair_error:
+                print(f"⚠️  [LLM BATCH] json-repair failed: {repair_error}")
+            
             # Try extracting JSON from markdown blocks
-            if "```json" in content:
+            if generated_code_map is None and "```json" in content:
                 try:
                     extracted = content.split("```json")[1].split("```")[0].strip()
-                    generated_code_map = json.loads(extracted)
-                    print(f"🔧 [LLM BATCH] Recovered JSON from markdown block")
+                    repaired_extracted = repair_json(extracted)
+                    generated_code_map = json.loads(repaired_extracted)
+                    print(f"🔧 [LLM BATCH] Recovered JSON from markdown block with repair")
                 except:
                     pass
             
-            # Try finding JSON object boundaries
+            # Try finding JSON object boundaries with repair
             if generated_code_map is None:
                 try:
                     start = content.find('{')
                     end = content.rfind('}') + 1
                     if start >= 0 and end > start:
                         json_content = content[start:end]
-                        generated_code_map = json.loads(json_content)
-                        print(f"🔧 [LLM BATCH] Recovered JSON from boundaries")
+                        repaired_boundaries = repair_json(json_content)
+                        generated_code_map = json.loads(repaired_boundaries)
+                        print(f"🔧 [LLM BATCH] Recovered JSON from boundaries with repair")
                 except:
                     pass
             
-            # Try cleaning escape sequences
+            # Fallback to manual escape sequence cleaning
             if generated_code_map is None:
                 try:
                     cleaned_content = clean_json_escape_sequences(content)
@@ -243,7 +254,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                 except:
                     pass
             
-            # If recovery fails, fall back to individual generation
+            # If all recovery fails, fall back to individual generation
             if generated_code_map is None:
                 print(f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation")
                 raise e
