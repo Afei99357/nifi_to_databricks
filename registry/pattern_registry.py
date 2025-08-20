@@ -43,7 +43,13 @@ def _spark():
         # If no active session, try to create one (for Databricks environment)
         try:
             spark = SparkSession.builder.appName("NiFi_Migration_Pattern_Registry").getOrCreate()
-            print(f"🔧 [SPARK] Created new SparkSession: {spark.sparkContext.appName}")
+            # Avoid sparkContext.appName in Spark Connect - just check if session is valid
+            try:
+                app_name = spark.sparkContext.appName
+                print(f"🔧 [SPARK] Created new SparkSession: {app_name}")
+            except Exception:
+                # Spark Connect mode - can't access sparkContext
+                print(f"🔧 [SPARK] Created new SparkSession (Spark Connect mode)")
             return spark
         except Exception as create_error:
             print(f"⚠️  [SPARK] Could not create SparkSession: {create_error}")

@@ -427,7 +427,11 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
         # Only save if we have a UC registry (not fallback)
         if hasattr(registry, 'add_pattern') and hasattr(registry, 'spark'):
             if registry.spark:
-                print(f"🔍 [DEBUG] SparkSession available: {registry.spark.sparkContext.appName}")
+                try:
+                    app_name = registry.spark.sparkContext.appName
+                    print(f"🔍 [DEBUG] SparkSession available: {app_name}")
+                except Exception:
+                    print(f"🔍 [DEBUG] SparkSession available (Spark Connect mode)")
                 
                 # Create a pattern from the generated code
                 pattern = {
