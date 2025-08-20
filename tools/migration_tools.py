@@ -140,7 +140,8 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             generated_code_map = json.loads(response.content.strip())
             print(f"🎯 [LLM BATCH] Successfully parsed {len(generated_code_map)} code snippets")
         except json.JSONDecodeError as e:
-            print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
+            print(f"⚠️  [LLM BATCH] Strict JSON parse failed: {e}")
+            print(f"↪️  [LLM BATCH] Recovery steps: markdown json → fenced code → boundary detection → escape fixes → regex extraction")
             # Try multiple approaches to extract JSON from response
             content = response.content.strip()
             generated_code_map = None
@@ -150,14 +151,14 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                 try:
                     content = content.split("```json")[1].split("```")[0].strip()
                     generated_code_map = json.loads(content)
-                    print(f"🔧 [LLM BATCH] Recovered JSON from markdown block")
+                    print(f"✅ [LLM BATCH] Recovered via markdown json block")
                 except:
                     pass
             elif "```" in content:
                 try:
                     content = content.split("```")[1].split("```")[0].strip()
                     generated_code_map = json.loads(content)
-                    print(f"🔧 [LLM BATCH] Recovered JSON from code block")
+                    print(f"✅ [LLM BATCH] Recovered via fenced code block")
                 except:
                     pass
             
@@ -172,7 +173,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                         # Fix common escape issues
                         json_content = json_content.replace('\\n', '\\\\n').replace('\\"', '\\\\"')
                         generated_code_map = json.loads(json_content)
-                        print(f"🔧 [LLM BATCH] Recovered JSON by boundary detection")
+                        print(f"✅ [LLM BATCH] Recovered via boundary detection")
                 except:
                     pass
             
@@ -185,7 +186,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                     if '\\\\' not in fixed_content:
                         fixed_content = fixed_content.replace('\\', '\\\\')
                     generated_code_map = json.loads(fixed_content)
-                    print(f"🔧 [LLM BATCH] Recovered JSON after escape fixes")
+                    print(f"✅ [LLM BATCH] Recovered via escape fixes")
                 except:
                     pass
             
@@ -204,7 +205,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
                             clean_match = re.sub(r'",\s*}', '"}', clean_match)  # Remove trailing commas
                             clean_match = re.sub(r'",\s*]', '"]', clean_match)  # Remove trailing commas in arrays
                             generated_code_map = json.loads(clean_match)
-                            print(f"🔧 [LLM BATCH] Recovered JSON using regex pattern matching")
+                            print(f"✅ [LLM BATCH] Recovered via regex extraction")
                             break
                         except:
                             continue
@@ -213,7 +214,7 @@ Generate the code for all {len(processor_specs)} processors as a valid JSON obje
             
             # If all parsing attempts fail, raise the original error
             if generated_code_map is None:
-                print(f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation")
+                print(f"❌ [LLM BATCH] All recovery attempts failed → falling back to sub-batches/per-processor as needed")
                 raise e
         
         # Build tasks from the batch response
