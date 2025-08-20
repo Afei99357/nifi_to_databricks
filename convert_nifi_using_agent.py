@@ -12,11 +12,6 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC Complex NIFI Workflow
-
-# COMMAND ----------
-
 from mlflow.types.responses import ResponsesAgentRequest
 from agents import AGENT
 
