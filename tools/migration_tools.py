@@ -153,14 +153,21 @@ REQUIREMENTS:
 
 CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
 
-JSON ESCAPE RULES:
-- Use \\n for newlines (double backslash + n)
-- Use \\" for quotes (backslash + quote)  
+CRITICAL JSON ESCAPE RULES (MUST FOLLOW EXACTLY):
+- Use \\n for newlines (double backslash + n) 
+- Use \\" for quotes (backslash + quote)
 - Use \\\\ for literal backslashes (four backslashes)
-- DO NOT use single backslashes like \\t or \\r
+- For SQL queries: Replace ALL internal quotes with \\" 
+- For multi-line SQL: Use \\n instead of actual newlines
+- NEVER use triple quotes (""") in JSON values
+- NEVER use unescaped $ signs - use \\$ instead  
+- Replace \\t with \\\\t and \\r with \\\\r
+- DO NOT include multiple JSON objects - return ONE object only
 
-EXAMPLE FORMAT:
-{{"0": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)", "1": "# GetFile → Auto Loader\\nfrom pyspark.sql.functions import *\\n\\ndf = spark.readStream.format('cloudFiles').load('/path/')"}}
+EXAMPLE WITH COMPLEX SQL:
+{{"0": "# UpdateAttribute → SQL Query\\nfrom pyspark.sql import SparkSession\\n\\nsql_query = \\"SELECT * FROM table WHERE column = \\'value\\' AND date = \\'\\${date}\\';\\"\\nresult = spark.sql(sql_query)", "1": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)"}}
+
+VALIDATE: Your JSON must parse correctly. Test before responding.
 
 GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
