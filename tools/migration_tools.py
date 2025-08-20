@@ -16,6 +16,18 @@ from langchain_core.tools import tool
 
 from config import logger
 from utils import safe_name as _safe_name, write_text as _write_text, read_text as _read_text
+
+def _unescape_code(code: str) -> str:
+    """
+    Unescape literal escape sequences from LLM-generated code.
+    Converts \\n to actual newlines, \\t to tabs, etc.
+    """
+    if not code:
+        return code
+    
+    # Handle common escape sequences
+    unescaped = code.encode().decode('unicode_escape')
+    return unescaped
 from utils import (
     parse_nifi_template_impl,
     extract_nifi_parameters_and_services_impl,
@@ -411,8 +423,10 @@ def convert_flow(
             al = json.loads(suggest_autoloader_options.func(json.dumps(props)))
             code = f"# Suggested Auto Loader for {proc_type}\n{al['code']}\n# Tips:\n# - " + "\n# - ".join(al["tips"])
 
+        # Unescape the code to convert \n to actual newlines, etc.
+        unescaped_code = _unescape_code(code)
         step_path = out / f"src/steps/{idx:02d}_{name_sn}.py"
-        _write_text(step_path, code)
+        _write_text(step_path, unescaped_code)
         step_files.append(step_path)
 
     # 3) Bundle + README
@@ -782,8 +796,10 @@ def orchestrate_chunked_nifi_migration(
             for task in chunk_result["tasks"]:
                 task_name = task["name"]
                 code = task["code"]
+                # Unescape the code to convert \n to actual newlines, etc.
+                unescaped_code = _unescape_code(code)
                 step_path = out / f"src/steps/{i:02d}_{task_name}.py"
-                _write_text(step_path, code)
+                _write_text(step_path, unescaped_code)
                 all_step_files.append(str(step_path))
             
             # Save chunk processing result
