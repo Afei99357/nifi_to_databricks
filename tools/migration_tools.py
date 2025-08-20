@@ -165,7 +165,7 @@ CRITICAL JSON ESCAPE RULES (MUST FOLLOW EXACTLY):
 - DO NOT include multiple JSON objects - return ONE object only
 
 EXAMPLE WITH COMPLEX SQL:
-{{"0": "# UpdateAttribute → SQL Query\\nfrom pyspark.sql import SparkSession\\n\\nsql_query = \\"SELECT * FROM table WHERE column = \\'value\\' AND date = \\'\\${date}\\';\\"\\nresult = spark.sql(sql_query)", "1": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)"}}
+{{"0": "# UpdateAttribute → SQL Query\\nfrom pyspark.sql import SparkSession\\n\\nsql_query = \\"SELECT * FROM table WHERE column = \\'value\\' AND timestamp = \\'2024-01-01\\';\\"\\nresult = spark.sql(sql_query)", "1": "# ControlRate → Throttling\\nfrom time import sleep\\n\\n# Delay for rate limiting\\nsleep(300)"}}
 
 VALIDATE: Your JSON must parse correctly. Test before responding.
 
