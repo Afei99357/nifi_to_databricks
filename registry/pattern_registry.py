@@ -208,73 +208,7 @@ class PatternRegistryUC:
         self.complex = self._load_complex_uc()
         self.cache.clear()
 
-    def snapshot_raw_json(self, raw_json: str) -> None:
-        if not self.raw_snapshots_table:
-            return
-        self.spark.createDataFrame([(datetime.utcnow(), raw_json)], ["snapshot_ts", "raw_json"]) \
-            .write.mode("append").saveAsTable(self.raw_snapshots_table)
-
-    def seed_from_blob(self, blob: Dict[str, Any]) -> None:
-        # processors
-        proc_rows = [
-            (name, json.dumps(patt, ensure_ascii=False), datetime.utcnow())
-            for name, patt in (blob.get("processors", {}) or {}).items()
-        ]
-        if proc_rows:
-            self.spark.createDataFrame(proc_rows, ["processor", "pattern_json", "updated_at"]) \
-                .createOrReplaceTempView("_seed_processors")
-            self.spark.sql(
-                f"""
-                MERGE INTO {self.processors_table} t
-                USING _seed_processors s
-                ON t.processor = s.processor
-                WHEN MATCHED THEN UPDATE SET
-                  t.pattern_json = s.pattern_json,
-                  t.updated_at   = s.updated_at
-                WHEN NOT MATCHED THEN INSERT (processor, pattern_json, updated_at)
-                  VALUES (s.processor, s.pattern_json, s.updated_at)
-                """
-            )
-        # complex
-        complex_rows = [
-            (name, json.dumps(patt, ensure_ascii=False), datetime.utcnow())
-            for name, patt in (blob.get("complex_patterns", {}) or {}).items()
-        ]
-        if complex_rows:
-            self.spark.createDataFrame(complex_rows, ["pattern_name", "pattern_json", "updated_at"]) \
-                .createOrReplaceTempView("_seed_complex")
-            self.spark.sql(
-                f"""
-                MERGE INTO {self.complex_table} t
-                USING _seed_complex s
-                ON t.pattern_name = s.pattern_name
-                WHEN MATCHED THEN UPDATE SET
-                  t.pattern_json = s.pattern_json,
-                  t.updated_at   = s.updated_at
-                WHEN NOT MATCHED THEN INSERT (pattern_name, pattern_json, updated_at)
-                  VALUES (s.pattern_name, s.pattern_json, s.updated_at)
-                """
-            )
-        # optional meta
-        if self.meta_table:
-            version = blob.get("version")
-            last_updated = blob.get("last_updated")
-            if version and last_updated:
-                if isinstance(last_updated, str) and "T" not in last_updated:
-                    last_updated = f"{last_updated}T00:00:00"
-                self.spark.createDataFrame(
-                    [(version, datetime.fromisoformat(last_updated))],
-                    ["version", "last_updated"],
-                ).write.mode("overwrite").saveAsTable(self.meta_table)
-
-        self.refresh_from_uc()
-
-    def seed_from_file(self, json_file_path: str) -> None:
-        with open(json_file_path, "r", encoding="utf-8") as f:
-            raw = f.read()
-        blob = json.loads(raw)
-        self.snapshot_raw_json(raw)
-        self.seed_from_blob(blob)
+    # JSON seeding functions removed - use Delta table operations only
 
     def track_usage(self, processor: str) -> None:
         stats = self.usage_stats.get(processor, {"count": 0})

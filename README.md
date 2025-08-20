@@ -99,8 +99,8 @@ from registry import PatternRegistryUC
 # Initialize with Unity Catalog tables
 reg = PatternRegistryUC()
 
-# Optionally seed from the JSON file (one-time setup)
-reg.seed_from_file("migration_nifi_patterns.json")
+# Patterns are managed directly in Delta tables - no JSON seeding needed
+# Use reg.add_pattern() to add new processor patterns as needed
 ```
 
 ### Basic Usage
