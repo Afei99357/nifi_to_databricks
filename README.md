@@ -697,6 +697,12 @@ This project uses pre-commit hooks to ensure code quality. The hooks are configu
 
 #### Setup
 
+**Quick setup (recommended):**
+```bash
+./scripts/setup_dev.sh
+```
+
+**Manual setup:**
 1. Install dev dependencies:
    ```bash
    uv sync --group dev
