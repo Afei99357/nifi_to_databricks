@@ -84,6 +84,9 @@ Thumbs.db
 *.log
 *.bak
 
+# Metrics tracking
+.exception_metrics.json
+
 # Unity Catalog temporary files
 *.uc_temp
 

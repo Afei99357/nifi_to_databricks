@@ -726,6 +726,7 @@ The hooks will now run automatically on every commit. If any hooks fail, the com
 - **isort**: Configured to work with Black
 - **flake8**: Lenient configuration for initial setup (ignores many common issues)
 - **mypy**: Enabled with lenient settings and module-specific overrides for gradual adoption
+- **Exception Handling**: Non-gating checks for banned exception patterns with metrics
 
 #### MyPy Type Checking
 
@@ -736,3 +737,25 @@ MyPy is configured to start lenient but provides a clear path to strictness:
 - **Future**: Full strict mode for maximum type safety
 
 📖 **See [MyPy Strictness Guide](docs/mypy_strictness_guide.md)** for the complete graduation plan.
+
+#### Exception Handling Quality
+
+The pre-commit hooks include a custom exception handling checker that:
+
+- **Reports** banned patterns like `except Exception:` and `except:`
+- **Tracks metrics** for try/except usage, with statements, and more
+- **Provides suggestions** for better error handling
+- **Non-gating** - warns but doesn't block commits
+- **Metrics tracking** - gates commits if exception handling metrics degrade over time
+
+**Quick commands:**
+```bash
+# Check exception handling quality
+python3 scripts/exception_metrics.py .
+
+# Get help
+python3 scripts/exception_metrics.py --help
+
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+```

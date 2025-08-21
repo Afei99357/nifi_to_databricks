@@ -1,0 +1,254 @@
+[
+  {
+    "timestamp": "2025-08-21T09:00:28.332344",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:32.313175",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:32.313455",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:32.313769",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:32.315546",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:32.315890",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:40.885366",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:00:36.142791",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:18.801921",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:23.792747",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:23.793877",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:23.795070",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:23.797174",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:33.243977",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:04:28.208999",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:14:35.801403",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:15:49.175701",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:15:53.432236",
+    "metrics": {
+      "banned_patterns": 68,
+      "try_blocks": 73,
+      "except_blocks": 74,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:17:24.897619",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:17:27.919341",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:17:56.577379",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:30:38.833333",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:30:48.822302",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:32:09.308190",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:32:19.882376",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:32:22.860431",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:33:18.688194",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  },
+  {
+    "timestamp": "2025-08-21T09:33:26.162392",
+    "metrics": {
+      "banned_patterns": 69,
+      "try_blocks": 73,
+      "except_blocks": 72,
+      "finally_blocks": 1
+    }
+  }
+]
