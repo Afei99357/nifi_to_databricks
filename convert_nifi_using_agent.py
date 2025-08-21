@@ -1,5 +1,9 @@
 # Databricks notebook source
-# MAGIC %pip install -U -qqqq backoff databricks-langchain langgraph==0.5.3 uv databricks-agents mlflow-skinny[databricks]
+# MAGIC %pip install -U -qqqq backoff databricks-langchain langgraph==0.5.3 uv databricks-agents mlflow-skinny[databricks] json-repair
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
