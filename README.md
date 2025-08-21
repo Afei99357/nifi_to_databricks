@@ -108,11 +108,6 @@ ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 # Batch Processing Configuration (Performance tuning)
 MAX_PROCESSORS_PER_CHUNK=20          # Processors per batch (default: 20, tune 15-30)
 LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10, recommended: 5)
-
-# Job Status Polling Configuration
-JOB_STATUS_INITIAL_WAIT=5            # Seconds to wait before first status check (default: 5)
-JOB_STATUS_POLL_INTERVAL=3           # Seconds between status checks (default: 3)
-JOB_STATUS_MAX_WAIT=45               # Total seconds to wait for job status (default: 45)
 ```
 
 **How to configure:**
@@ -132,11 +127,6 @@ JOB_STATUS_MAX_WAIT=45               # Total seconds to wait for job status (def
 **Batch Processing Configuration Variables:**
 - `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30 based on complexity)
 - `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5 for better success rate)
-
-**Job Status Polling Variables:**
-- `JOB_STATUS_INITIAL_WAIT`: Seconds to wait before first status check (default: 5)
-- `JOB_STATUS_POLL_INTERVAL`: Seconds between status checks (default: 3)
-- `JOB_STATUS_MAX_WAIT`: Total seconds to wait for job status (default: 45)
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
