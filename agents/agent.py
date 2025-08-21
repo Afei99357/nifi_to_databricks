@@ -1,5 +1,4 @@
 # agent.py
-import copy
 import json
 import os
 from typing import Annotated, Any, Generator, Optional, Sequence, TypedDict, Union
@@ -37,42 +36,84 @@ os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 # --- LLM & system prompt ---
 # Patch ChatDatabricks to fix additionalProperties in tool schemas
 class FixedChatDatabricks(ChatDatabricks):
-    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-        # Fix tools in the request data that's about to be sent to the API
-        if "tools" in kwargs:
-            kwargs = kwargs.copy()  # Don't modify the original
-            tools_copy = []
-            for tool in kwargs["tools"]:
+    """Databricks LLM with tool schema fixes applied once at initialization."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Pre-fix tool schemas to avoid deep copying on every call
+        self._fixed_tools_cache = {}
+
+    def _get_fixed_tools(self, tools):
+        """Get tools with schemas fixed, using cache for efficiency."""
+        if not tools:
+            return tools
+
+        # Create a cache key based on tool identities
+        tools_key = tuple(id(tool) for tool in tools if isinstance(tool, dict))
+
+        if tools_key not in self._fixed_tools_cache:
+            fixed_tools = []
+            for tool in tools:
                 if isinstance(tool, dict):
-                    tool_copy = self._deep_copy_and_fix_tool(tool)
-                    tools_copy.append(tool_copy)
+                    fixed_tool = self._fix_tool_schema(tool)
+                    fixed_tools.append(fixed_tool)
                 else:
-                    tools_copy.append(tool)
-            kwargs["tools"] = tools_copy
+                    fixed_tools.append(tool)
+            self._fixed_tools_cache[tools_key] = fixed_tools
+
+        return self._fixed_tools_cache[tools_key]
+
+    def _fix_tool_schema(self, tool):
+        """Fix a single tool's schema without deep copying."""
+        if "function" not in tool or "parameters" not in tool["function"]:
+            return tool
+
+        # Create fixed tool with immutable approach
+        return {
+            **tool,
+            "function": {
+                **tool["function"],
+                "parameters": self._fix_schema_immutably(
+                    tool["function"]["parameters"]
+                ),
+            },
+        }
+
+    def _fix_schema_immutably(self, schema):
+        """Return a fixed schema without mutating the original."""
+        if not isinstance(schema, dict):
+            return schema
+
+        fixed = {}
+        for key, value in schema.items():
+            if key == "additionalProperties":
+                fixed[key] = False  # Fix the additionalProperties issue
+            elif isinstance(value, dict):
+                fixed[key] = self._fix_schema_immutably(value)
+            elif isinstance(value, list):
+                fixed[key] = [
+                    self._fix_schema_immutably(item) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                fixed[key] = value
+        return fixed
+
+    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+        # Use pre-fixed tools instead of copying on every call
+        if "tools" in kwargs:
+            kwargs = kwargs.copy()  # Shallow copy is sufficient now
+            kwargs["tools"] = self._get_fixed_tools(kwargs["tools"])
 
         return super()._stream(messages, stop=stop, run_manager=run_manager, **kwargs)
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        # Fix tools in the request data for non-streaming generation
+        # Use pre-fixed tools instead of copying on every call
         if "tools" in kwargs:
-            kwargs = kwargs.copy()  # Don't modify the original
-            tools_copy = []
-            for tool in kwargs["tools"]:
-                if isinstance(tool, dict):
-                    tool_copy = self._deep_copy_and_fix_tool(tool)
-                    tools_copy.append(tool_copy)
-                else:
-                    tools_copy.append(tool)
-            kwargs["tools"] = tools_copy
+            kwargs = kwargs.copy()  # Shallow copy is sufficient now
+            kwargs["tools"] = self._get_fixed_tools(kwargs["tools"])
 
         return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-
-    def _deep_copy_and_fix_tool(self, tool):
-        """Deep copy a tool dict and fix its schema"""
-        tool_copy = copy.deepcopy(tool)
-        if "function" in tool_copy and "parameters" in tool_copy["function"]:
-            _fix_additional_properties(tool_copy["function"]["parameters"])
-        return tool_copy
 
 
 llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
