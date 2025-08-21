@@ -219,6 +219,111 @@ def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
     return json.dumps({"job_id": job_id}, indent=2)
 
 
+def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 30) -> dict:
+    """
+    Check the status of a Databricks job run.
+    Polls for up to max_wait_seconds to see if job actually starts running.
+
+    Returns:
+        {
+            "status": "RUNNING" | "PENDING" | "FAILED" | "SUCCESS" | "TIMEOUT",
+            "life_cycle_state": actual Databricks state,
+            "result_state": result if completed,
+            "state_message": human readable message,
+            "run_page_url": URL to view run in Databricks UI
+        }
+    """
+    import time
+
+    host = os.environ.get("DATABRICKS_HOST") or os.environ.get("DATABRICKS_HOSTNAME")
+    token = os.environ.get("DATABRICKS_TOKEN")
+    if not (host and token):
+        return {
+            "status": "FAILED",
+            "state_message": "Missing DATABRICKS_HOST and/or DATABRICKS_TOKEN",
+        }
+    if not host.startswith("http"):
+        host = "https://" + host
+
+    headers = {"Authorization": f"Bearer {token}"}
+    run_page_url = f"{host}/#job/{job_id}/run/{run_id}"
+
+    # Poll for status
+    start_time = time.time()
+    while time.time() - start_time < max_wait_seconds:
+        try:
+            response = requests.get(
+                f"{host}/api/2.1/jobs/runs/get",
+                params={"run_id": run_id},
+                headers=headers,
+                timeout=10,
+            )
+
+            if response.status_code >= 300:
+                return {
+                    "status": "FAILED",
+                    "state_message": f"API error: {response.status_code} {response.text}",
+                    "run_page_url": run_page_url,
+                }
+
+            run_data = response.json()
+            life_cycle_state = run_data.get("state", {}).get(
+                "life_cycle_state", "UNKNOWN"
+            )
+            result_state = run_data.get("state", {}).get("result_state")
+
+            # Determine overall status
+            if life_cycle_state in ["RUNNING"]:
+                return {
+                    "status": "RUNNING",
+                    "life_cycle_state": life_cycle_state,
+                    "state_message": "Job is actively running",
+                    "run_page_url": run_page_url,
+                }
+            elif life_cycle_state in ["PENDING", "BLOCKED"]:
+                # Keep waiting
+                time.sleep(2)
+                continue
+            elif life_cycle_state in ["SKIPPED", "INTERNAL_ERROR"] or result_state in [
+                "FAILED",
+                "TIMEDOUT",
+                "CANCELED",
+            ]:
+                return {
+                    "status": "FAILED",
+                    "life_cycle_state": life_cycle_state,
+                    "result_state": result_state,
+                    "state_message": f"Job failed: {life_cycle_state} / {result_state}",
+                    "run_page_url": run_page_url,
+                }
+            elif result_state == "SUCCESS":
+                return {
+                    "status": "SUCCESS",
+                    "life_cycle_state": life_cycle_state,
+                    "result_state": result_state,
+                    "state_message": "Job completed successfully",
+                    "run_page_url": run_page_url,
+                }
+            else:
+                # Keep waiting for unclear states
+                time.sleep(2)
+                continue
+
+        except Exception as e:
+            return {
+                "status": "FAILED",
+                "state_message": f"Status check error: {str(e)}",
+                "run_page_url": run_page_url,
+            }
+
+    # Timeout
+    return {
+        "status": "TIMEOUT",
+        "state_message": f"Status check timed out after {max_wait_seconds}s - job may still be starting",
+        "run_page_url": run_page_url,
+    }
+
+
 @tool
 def scaffold_asset_bundle(
     project_name: str,

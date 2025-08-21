@@ -55,6 +55,7 @@ from tools.generator_tools import (
     suggest_autoloader_options,
 )
 from tools.job_tools import (
+    check_job_run_status,
     create_job_config,
     create_job_config_from_plan,
     deploy_and_run_job,
@@ -794,15 +795,53 @@ def orchestrate_nifi_migration(
     try:
         deploy_res = deploy_and_run_job.func(dag_job_json, run_now=run_now)
 
-        # Simple success check
+        # Parse deployment result
         if deploy_res and "job_id" in str(deploy_res):
-            print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_res}")
-            if run_now:
-                print(f"🚀 [JOB STARTED] Job is now running")
-            else:
-                print(f"🎯 [JOB READY] Job is ready to run in Databricks Jobs UI")
-            deployment_success = True
-            deployment_error = None
+            try:
+                result_data = json.loads(deploy_res)
+                job_id = result_data.get("job_id")
+                run_id = result_data.get("run_id")
+
+                print(f"✅ [DEPLOY SUCCESS] Job created (job_id: {job_id})")
+
+                if run_now and run_id:
+                    print(f"🚀 [JOB TRIGGERED] Execution started (run_id: {run_id})")
+                    print(f"⏳ [STATUS CHECK] Verifying job startup...")
+
+                    # Poll for actual job status
+                    status = check_job_run_status(job_id, run_id, max_wait_seconds=30)
+
+                    if status["status"] == "RUNNING":
+                        print(f"✅ [JOB RUNNING] Job is actively running!")
+                        print(f"📊 [MONITOR] View progress: {status['run_page_url']}")
+                    elif status["status"] == "FAILED":
+                        print(f"❌ [JOB FAILED] {status['state_message']}")
+                        print(f"🔗 [DEBUG] Check details: {status['run_page_url']}")
+                    elif status["status"] == "TIMEOUT":
+                        print(f"⏰ [JOB PENDING] {status['state_message']}")
+                        print(f"🔗 [MONITOR] Check status: {status['run_page_url']}")
+                    elif status["status"] == "SUCCESS":
+                        print(f"🎉 [JOB COMPLETE] Job finished successfully!")
+                        print(f"📊 [RESULTS] View output: {status['run_page_url']}")
+                elif run_now and not run_id:
+                    print(f"⚠️  [JOB CREATED] Job created but run trigger failed")
+                    print(
+                        f"🔗 [MANUAL RUN] Start manually: https://databricks.com/#job/{job_id}"
+                    )
+                else:
+                    print(f"🎯 [JOB READY] Job ready for manual execution")
+                    print(
+                        f"🔗 [RUN MANUALLY] Start job: https://databricks.com/#job/{job_id}"
+                    )
+
+                deployment_success = True
+                deployment_error = None
+
+            except json.JSONDecodeError:
+                # Fallback for non-JSON responses
+                print(f"✅ [DEPLOY SUCCESS] {deploy_res}")
+                deployment_success = True
+                deployment_error = None
         else:
             print(f"❌ [DEPLOY FAILED] {deploy_res}")
             deployment_success = False
@@ -1175,15 +1214,61 @@ def orchestrate_chunked_nifi_migration(
                 json.dumps(final_job_config), run_now=run_now
             )
 
-            # Simple success check
+            # Parse deployment result
             if deploy_result and "job_id" in str(deploy_result):
-                print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_result}")
-                if run_now:
-                    print(f"🚀 [JOB STARTED] Job is now running")
-                else:
-                    print(f"🎯 [JOB READY] Job is ready to run in Databricks Jobs UI")
-                deployment_success = True
-                deployment_error = None
+                try:
+                    result_data = json.loads(deploy_result)
+                    job_id = result_data.get("job_id")
+                    run_id = result_data.get("run_id")
+
+                    print(f"✅ [DEPLOY SUCCESS] Job created (job_id: {job_id})")
+
+                    if run_now and run_id:
+                        print(
+                            f"🚀 [JOB TRIGGERED] Execution started (run_id: {run_id})"
+                        )
+                        print(f"⏳ [STATUS CHECK] Verifying job startup...")
+
+                        # Poll for actual job status
+                        status = check_job_run_status(
+                            job_id, run_id, max_wait_seconds=30
+                        )
+
+                        if status["status"] == "RUNNING":
+                            print(f"✅ [JOB RUNNING] Job is actively running!")
+                            print(
+                                f"📊 [MONITOR] View progress: {status['run_page_url']}"
+                            )
+                        elif status["status"] == "FAILED":
+                            print(f"❌ [JOB FAILED] {status['state_message']}")
+                            print(f"🔗 [DEBUG] Check details: {status['run_page_url']}")
+                        elif status["status"] == "TIMEOUT":
+                            print(f"⏰ [JOB PENDING] {status['state_message']}")
+                            print(
+                                f"🔗 [MONITOR] Check status: {status['run_page_url']}"
+                            )
+                        elif status["status"] == "SUCCESS":
+                            print(f"🎉 [JOB COMPLETE] Job finished successfully!")
+                            print(f"📊 [RESULTS] View output: {status['run_page_url']}")
+                    elif run_now and not run_id:
+                        print(f"⚠️  [JOB CREATED] Job created but run trigger failed")
+                        print(
+                            f"🔗 [MANUAL RUN] Start manually: https://databricks.com/#job/{job_id}"
+                        )
+                    else:
+                        print(f"🎯 [JOB READY] Job ready for manual execution")
+                        print(
+                            f"🔗 [RUN MANUALLY] Start job: https://databricks.com/#job/{job_id}"
+                        )
+
+                    deployment_success = True
+                    deployment_error = None
+
+                except json.JSONDecodeError:
+                    # Fallback for non-JSON responses
+                    print(f"✅ [DEPLOY SUCCESS] {deploy_result}")
+                    deployment_success = True
+                    deployment_error = None
             else:
                 print(f"❌ [DEPLOY FAILED] {deploy_result}")
                 deployment_success = False
