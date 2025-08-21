@@ -1,107 +1,17 @@
 # tools/pattern_tools.py
-# Pattern lookups and code-generation utilities that use the UC-backed registry.
+# Pattern lookups and code-generation utilities with fresh generation.
 
 from __future__ import annotations
 
 import json
 import os
 import tempfile
-from datetime import datetime
 from typing import Any, Dict
 
 from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
 
-# Import UC-backed registry (aliased for clarity)
-from registry import PatternRegistryUC as _UCRegistry
-
-# Lazy-initialized registry instance
-_registry = None
-_bulk_buffer: Dict[str, dict] = {}
-
-
-def _get_registry():
-    """Get the pattern registry, initializing it lazily."""
-    global _registry
-    if _registry is None:
-        try:
-            _registry = _UCRegistry()
-        except RuntimeError as e:
-            # If Unity Catalog/Spark is not available, use a fallback
-            if "SparkSession not available" in str(e):
-                _registry = _FallbackRegistry()
-            else:
-                raise
-    return _registry
-
-
-def _buffer_generated_pattern(processor_class: str, pattern: dict) -> None:
-    global _bulk_buffer
-    _bulk_buffer[processor_class] = pattern
-
-
-def flush_patterns_to_registry() -> None:
-    """Flush buffered patterns and usage stats to UC in batched operations."""
-    global _bulk_buffer
-    registry = _get_registry()
-
-    # Flush new patterns first
-    if _bulk_buffer:
-        try:
-            if hasattr(registry, "add_patterns_bulk"):
-                registry.add_patterns_bulk(_bulk_buffer)
-                print(
-                    f"💾 [PATTERN BULK SAVED] {len(_bulk_buffer)} patterns → UC table"
-                )
-            else:
-                # Fallback: save individually
-                for proc, pat in _bulk_buffer.items():
-                    if hasattr(registry, "add_pattern"):
-                        registry.add_pattern(proc, pat)
-                print(f"💾 [PATTERN SAVED] {len(_bulk_buffer)} patterns (individual)")
-        except Exception as e:
-            print(f"❌ [DEBUG] Bulk save error: {e}")
-        finally:
-            _bulk_buffer = {}
-
-    # Flush usage stats in a single batch operation
-    try:
-        if hasattr(registry, "flush_usage_stats"):
-            registry.flush_usage_stats()
-    except Exception as e:
-        print(f"❌ [DEBUG] Usage stats flush error: {e}")
-
-
-def get_buffered_patterns() -> Dict[str, dict]:
-    """Return a snapshot of the currently buffered patterns (not flushed)."""
-    return dict(_bulk_buffer)
-
-
-def dump_buffer_to_file(path: str) -> None:
-    """Write the buffered patterns to a JSON file for deferred persistence/audit."""
-    try:
-        payload = {
-            "processors": get_buffered_patterns(),
-            "tool_name": "pattern_tools.dump_buffer",
-        }
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(json.dumps(payload, indent=2))
-        print(f"🗂️  [PATTERN BUFFER FILE] Wrote pending patterns → {path}")
-    except Exception as e:
-        print(f"⚠️  [DEBUG] Could not write pattern buffer file: {e}")
-
-
-class _FallbackRegistry:
-    """Fallback registry for when Unity Catalog is not available."""
-
-    def __init__(self):
-        self._patterns = {}
-
-    def get_pattern(self, processor_class: str):
-        return self._patterns.get(processor_class)
-
-    def add_pattern(self, processor_class: str, pattern: dict):
-        self._patterns[processor_class] = pattern
+# Registry functionality removed - generate fresh every time
 
 
 __all__ = [
@@ -111,56 +21,54 @@ __all__ = [
 ]
 
 
-def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[str, Any]:
+def _get_builtin_pattern(
+    processor_class: str, properties: Dict[str, Any]
+) -> Dict[str, Any]:
     """
-    Look up a migration pattern from UC; if missing, auto-register a stub
-    so you can fill it in later. Returns a rendered dictionary.
+    Get hardcoded migration patterns for common NiFi processors.
+    Returns a rendered dictionary with code template and metadata.
     """
-    registry = _get_registry()
-    pattern = registry.get_pattern(processor_class) or {}
+    pattern = {}
+    lc = processor_class.lower()
 
-    if not pattern:
-        lc = processor_class.lower()
-        if "getfile" in lc or "listfile" in lc:
-            pattern = {
-                "databricks_equivalent": "Auto Loader",
-                "description": "File ingestion via Auto Loader.",
-                "best_practices": [
-                    "Use schemaLocation for schema tracking",
-                    "Enable includeExistingFiles for initial backfill",
-                    "Use cleanSource after successful processing",
-                ],
-                "code_template": (
-                    "from pyspark.sql.functions import *\n"
-                    "df = (spark.readStream\n"
-                    "      .format('cloudFiles')\n"
-                    "      .option('cloudFiles.format', '{format}')\n"
-                    "      .option('cloudFiles.inferColumnTypes', 'true')\n"
-                    "      .option('cloudFiles.schemaEvolutionMode', 'addNewColumns')\n"
-                    "      .load('{path}'))"
-                ),
-                "last_seen_properties": properties or {},
-            }
-        elif "puthdfs" in lc or "putfile" in lc:
-            pattern = {
-                "databricks_equivalent": "Delta Lake",
-                "description": "Transactional storage in Delta.",
-                "best_practices": [
-                    "Partition by frequently filtered columns when useful",
-                    "Compact small files (OPTIMIZE / auto-opt)",
-                    "Consider Z-ORDER for skewed query patterns",
-                ],
-                "code_template": "df.write.format('delta').mode('{mode}').save('{path}')",
-                "last_seen_properties": properties or {},
-            }
-        else:
-            # Pattern not found - don't create stub, let LLM generation handle it
-            return {
-                "equivalent": "Unknown",
-                "description": "",
-                "best_practices": [],
-                "code": None,  # This will trigger LLM generation
-            }
+    if "getfile" in lc or "listfile" in lc:
+        pattern = {
+            "databricks_equivalent": "Auto Loader",
+            "description": "File ingestion via Auto Loader.",
+            "best_practices": [
+                "Use schemaLocation for schema tracking",
+                "Enable includeExistingFiles for initial backfill",
+                "Use cleanSource after successful processing",
+            ],
+            "code_template": (
+                "from pyspark.sql.functions import *\n"
+                "df = (spark.readStream\n"
+                "      .format('cloudFiles')\n"
+                "      .option('cloudFiles.format', '{format}')\n"
+                "      .option('cloudFiles.inferColumnTypes', 'true')\n"
+                "      .option('cloudFiles.schemaEvolutionMode', 'addNewColumns')\n"
+                "      .load('{path}'))"
+            ),
+        }
+    elif "puthdfs" in lc or "putfile" in lc:
+        pattern = {
+            "databricks_equivalent": "Delta Lake",
+            "description": "Transactional storage in Delta.",
+            "best_practices": [
+                "Partition by frequently filtered columns when useful",
+                "Compact small files (OPTIMIZE / auto-opt)",
+                "Consider Z-ORDER for skewed query patterns",
+            ],
+            "code_template": "df.write.format('delta').mode('{mode}').save('{path}')",
+        }
+    else:
+        # No builtin pattern - return empty to trigger LLM generation
+        return {
+            "equivalent": "Unknown",
+            "description": "",
+            "best_practices": [],
+            "code": None,  # This will trigger LLM generation
+        }
 
     # Render code with injected placeholders when present
     code = None
@@ -205,11 +113,12 @@ def generate_databricks_code(
         processor_type.split(".")[-1] if "." in processor_type else processor_type
     )
 
-    # If force_regenerate is True, skip UC table lookup and use LLM directly
+    # If force_regenerate is True, skip builtin patterns and use LLM directly
     if force_regenerate:
         return _generate_with_llm(processor_class, properties)
 
-    rendered = _render_pattern(processor_class, properties)
+    # Check for builtin patterns first
+    rendered = _get_builtin_pattern(processor_class, properties)
 
     if rendered["code"]:
         code = f"# {processor_class} → {rendered['equivalent']}\n"
@@ -391,8 +300,7 @@ Generate the working PySpark code that implements {processor_class} functionalit
         # Add header comment
         header = f"# {processor_class} → LLM Generated Code\n# Generated based on processor properties and NiFi documentation\n\n"
 
-        # Optionally save the generated pattern to UC table for future use
-        _save_generated_pattern(processor_class, properties, generated_code)
+        # Pattern generated fresh each time - no registry saving
 
         return header + generated_code
 
@@ -488,41 +396,7 @@ def _track_fallback_processor(
         print(f"Warning: Could not track fallback for {processor_class}: {track_error}")
 
 
-def _save_generated_pattern(
-    processor_class: str, properties: dict, generated_code: str
-) -> None:
-    """
-    Optionally save the LLM-generated pattern to UC table for future reuse.
-    This builds up the pattern registry over time.
-    """
-    try:
-        # Use the global registry to ensure tables are created once
-        registry = _get_registry()
-
-        # Only save if we have a UC registry (not fallback)
-        if hasattr(registry, "add_pattern") and hasattr(registry, "spark"):
-            if registry.spark:
-                # Create a pattern from the generated code
-                pattern = {
-                    "category": "llm_generated",
-                    "databricks_equivalent": "LLM Generated Solution",
-                    "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
-                    "code_template": generated_code,
-                    "best_practices": [
-                        "Review and customize the generated code",
-                        "Test thoroughly before production use",
-                        "Consider processor-specific optimizations",
-                    ],
-                    "generated_from_properties": properties,
-                    "generation_source": "llm_hybrid_approach",
-                }
-
-                # Buffer to save in bulk later (no per-processor prints)
-                _buffer_generated_pattern(processor_class, pattern)
-
-    except Exception as e:
-        # Pattern saving is optional - log warning but don't fail
-        print(f"⚠️  [DEBUG] Could not save generated pattern for {processor_class}: {e}")
+# Pattern saving removed - generate fresh each time
 
 
 @tool

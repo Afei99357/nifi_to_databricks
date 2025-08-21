@@ -23,7 +23,8 @@ from json_repair import repair_json
 from langchain_core.tools import tool
 
 from config import logger
-from registry import PatternRegistryUC
+
+# Registry removed - generating fresh each time
 from utils import read_text as _read_text
 from utils import safe_name as _safe_name
 from utils import write_text as _write_text
@@ -56,11 +57,7 @@ from tools.job_tools import (
     scaffold_asset_bundle,
 )
 from tools.pattern_tools import (
-    _buffer_generated_pattern,
-    dump_buffer_to_file,
-    flush_patterns_to_registry,
     generate_databricks_code,
-    get_buffered_patterns,
     suggest_autoloader_options,
 )
 from tools.xml_tools import extract_nifi_parameters_and_services, parse_nifi_template
@@ -300,8 +297,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             }
             bulk_patterns[processor_class] = pattern_obj
 
-            # Buffer pattern for later persistence
-            _buffer_generated_pattern(processor_class, pattern_obj)
+            # Registry removed - no pattern buffering
 
             task = {
                 "id": spec["id"],
@@ -314,8 +310,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             }
             generated_tasks.append(task)
 
-        # Flush patterns to registry
-        flush_patterns_to_registry()
+        # Registry removed - generating fresh each time
 
         print(
             f"✨ [LLM BATCH] Generated {len(generated_tasks)} processor tasks for {chunk_id}"
@@ -1062,50 +1057,7 @@ def orchestrate_chunked_nifi_migration(
             out / "jobs/job.chunked.json", json.dumps(final_job_config, indent=2)
         )
 
-        # Step 5: Finalize pattern persistence at end of migration
-        try:
-            # Persist any remaining buffered patterns to temp file and UC
-            buf = get_buffered_patterns()
-            if buf:
-                tmp_file = out / "conf/pending_patterns.final.json"
-                dump_buffer_to_file(str(tmp_file))
-                # Also write a raw snapshot
-                try:
-                    reg = PatternRegistryUC()
-                    raw_json = json.dumps(buf, ensure_ascii=False)
-                    nifi_xml_hash = (
-                        hashlib.md5(xml_text.encode("utf-8")).hexdigest()
-                        if xml_text
-                        else None
-                    )
-                    snapshot = {
-                        "snapshot_id": f"{project}_final_pending",
-                        "snapshot_type": "pattern_buffer_final",
-                        "migration_id": project,
-                        "processor_count": 0,
-                        "patterns_count": len(buf),
-                        "nifi_xml_hash": nifi_xml_hash,
-                        "raw_json": raw_json,
-                        "file_size_bytes": len(raw_json.encode("utf-8")),
-                        "compression": "none",
-                        "created_by": os.environ.get("USER_EMAIL")
-                        or os.environ.get("USER"),
-                    }
-                    reg.add_raw_snapshot(snapshot)
-                except Exception as e:
-                    logger.warning(f"Could not create raw snapshot: {e}")
-            flush_patterns_to_registry()
-        except Exception as e:
-            logger.warning(f"Pattern persistence failed: {e}")
-
-        # Always upsert meta for last run
-        reg = PatternRegistryUC()
-        reg.upsert_meta(
-            "last_run",
-            json.dumps({"project": project}),
-            category="run",
-            description="Last migration run",
-        )
+        # Step 5: Registry removed - no pattern persistence needed
 
         # Step 6: Generate project artifacts
         # Bundle + README
