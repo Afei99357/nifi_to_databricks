@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# checking
+.mypy_cache
+
 # Migration outputs - don't commit generated results
 output_results/
 outputs/
