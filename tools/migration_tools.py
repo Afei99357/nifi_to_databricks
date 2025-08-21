@@ -58,7 +58,6 @@ from tools.job_tools import (
     create_job_config,
     create_job_config_from_plan,
     deploy_and_run_job,
-    deploy_bundle,
     scaffold_asset_bundle,
 )
 from tools.xml_tools import extract_nifi_parameters_and_services, parse_nifi_template
@@ -505,7 +504,6 @@ def convert_flow(
     notebook_path: str = "",
     emit_job_json: bool = True,
     deploy_job: bool = False,
-    use_bundle_deploy: bool = False,
     also_import_notebook: bool = True,
     # Cluster controls
     existing_cluster_id: str = "",
@@ -734,7 +732,6 @@ def orchestrate_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     deploy: bool = False,
-    use_bundle_deploy: bool = False,
 ) -> str:
     """
     End-to-end orchestration:
@@ -758,7 +755,6 @@ def orchestrate_nifi_migration(
             notebook_path=notebook_path,
             emit_job_json=True,
             deploy_job=False,
-            use_bundle_deploy=use_bundle_deploy,
             also_import_notebook=True,
             existing_cluster_id=existing_cluster_id,
         )
@@ -799,44 +795,30 @@ def orchestrate_nifi_migration(
     if deploy_job:
         try:
             print(f"🚀 [DEPLOY] Starting job deployment...")
-            if use_bundle_deploy:
-                # Use bundle deployment (avoids .bundles in wrong directory)
-                deploy_res = deploy_bundle.func(str(out), validate_only=False)
-            else:
-                # Use REST API deployment
-                deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
+            # Use REST API deployment
+            deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
 
-            # Check deployment success
+            # Check deployment success (REST API returns JSON)
             if deploy_res:
-                if isinstance(deploy_res, str):
-                    if "❌" in deploy_res or "failed" in deploy_res.lower():
+                try:
+                    deploy_json = (
+                        json.loads(deploy_res)
+                        if isinstance(deploy_res, str)
+                        else deploy_res
+                    )
+                    if (
+                        "error" in str(deploy_json).lower()
+                        or "run_error" in deploy_json
+                    ):
                         deployment_success = False
-                        deployment_error = deploy_res
-                        print(f"❌ [DEPLOY FAILED] {deploy_res}")
+                        deployment_error = str(deploy_json)
+                        print(f"❌ [DEPLOY FAILED] {deployment_error}")
                     else:
                         deployment_success = True
-                        print(f"✅ [DEPLOY SUCCESS] {deploy_res}")
-                else:
-                    # Handle JSON response
-                    try:
-                        deploy_json = (
-                            json.loads(deploy_res)
-                            if isinstance(deploy_res, str)
-                            else deploy_res
-                        )
-                        if (
-                            "error" in str(deploy_json).lower()
-                            or "run_error" in deploy_json
-                        ):
-                            deployment_success = False
-                            deployment_error = str(deploy_json)
-                            print(f"❌ [DEPLOY FAILED] {deployment_error}")
-                        else:
-                            deployment_success = True
-                            print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
-                    except Exception:
-                        deployment_success = True
-                        print(f"✅ [DEPLOY RESULT] {deploy_res}")
+                        print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
+                except Exception:
+                    deployment_success = True
+                    print(f"✅ [DEPLOY RESULT] {deploy_res}")
 
                 result["deploy_result"] = deploy_res
             else:
@@ -1212,57 +1194,33 @@ def orchestrate_chunked_nifi_migration(
         if deploy:
             try:
                 print(f"🚀 [DEPLOY] Starting job deployment...")
-                if use_bundle_deploy:
-                    # Use bundle deployment (avoids .bundles in wrong directory)
-                    deploy_result = deploy_bundle.func(
-                        str(project_out), validate_only=False
-                    )
-                else:
-                    # Use REST API deployment
-                    deploy_result = deploy_and_run_job.func(
-                        json.dumps(final_job_config), run_now=False
-                    )
+                # Use REST API deployment
+                deploy_result = deploy_and_run_job.func(
+                    json.dumps(final_job_config), run_now=False
+                )
 
-                # Check if deployment actually succeeded
+                # Check if deployment actually succeeded (REST API returns JSON)
                 if deploy_result:
-                    if isinstance(deploy_result, str):
-                        # Bundle deployment returns string messages
-                        if "❌" in deploy_result or "failed" in deploy_result.lower():
-                            deployment_success = False
-                            deployment_error = deploy_result
-                            print(f"❌ [DEPLOY FAILED] {deploy_result}")
-                        elif (
-                            "✅" in deploy_result
-                            or "successful" in deploy_result.lower()
+                    try:
+                        deploy_json = (
+                            json.loads(deploy_result)
+                            if isinstance(deploy_result, str)
+                            else deploy_result
+                        )
+                        if (
+                            "error" in str(deploy_json).lower()
+                            or "run_error" in deploy_json
                         ):
-                            deployment_success = True
-                            print(f"✅ [DEPLOY SUCCESS] {deploy_result}")
+                            deployment_success = False
+                            deployment_error = str(deploy_json)
+                            print(f"❌ [DEPLOY FAILED] {deployment_error}")
                         else:
-                            # Assume success if no clear error indicators
                             deployment_success = True
-                            print(f"✅ [DEPLOY RESULT] {deploy_result}")
-                    else:
-                        # JSON deployment returns dict/object
-                        try:
-                            deploy_json = (
-                                json.loads(deploy_result)
-                                if isinstance(deploy_result, str)
-                                else deploy_result
-                            )
-                            if (
-                                "error" in str(deploy_json).lower()
-                                or "run_error" in deploy_json
-                            ):
-                                deployment_success = False
-                                deployment_error = str(deploy_json)
-                                print(f"❌ [DEPLOY FAILED] {deployment_error}")
-                            else:
-                                deployment_success = True
-                                print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
-                        except Exception as parse_error:
-                            # If we can't parse, assume success and log the result
-                            deployment_success = True
-                            print(f"✅ [DEPLOY RESULT] {deploy_result}")
+                            print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
+                    except Exception:
+                        # If we can't parse, assume success and log the result
+                        deployment_success = True
+                        print(f"✅ [DEPLOY RESULT] {deploy_result}")
                 else:
                     # No result returned - this is suspicious
                     deployment_success = False
@@ -1591,7 +1549,6 @@ def orchestrate_intelligent_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     deploy: bool = False,
-    use_bundle_deploy: bool = False,
     max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
 ) -> str:
     """
@@ -1659,7 +1616,6 @@ def orchestrate_intelligent_nifi_migration(
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
-                use_bundle_deploy=use_bundle_deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
@@ -1706,7 +1662,6 @@ def orchestrate_intelligent_nifi_migration(
                     notebook_path=notebook_path,
                     existing_cluster_id=existing_cluster_id,
                     deploy=deploy,
-                    use_bundle_deploy=use_bundle_deploy,
                     max_processors_per_chunk=max_processors_per_chunk,
                 )
                 migration_result = json.loads(migration_result_str)
@@ -1723,7 +1678,6 @@ def orchestrate_intelligent_nifi_migration(
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
-                use_bundle_deploy=use_bundle_deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
