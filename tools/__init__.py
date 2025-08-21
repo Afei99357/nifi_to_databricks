@@ -12,9 +12,9 @@ from . import (
     chunking_tools,
     dlt_tools,
     eval_tools,
+    generator_tools,
     job_tools,
     migration_tools,
-    pattern_tools,
     xml_tools,
 )
 
@@ -22,7 +22,7 @@ SUBMODULES = [
     xml_tools,
     migration_tools,
     job_tools,
-    pattern_tools,
+    generator_tools,
     dlt_tools,
     eval_tools,
     chunking_tools,

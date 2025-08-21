@@ -437,7 +437,7 @@ The agent has access to specialized tools in the `tools/` folder:
 - **`xml_tools.py`**: NiFi XML parsing and template extraction
 - **`migration_tools.py`**: Main conversion logic and orchestration (both standard and chunked)
 - **`chunking_tools.py`**: Large XML file chunking, workflow mapping, and reconstruction utilities
-- **`pattern_tools.py`**: Pattern registry operations and template rendering
+- **`generator_tools.py`**: Code generation utilities with LLM-powered PySpark code creation
 
 ### Databricks Integration
 - **`job_tools.py`**: Jobs API integration, creation, and deployment

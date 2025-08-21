@@ -1,5 +1,5 @@
-# tools/pattern_tools.py
-# Pattern lookups and code-generation utilities with fresh generation.
+# tools/generator_tools.py
+# Code generation utilities with LLM-powered PySpark code creation.
 
 from __future__ import annotations
 

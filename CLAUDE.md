@@ -27,7 +27,7 @@ The system provides both programmatic APIs and an agent-based interface for auto
   - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks with intelligent migration orchestration
   - `tools/chunking_tools.py`: Large NiFi XML file chunking and reconstruction utilities
   - `tools/job_tools.py`: Databricks Jobs API integration and job creation
-  - `tools/pattern_tools.py`: Pattern matching and code template management with LLM-powered code generation
+  - `tools/generator_tools.py`: Code generation utilities with LLM-powered PySpark code creation
   - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
   - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
