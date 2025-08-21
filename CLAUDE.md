@@ -305,3 +305,66 @@ If you see JSON parsing failures:
 - **5-8 processors (fallback)**: ~90% success rate
 
 **Result**: Dramatically fewer expensive individual processor API calls.
+
+## Code Quality Guidelines
+
+### Exception Handling Best Practices
+
+When working with this codebase, follow these exception handling guidelines to maintain clean, maintainable code:
+
+**❌ Avoid these patterns:**
+```python
+# Don't use broad exception catching that silently ignores errors
+try:
+    some_operation()
+except Exception:
+    pass
+
+# Don't wrap simple operations unnecessarily
+try:
+    value = int(os.environ.get("VAR", "10"))
+except Exception:
+    value = 10
+
+# Don't create complex nested try-except blocks
+try:
+    # complex operation
+    try:
+        # nested operation
+        try:
+            # deeply nested operation
+        except Exception:
+            pass
+    except Exception:
+        pass
+except Exception:
+    pass
+```
+
+**✅ Use these patterns instead:**
+```python
+# Use specific exception types with meaningful handling
+try:
+    from optional_module import some_function
+    some_function()
+except ImportError:
+    logger.warning("Optional module not available, skipping feature")
+
+# Simple operations often don't need try-except
+value = int(os.environ.get("VAR", "10"))  # os.environ.get() already handles missing keys
+
+# Use single-level exception handling with specific recovery
+try:
+    result = complex_operation()
+except (SpecificError, AnotherError) as e:
+    logger.error(f"Operation failed: {e}")
+    result = fallback_value
+```
+
+**Guidelines:**
+- Only use try-except when you can meaningfully handle the exception
+- Use specific exception types rather than broad `Exception` catching
+- Log warnings/errors instead of silently ignoring with `pass`
+- Avoid deep nesting of try-except blocks
+- Simple operations like `os.environ.get()` or basic arithmetic rarely need exception handling
+- If you must catch `Exception`, log it and provide meaningful fallback behavior

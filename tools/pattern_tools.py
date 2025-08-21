@@ -518,15 +518,10 @@ def _save_generated_pattern(
 
                 # Buffer to save in bulk later (no per-processor prints)
                 _buffer_generated_pattern(processor_class, pattern)
-            else:
-                pass
-        else:
-            pass
 
     except Exception as e:
-        # Silent fail - reduce noise
-        # Silent fail - saving is optional
-        pass
+        # Pattern saving is optional - log warning but don't fail
+        print(f"⚠️  [DEBUG] Could not save generated pattern for {processor_class}: {e}")
 
 
 @tool

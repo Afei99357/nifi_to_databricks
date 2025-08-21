@@ -4,17 +4,26 @@
 from __future__ import annotations
 
 import base64
+import glob
+import hashlib
+import importlib.util
 import json
 import os
+import re
+import sys
 import textwrap
 import xml.etree.ElementTree as ET
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+from databricks_langchain import ChatDatabricks
+from json_repair import repair_json
 from langchain_core.tools import tool
 
 from config import logger
+from registry import PatternRegistryUC
 from utils import read_text as _read_text
 from utils import safe_name as _safe_name
 from utils import write_text as _write_text
@@ -46,15 +55,19 @@ from tools.job_tools import (
     deploy_and_run_job,
     scaffold_asset_bundle,
 )
-from tools.pattern_tools import generate_databricks_code, suggest_autoloader_options
+from tools.pattern_tools import (
+    _buffer_generated_pattern,
+    dump_buffer_to_file,
+    flush_patterns_to_registry,
+    generate_databricks_code,
+    get_buffered_patterns,
+    suggest_autoloader_options,
+)
 from tools.xml_tools import extract_nifi_parameters_and_services, parse_nifi_template
 from utils import extract_nifi_parameters_and_services_impl, parse_nifi_template_impl
 
 # Default max processors per chunk (batch size) via env var
-try:
-    MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
-except Exception:
-    MAX_PROCS_PER_CHUNK_DEFAULT = 25
+MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
 
 
 def _generate_batch_processor_code(
@@ -64,10 +77,6 @@ def _generate_batch_processor_code(
     Generate Databricks code for multiple processors in a single LLM call to reduce API requests.
     """
     try:
-        import os
-
-        from databricks_langchain import ChatDatabricks
-
         print(
             f"🧠 [LLM BATCH] Generating code for {len(processors)} processors in {chunk_id}"
         )
@@ -185,8 +194,6 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
         # Log the first 200 chars of response for debugging
         def clean_json_escape_sequences(content: str) -> str:
             """Fix common escape sequence issues in JSON strings"""
-            import re
-
             # Extract JSON object boundaries first
             start = content.find("{")
             end = content.rfind("}") + 1
@@ -223,53 +230,38 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             content = response.content.strip()
             generated_code_map = None
 
-            # Try json-repair as first recovery step
-            try:
-                from json_repair import repair_json
+            # Try various recovery strategies in order
+            recovery_strategies = [
+                ("json-repair", lambda c: repair_json(c)),
+                (
+                    "markdown extraction",
+                    lambda c: (
+                        repair_json(c.split("```json")[1].split("```")[0].strip())
+                        if "```json" in c
+                        else None
+                    ),
+                ),
+                (
+                    "boundary detection",
+                    lambda c: (
+                        repair_json(c[c.find("{") : c.rfind("}") + 1])
+                        if c.find("{") >= 0 and c.rfind("}") > c.find("{")
+                        else None
+                    ),
+                ),
+                ("escape sequence cleaning", clean_json_escape_sequences),
+            ]
 
-                repaired_json = repair_json(content)
-                generated_code_map = json.loads(repaired_json)
-                print(f"🔧 [LLM BATCH] Recovered JSON using json-repair")
-            except Exception as repair_error:
-                print(f"⚠️  [LLM BATCH] json-repair failed: {repair_error}")
-
-            # Try extracting JSON from markdown blocks
-            if generated_code_map is None and "```json" in content:
+            for strategy_name, strategy_func in recovery_strategies:
+                if generated_code_map is not None:
+                    break
                 try:
-                    extracted = content.split("```json")[1].split("```")[0].strip()
-                    repaired_extracted = repair_json(extracted)
-                    generated_code_map = json.loads(repaired_extracted)
-                    print(
-                        f"🔧 [LLM BATCH] Recovered JSON from markdown block with repair"
-                    )
-                except:
-                    pass
-
-            # Try finding JSON object boundaries with repair
-            if generated_code_map is None:
-                try:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start >= 0 and end > start:
-                        json_content = content[start:end]
-                        repaired_boundaries = repair_json(json_content)
-                        generated_code_map = json.loads(repaired_boundaries)
-                        print(
-                            f"🔧 [LLM BATCH] Recovered JSON from boundaries with repair"
-                        )
-                except:
-                    pass
-
-            # Fallback to manual escape sequence cleaning
-            if generated_code_map is None:
-                try:
-                    cleaned_content = clean_json_escape_sequences(content)
-                    generated_code_map = json.loads(cleaned_content)
-                    print(
-                        f"🔧 [LLM BATCH] Recovered JSON after escape sequence cleaning"
-                    )
-                except:
-                    pass
+                    repaired_content = strategy_func(content)
+                    if repaired_content:
+                        generated_code_map = json.loads(repaired_content)
+                        print(f"🔧 [LLM BATCH] Recovered JSON using {strategy_name}")
+                except (json.JSONDecodeError, ValueError, IndexError):
+                    continue
 
             # If all recovery fails, fall back to individual generation
             if generated_code_map is None:
@@ -290,33 +282,26 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             )
 
             # Prepare pattern for bulk save later
-            try:
-                processor_class = (
-                    spec["type"].split(".")[-1] if "." in spec["type"] else spec["type"]
-                )
-                pattern_obj = {
-                    "category": "llm_generated",
-                    "databricks_equivalent": "LLM Generated Solution",
-                    "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
-                    "code_template": code,
-                    "best_practices": [
-                        "Review and customize the generated code",
-                        "Test thoroughly before production use",
-                        "Consider processor-specific optimizations",
-                    ],
-                    "generated_from_properties": spec["properties"],
-                    "generation_source": "llm_hybrid_approach",
-                }
-                bulk_patterns[processor_class] = pattern_obj
-                # Also buffer immediately so a later flush will persist and init UC
-                try:
-                    from tools.pattern_tools import _buffer_generated_pattern
+            processor_class = (
+                spec["type"].split(".")[-1] if "." in spec["type"] else spec["type"]
+            )
+            pattern_obj = {
+                "category": "llm_generated",
+                "databricks_equivalent": "LLM Generated Solution",
+                "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
+                "code_template": code,
+                "best_practices": [
+                    "Review and customize the generated code",
+                    "Test thoroughly before production use",
+                    "Consider processor-specific optimizations",
+                ],
+                "generated_from_properties": spec["properties"],
+                "generation_source": "llm_hybrid_approach",
+            }
+            bulk_patterns[processor_class] = pattern_obj
 
-                    _buffer_generated_pattern(processor_class, pattern_obj)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+            # Buffer pattern for later persistence
+            _buffer_generated_pattern(processor_class, pattern_obj)
 
             task = {
                 "id": spec["id"],
@@ -329,52 +314,8 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             }
             generated_tasks.append(task)
 
-        # Flush patterns once per chunk (creates tables on first run)
-        try:
-            from tools.pattern_tools import (
-                dump_buffer_to_file,
-                flush_patterns_to_registry,
-                get_buffered_patterns,
-            )
-
-            # Always persist temp JSON snapshot for this chunk
-            buf = get_buffered_patterns()
-            if buf:
-                tmp_file = out / f"chunks/{chunk_id}_pending_patterns.json"
-                dump_buffer_to_file(str(tmp_file))
-                # Also write a raw snapshot for this chunk
-                try:
-                    import hashlib
-
-                    from registry import PatternRegistryUC
-
-                    reg = PatternRegistryUC()
-                    raw_json = json.dumps(buf, ensure_ascii=False)
-                    nifi_xml_hash = (
-                        hashlib.md5(xml_text.encode("utf-8")).hexdigest()
-                        if "xml_text" in locals()
-                        else None
-                    )
-                    snapshot = {
-                        "snapshot_id": f"{project}_{chunk_id}_pending",
-                        "snapshot_type": "pattern_buffer_chunk",
-                        "migration_id": project,
-                        "processor_count": len(chunk.get("processors", [])),
-                        "patterns_count": len(buf),
-                        "nifi_xml_hash": nifi_xml_hash,
-                        "raw_json": raw_json,
-                        "file_size_bytes": len(raw_json.encode("utf-8")),
-                        "compression": "none",
-                        "created_by": os.environ.get("USER_EMAIL")
-                        or os.environ.get("USER"),
-                    }
-                    reg.add_raw_snapshot(snapshot)
-                except Exception:
-                    pass
-            # Attempt UC bulk write
-            flush_patterns_to_registry()
-        except Exception:
-            pass
+        # Flush patterns to registry
+        flush_patterns_to_registry()
 
         print(
             f"✨ [LLM BATCH] Generated {len(generated_tasks)} processor tasks for {chunk_id}"
@@ -387,12 +328,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
     except Exception as e:
         logger.error(f"Batch code generation failed: {e}")
         # Sub-batch fallback to reduce per-processor LLM calls
-        try:
-            import os
-
-            sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
-        except Exception:
-            sub_batch_size = 10
+        sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
 
         if len(processors) > sub_batch_size:
             generated_tasks: List[Dict[str, Any]] = []
@@ -537,8 +473,6 @@ def build_migration_plan(xml_content: str) -> str:
                 edges.append([src, dst])
 
         # Kahn's algorithm for topo order
-        from collections import defaultdict, deque
-
         indeg = defaultdict(int)
         graph: Dict[str, List[str]] = defaultdict(list)
         for s, d in edges:
@@ -737,10 +671,7 @@ def convert_flow(
         _write_text(out / "jobs/job.json", job_cfg)
         if deploy_job:
             res = deploy_and_run_job.func(job_cfg)
-            try:
-                print(f"Deploy result: {res[:200]}...")
-            except Exception:
-                pass
+            print(f"Deploy result: {str(res)[:200]}...")
 
     # 7) DLT config (optional scaffold)
     dlt_cfg = generate_dlt_pipeline_config.func(
@@ -787,10 +718,7 @@ def convert_flow(
                     json=payload,
                     timeout=60,
                 )
-                try:
-                    print(f"Notebook import: {r.status_code} {r.text[:160]}")
-                except Exception:
-                    pass
+                print(f"Notebook import: {r.status_code} {str(r.text)[:160]}...")
 
     summary = {
         "output_dir": str(out),
@@ -981,15 +909,8 @@ def orchestrate_chunked_nifi_migration(
     """
     try:
         # Resolve effective max processors per chunk with env override
-        try:
-            env_max = (
-                int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", ""))
-                if os.environ.get("MAX_PROCESSORS_PER_CHUNK")
-                else None
-            )
-        except Exception:
-            env_max = None
-        effective_max = env_max if env_max else max_processors_per_chunk
+        env_max_str = os.environ.get("MAX_PROCESSORS_PER_CHUNK")
+        effective_max = int(env_max_str) if env_max_str else max_processors_per_chunk
         # --- Setup output directory ---
         root = Path(out_dir)
         proj_name = _safe_name(project)
@@ -1145,12 +1066,6 @@ def orchestrate_chunked_nifi_migration(
 
         # Step 5: Finalize pattern persistence at end of migration
         try:
-            from tools.pattern_tools import (
-                dump_buffer_to_file,
-                flush_patterns_to_registry,
-                get_buffered_patterns,
-            )
-
             # Persist any remaining buffered patterns to temp file and UC
             buf = get_buffered_patterns()
             if buf:
@@ -1158,10 +1073,6 @@ def orchestrate_chunked_nifi_migration(
                 dump_buffer_to_file(str(tmp_file))
                 # Also write a raw snapshot
                 try:
-                    import hashlib
-
-                    from registry import PatternRegistryUC
-
                     reg = PatternRegistryUC()
                     raw_json = json.dumps(buf, ensure_ascii=False)
                     nifi_xml_hash = (
@@ -1183,25 +1094,20 @@ def orchestrate_chunked_nifi_migration(
                         or os.environ.get("USER"),
                     }
                     reg.add_raw_snapshot(snapshot)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Could not create raw snapshot: {e}")
             flush_patterns_to_registry()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Pattern persistence failed: {e}")
 
         # Always upsert meta for last run
-        try:
-            from registry import PatternRegistryUC
-
-            reg = PatternRegistryUC()
-            reg.upsert_meta(
-                "last_run",
-                json.dumps({"project": project}),
-                category="run",
-                description="Last migration run",
-            )
-        except Exception:
-            pass
+        reg = PatternRegistryUC()
+        reg.upsert_meta(
+            "last_run",
+            json.dumps({"project": project}),
+            category="run",
+            description="Last migration run",
+        )
 
         # Step 6: Generate project artifacts
         # Bundle + README
