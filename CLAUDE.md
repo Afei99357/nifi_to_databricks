@@ -41,18 +41,16 @@ The system provides both programmatic APIs and an agent-based interface for auto
 
 #### Standard Migration (files <50 processors)
 1. **XML Parsing**: Extracts processors, connections, and properties from NiFi templates
-2. **Pattern Matching**: Maps NiFi processors to Databricks equivalents using UC patterns
-3. **Code Generation**: Creates PySpark code for each processor with proper dependencies
-4. **Job Creation**: Generates Databricks Jobs with DAG-aware task dependencies
-5. **Asset Bundling**: Creates complete Databricks project with notebooks and configurations
+2. **Code Generation**: Creates PySpark code for each processor using builtin templates and LLM generation with proper dependencies
+3. **Job Creation**: Generates Databricks Jobs with DAG-aware task dependencies
+4. **Asset Bundling**: Creates complete Databricks project with notebooks and configurations
 
 #### Chunked Migration (large files >50 processors)
 1. **XML Chunking**: Splits NiFi workflow by process groups while preserving graph relationships
 2. **Chunk Processing**: Processes each chunk individually to avoid context limits
-3. **Pattern Matching**: Maps NiFi processors to Databricks equivalents per chunk
-4. **Code Generation**: Creates PySpark code for processors within each chunk
-5. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job
-6. **Asset Bundling**: Creates enhanced project structure with chunk analysis and dependencies
+3. **Code Generation**: Creates PySpark code for processors within each chunk using builtin templates and LLM generation
+4. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job
+5. **Asset Bundling**: Creates enhanced project structure with chunk analysis and dependencies
 
 ## Common Development Tasks
 

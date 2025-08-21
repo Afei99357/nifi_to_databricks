@@ -10,11 +10,10 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 - **AI-Powered Agent**: LangGraph-based conversational agent using Databricks Foundation Models
 - **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
 - **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
-- **Pattern Registry**: Unity Catalog-backed repository of NiFi-to-Databricks conversion patterns
-- **Automated Code Generation**: Converts NiFi processors to PySpark with proper error handling and best practices
+- **Fresh Code Generation**: LLM-powered conversion of NiFi processors to PySpark with builtin templates for common processors
 - **Job Orchestration**: Creates Databricks Jobs with precise task dependencies that mirror NiFi flow structure
 - **Funnel Handling**: Intelligent detection and bypass of NiFi funnels to prevent disconnected tasks
-- **Comprehensive Tooling**: Modular tools for XML parsing, pattern matching, job creation, and validation
+- **Comprehensive Tooling**: Modular tools for XML parsing, code generation, job creation, and validation
 
 ## 🏗️ Architecture
 
@@ -34,8 +33,8 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
                               │                           │
                               ▼                           ▼
                     ┌──────────────────┐         ┌──────────────────┐
-                    │ Pattern Registry │         │   Databricks     │
-                    │  (Unity Catalog) │         │ Assets & Deploy  │
+                    │ Fresh Code Gen   │         │   Databricks     │
+                    │ (LLM + Builtin)  │         │ Assets & Deploy  │
                     └──────────────────┘         └──────────────────┘
 ```
 
@@ -58,8 +57,7 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 
 - **Agent System** (`agents/`, `nifi_databricks_agent.py`): LangGraph-based conversational interface
 - **Migration Tools** (`tools/`): Specialized tools for each aspect of the conversion process
-- **Pattern Registry** (`registry/`): UC-backed pattern storage and retrieval
-  - `init_delta_tables.sql`: SQL script to create required Unity Catalog tables
+- **Code Generation** (`tools/generator_tools.py`): LLM-powered PySpark code generation with builtin templates
 - **Configuration** (`config/`): Environment management and logging
 - **Utilities** (`utils/`): File operations, XML processing, and helper functions
 
@@ -108,12 +106,7 @@ ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 MAX_PROCESSORS_PER_CHUNK=20          # Processors per batch (default: 20, tune 15-30)
 LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10, recommended: 5)
 
-# Unity Catalog Pattern Registry (Optional - improves performance over time)
-# Uncomment these to enable pattern learning and reuse across migrations
-PATTERN_TABLE=eliao.nifi_to_databricks.processors
-COMPLEX_TABLE=eliao.nifi_to_databricks.complex_patterns
-META_TABLE=eliao.nifi_to_databricks.patterns_meta
-RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
+# Pattern Registry removed - generates fresh code each time
 ```
 
 **How to configure:**
@@ -121,11 +114,6 @@ RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
 - Replace `your-databricks-personal-access-token` with your actual Databricks token
 - Replace `your-workspace.cloud.databricks.com` with your actual workspace URL
 - Replace `your-email@company.com` with your email address
-- The Unity Catalog tables are optional and will use these defaults if not specified:
-  - `eliao.nifi_to_databricks.processors`
-  - `eliao.nifi_to_databricks.complex_patterns`
-  - `eliao.nifi_to_databricks.patterns_meta`
-  - `eliao.nifi_to_databricks.patterns_raw_snapshots`
 
 **Required Variables:**
 - `DATABRICKS_TOKEN`: Personal access token or service principal token for authentication
@@ -142,234 +130,8 @@ RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
-- `PATTERN_TABLE`: Unity Catalog table for processor patterns (enables pattern learning)
-- `COMPLEX_TABLE`: Unity Catalog table for complex migration patterns
-- `META_TABLE`: Unity Catalog table for pattern metadata and versioning
-- `RAW_TABLE`: Unity Catalog table for raw pattern snapshots
 
-**Unity Catalog Pattern Registry Benefits:**
-- **Pattern Learning**: Saves LLM-generated patterns for reuse in future migrations
-- **Performance**: Reduces LLM calls from N to 0 for known processors (cost & speed)
-- **Team Sharing**: Multiple users benefit from collectively learned patterns
-- **Auto-Creation**: Tables are created automatically when configured
-
-2. **Initialize Unity Catalog Tables**:
-```sql
--- Run the SQL initialization script in Databricks
-%sql
-%run ./init_delta_tables
-```
-
-3. **Initialize Pattern Registry**:
-```python
-from registry import PatternRegistryUC
-
-# Initialize with Unity Catalog tables
-reg = PatternRegistryUC()
-
-# Patterns are managed directly in Delta tables - no JSON seeding needed
-# Use reg.add_pattern() to add new processor patterns as needed
-```
-
-## 📊 Unity Catalog Table Schema
-
-The migration tool uses four Delta tables in Unity Catalog to store patterns and track migrations. These tables are created by running `init_delta_tables.sql`.
-
-### Table Schema Details
-
-#### 1. `migration_patterns` Table
-**Purpose**: Stores processor conversion patterns and code templates
-**Location**: `nifi_migration.patterns.migration_patterns`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `processor_class` | STRING (PK) | NiFi processor class name (e.g., "GetFile", "EvaluateJsonPath") |
-| `databricks_equivalent` | STRING | Equivalent Databricks service/technology |
-| `description` | STRING | Human-readable description of the conversion |
-| `best_practices` | ARRAY<STRING> | List of recommended practices |
-| `code_template` | STRING | PySpark code template with placeholders |
-| `last_seen_properties` | MAP<STRING, STRING> | Sample properties from recent usage |
-| `created_at` | TIMESTAMP | Pattern creation timestamp |
-| `updated_at` | TIMESTAMP | Last modification timestamp |
-
-**Example Data**:
-```
-processor_class: "EvaluateJsonPath"
-databricks_equivalent: "JSON Functions"
-description: "Extract JSON values using PySpark JSON functions"
-code_template: "df.select(from_json(col('json_data'), schema).alias('parsed'))"
-```
-
-#### 2. `processor_mappings` Table
-**Purpose**: Maps NiFi processors to Databricks services with complexity indicators
-**Location**: `nifi_migration.patterns.processor_mappings`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `nifi_processor` | STRING | NiFi processor name |
-| `databricks_service` | STRING | Target Databricks service |
-| `complexity_level` | STRING | Migration complexity (Low/Medium/High) |
-| `migration_notes` | STRING | Special considerations for migration |
-| `example_properties` | MAP<STRING, STRING> | Common property examples |
-| `created_at` | TIMESTAMP | Record creation time |
-
-**Example Data**:
-```
-nifi_processor: "ConsumeKafka"
-databricks_service: "Structured Streaming"
-complexity_level: "Medium"
-migration_notes: "Requires Kafka cluster configuration and checkpointing"
-```
-
-#### 3. `migration_history` Table
-**Purpose**: Tracks migration execution results and statistics
-**Location**: `nifi_migration.patterns.migration_history`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `migration_id` | STRING | Unique migration execution ID |
-| `xml_file_path` | STRING | Source NiFi XML template path |
-| `project_name` | STRING | Generated project name |
-| `processor_count` | INTEGER | Total processors in workflow |
-| `success_count` | INTEGER | Successfully converted processors |
-| `failure_count` | INTEGER | Failed conversions |
-| `migration_type` | STRING | "standard" or "chunked" |
-| `started_at` | TIMESTAMP | Migration start time |
-| `completed_at` | TIMESTAMP | Migration completion time |
-| `errors` | ARRAY<STRING> | List of errors encountered |
-| `generated_files` | ARRAY<STRING> | List of output files created |
-
-**Example Data**:
-```
-migration_id: "migration_20241220_143052"
-xml_file_path: "/Volumes/catalog/schema/nifi_files/workflow.xml"
-processor_count: 45
-success_count: 42
-failure_count: 3
-migration_type: "chunked"
-```
-
-#### 4. `controller_services` Table
-**Purpose**: Maps NiFi controller services to Databricks configurations
-**Location**: `nifi_migration.patterns.controller_services`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `service_type` | STRING | NiFi controller service type |
-| `databricks_equivalent` | STRING | Equivalent Databricks configuration |
-| `configuration_mapping` | MAP<STRING, STRING> | Property mappings |
-| `setup_instructions` | STRING | Setup guidance |
-| `dependencies` | ARRAY<STRING> | Required dependencies |
-| `created_at` | TIMESTAMP | Record creation time |
-
-**Example Data**:
-```
-service_type: "DBCPConnectionPool"
-databricks_equivalent: "JDBC Connection"
-configuration_mapping: {"Database Connection URL": "spark.conf jdbc.url"}
-setup_instructions: "Configure JDBC connection in cluster settings"
-```
-
-### Table Initialization
-
-To create these tables, run the SQL script in Databricks:
-
-```sql
-%run ./init_delta_tables
-```
-
-The script creates:
-- Tables with proper schemas and constraints
-- Sample data for common processors (GetFile, PutFile, ConsumeKafka, etc.)
-- Primary key constraints and Delta table properties
-- Change data feed enablement for auditing
-
-### Basic Usage
-
-#### 🧠 **Intelligent Migration (Recommended)**
-Automatically analyzes your NiFi workflow and chooses the best Databricks architecture:
-
-```python
-# In Databricks notebook - using the AI Agent with Intelligent Decision
-from agents import AGENT
-from mlflow.types.responses import ResponsesAgentRequest
-
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": """
-    Run orchestrate_intelligent_nifi_migration with:
-    xml_path=/Volumes/catalog/schema/nifi_files/my_workflow.xml
-    out_dir=/Workspace/Users/me@company.com/migrations/output
-    project=my_nifi_project
-    deploy=false
-    """
-}])
-
-response = AGENT.predict(req)
-```
-
-**What it does:**
-1. **Analyzes** your NiFi XML for processor types and complexity
-2. **Recommends** optimal architecture (Jobs vs DLT vs Streaming)
-3. **Executes** the appropriate migration strategy automatically
-4. **Saves** architecture analysis in `conf/architecture_analysis.json`
-
-**Progress Tracking**: You'll see real-time progress like:
-```
-🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
-📋 [MIGRATION] Processing 4 chunks with 87 total processors
-📦 [CHUNK 1/4] Processing 25 processors...
-🧠 [LLM BATCH] Generating code for 25 processors in chunk_0
-✅ [CHUNK 1/4] Generated 25 tasks
-🎉 [MIGRATION COMPLETE] 87 processors → 87 tasks
-✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
-```
-
-#### **Manual Migration (Legacy)**
-For when you want to specify the approach manually:
-
-```python
-# In Databricks notebook - using the AI Agent (Manual Choice)
-from agents import AGENT
-from mlflow.types.responses import ResponsesAgentRequest
-
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": """
-    Run orchestrate_chunked_nifi_migration with:
-    xml_path=/Volumes/catalog/schema/nifi_files/my_workflow.xml
-    out_dir=/Workspace/Users/me@company.com/migrations/output
-    project=my_nifi_project
-    job=my_migration_job
-    max_processors_per_chunk=25
-    existing_cluster_id=your-cluster-id
-    deploy=true
-    """
-}])
-
-response = AGENT.predict(req)
-```
-
-**Key Parameters:**
-- `max_processors_per_chunk=25`: Optimal chunk size (adjust 15-30 based on complexity)
-- `existing_cluster_id`: Reuse existing cluster or omit to create new one
-- `deploy=true`: Automatically deploy the job to Databricks
-
-**Alternative: Direct Function Call**
-```python
-# For programmatic usage without agent
-from tools.migration_tools import orchestrate_chunked_nifi_migration
-
-result = orchestrate_chunked_nifi_migration(
-    xml_path="/Volumes/catalog/schema/nifi_files/my_workflow.xml",
-    out_dir="/Workspace/Users/me@company.com/migrations/output",
-    project="my_project",
-    job="migration_job",
-    max_processors_per_chunk=25,
-    existing_cluster_id="your-cluster-id",
-    deploy=True
-)
-```
+2. **Ready to migrate!** The tool now generates fresh code each time without requiring any pattern registry setup.
 
 ## 📁 Input Files
 
@@ -409,10 +171,9 @@ out_dir = "/Workspace/Users/me@company.com/migrations/output"
 2. **Funnel Detection & Bypass**: Identifies NiFi funnels and creates bypass mappings to preserve connectivity
 3. **Intelligent Chunking**: Splits workflow by process groups (if needed) while preserving graph relationships
 4. **Chunk Processing**: Processes each chunk individually to avoid context limits
-5. **Pattern Matching**: Maps NiFi processors to Databricks equivalents using UC patterns
-6. **Code Generation**: Creates PySpark code for processors with proper dependencies and error handling
-7. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job using original connectivity map
-8. **Asset Bundling**: Creates enhanced project structure with analysis, dependencies, and configurations
+5. **Code Generation**: Creates PySpark code for processors using builtin templates and LLM generation with proper dependencies and error handling
+6. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job using original connectivity map
+7. **Asset Bundling**: Creates enhanced project structure with analysis, dependencies, and configurations
 
 **Advantages of unified approach:**
 - **Scalable**: Automatically handles both small (1-10 processors) and large (100+ processors) workflows
@@ -550,14 +311,7 @@ The system analyzes your NiFi XML to detect:
 
 ## 🧪 Testing and Validation
 
-### Pattern Registry Testing
-```python
-from registry import PatternRegistryUC
-
-reg = PatternRegistryUC()
-pattern = reg.get_pattern("GetFile")
-print(f"Pattern: {pattern['databricks_equivalent']}")
-```
+# Pattern Registry removed - generates fresh code each time
 
 ### Migration Output Validation
 ```python
@@ -575,17 +329,7 @@ comparison = evaluate_pipeline_outputs(
 
 ### Adding New Processor Patterns
 
-1. **Add to pattern registry**:
-```python
-reg.add_pattern("CustomProcessor", {
-    "databricks_equivalent": "Custom Solution",
-    "description": "Handles custom processing logic",
-    "code_template": "# Custom PySpark code template",
-    "best_practices": ["Practice 1", "Practice 2"]
-})
-```
-
-2. **Update `migration_nifi_patterns.json`** for persistent storage
+Add builtin patterns to `tools/generator_tools.py` in the `_get_builtin_pattern()` function for common processors. For custom processors, the LLM will generate fresh code each time.
 
 ### Extending Tools
 
