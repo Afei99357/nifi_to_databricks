@@ -101,7 +101,7 @@ def generate_databricks_code(
     Args:
         processor_type: NiFi processor class name
         properties: JSON string of processor properties
-        force_regenerate: If True, skip UC table lookup and force LLM generation
+        force_regenerate: If True, skip builtin patterns and force LLM generation
     """
     if isinstance(properties, str):
         try:
@@ -131,7 +131,7 @@ def generate_databricks_code(
             )
         return code
 
-    # Pattern not found in UC table - check if LLM generation is enabled
+    # No builtin pattern found - check if LLM generation is enabled
     enable_llm_generation = (
         os.environ.get("ENABLE_LLM_CODE_GENERATION", "false").lower() == "true"
     )
@@ -232,7 +232,7 @@ Focus on the specific properties provided to customize the implementation.
 
 def _generate_with_llm(processor_class: str, properties: dict) -> str:
     """
-    Generate processor-specific PySpark code using LLM when pattern is not in UC table.
+    Generate processor-specific PySpark code using LLM for unknown processors.
 
     Args:
         processor_class: NiFi processor class name (e.g., "ControlRate", "ValidateRecord")

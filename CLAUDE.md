@@ -31,8 +31,7 @@ The system provides both programmatic APIs and an agent-based interface for auto
   - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
   - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
-- **Pattern Registry**: Unity Catalog-backed pattern storage
-  - `registry/pattern_registry.py`: UC table management for migration patterns
+# Pattern Registry removed - generates fresh code each time
 
 - **Configuration**: Environment and settings management
   - `config/settings.py`: Environment variable loading and logging setup
@@ -161,16 +160,7 @@ result = orchestrate_chunked_nifi_migration(
 )
 ```
 
-### Pattern Registry Operations
-
-```python
-from registry import PatternRegistryUC
-
-reg = PatternRegistryUC()
-# Patterns are managed directly in Delta tables
-pattern = reg.get_pattern("GetFile")                # Retrieve pattern from UC table
-reg.add_pattern("CustomProcessor", {...})           # Add new pattern to UC table
-```
+# Pattern Registry Operations removed - generates fresh code each time
 
 ## Environment Setup
 
@@ -279,7 +269,7 @@ The migration system now provides comprehensive progress tracking:
 
 ## Testing and Validation
 
-The system generates comparison utilities in `tools/eval_tools.py` for validating migration results against original NiFi outputs. Use the pattern registry to iteratively improve conversion accuracy for specific processor types.
+The system generates comparison utilities in `tools/eval_tools.py` for validating migration results against original NiFi outputs.
 
 **Performance Monitoring**: Track API call efficiency with the new progress indicators to ensure optimal resource usage.
 
