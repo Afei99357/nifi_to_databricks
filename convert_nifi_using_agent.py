@@ -8,7 +8,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Simpler file with deployment
+# MAGIC ### Simpler file with job execution
 
 # COMMAND ----------
 
@@ -33,7 +33,7 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_group_test_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "deploy=true"
+                "run_now=true"
             ),
         }
     ]
@@ -50,7 +50,7 @@ for item in resp.output:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Simple file without deployment
+# MAGIC ### Simple file without job execution
 
 # COMMAND ----------
 
@@ -75,7 +75,7 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_group_test_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "deploy=false"
+                "run_now=false"
             ),
         }
     ]
@@ -117,7 +117,7 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_feedback_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "deploy=true"
+                "run_now=true"
             ),
         }
     ]
@@ -159,7 +159,7 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_track-out_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "deploy=true"
+                "run_now=true"
             ),
         }
     ]

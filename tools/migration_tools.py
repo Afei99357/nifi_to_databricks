@@ -662,7 +662,7 @@ def convert_flow(
     if emit_job_json or deploy_job:
         job_cfg = create_job_config.func(job, notebook_path)
         _write_text(out / "jobs/job.json", job_cfg)
-        if deploy:
+        if deploy_job:
             res = deploy_and_run_job.func(job_cfg)
             print(f"Deploy result: {str(res)[:200]}...")
 
@@ -731,7 +731,7 @@ def orchestrate_nifi_migration(
     job: str,
     notebook_path: str = "",
     existing_cluster_id: str = "",
-    deploy: bool = False,
+    run_now: bool = False,
 ) -> str:
     """
     End-to-end orchestration:
@@ -788,60 +788,37 @@ def orchestrate_nifi_migration(
         "tool_name": "orchestrate_nifi_migration",
     }
 
-    # --- 4) Optionally create the job (don't run)
-    deployment_success = True
-    deployment_error = None
+    # --- 4) Always create the job in Databricks
+    print(f"🚀 [DEPLOY] Creating Databricks job...")
 
-    if deploy:
-        try:
-            print(f"🚀 [DEPLOY] Starting job deployment...")
-            # Use REST API deployment
-            deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
+    try:
+        deploy_res = deploy_and_run_job.func(dag_job_json, run_now=run_now)
 
-            # Check deployment success (REST API returns JSON)
-            if deploy_res:
-                try:
-                    deploy_json = (
-                        json.loads(deploy_res)
-                        if isinstance(deploy_res, str)
-                        else deploy_res
-                    )
-                    if (
-                        "error" in str(deploy_json).lower()
-                        or "run_error" in deploy_json
-                    ):
-                        deployment_success = False
-                        deployment_error = str(deploy_json)
-                        print(f"❌ [DEPLOY FAILED] {deployment_error}")
-                    else:
-                        deployment_success = True
-                        job_id = deploy_json.get("job_id", "unknown")
-                        print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
-                        print(
-                            f"🎯 [JOB READY] Job ID {job_id} is ready to run in Databricks Jobs UI"
-                        )
-                except Exception:
-                    deployment_success = True
-                    print(f"✅ [DEPLOY RESULT] {deploy_res}")
-
-                result["deploy_result"] = deploy_res
+        # Simple success check
+        if deploy_res and "job_id" in str(deploy_res):
+            print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_res}")
+            if run_now:
+                print(f"🚀 [JOB STARTED] Job is now running")
             else:
-                deployment_success = False
-                deployment_error = "Deployment returned no result"
-                result["deploy_result"] = deployment_error
-                print(f"❌ [DEPLOY FAILED] No result returned")
-
-        except Exception as e:
+                print(f"🎯 [JOB READY] Job is ready to run in Databricks Jobs UI")
+            deployment_success = True
+            deployment_error = None
+        else:
+            print(f"❌ [DEPLOY FAILED] {deploy_res}")
             deployment_success = False
-            deployment_error = f"Deployment exception: {str(e)}"
-            result["deploy_result"] = deployment_error
-            print(f"❌ [DEPLOY FAILED] Exception: {e}")
+            deployment_error = str(deploy_res)
 
-    # Add deployment status to result
-    result["deployment_requested"] = bool(deploy)
+    except Exception as e:
+        print(f"❌ [DEPLOY FAILED] Exception: {e}")
+        deployment_success = False
+        deployment_error = str(e)
+        deploy_res = f"Error: {e}"
+
+    # Add results
+    result["deploy_result"] = deploy_res
     result["deployment_success"] = deployment_success
     result["deployment_error"] = deployment_error
-    result["success"] = deployment_success if deploy else True
+    result["success"] = deployment_success  # Always depends on deployment now
 
     return json.dumps(result, indent=2)
 
@@ -919,7 +896,7 @@ def orchestrate_chunked_nifi_migration(
     notebook_path: str = "",
     max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
     existing_cluster_id: str = "",
-    deploy: bool = False,
+    run_now: bool = False,
 ) -> str:
     """
     End-to-end chunked migration for large NiFi XML files.
@@ -1190,69 +1167,44 @@ def orchestrate_chunked_nifi_migration(
         )
         _write_text(out / "notebooks/main", orchestrator)
 
-        # Step 9: Optional deployment
-        deploy_result = None
-        deployment_success = True
-        deployment_error = None
+        # --- 9) Always create the job in Databricks
+        print(f"🚀 [DEPLOY] Creating Databricks job...")
 
-        if deploy:
-            try:
-                print(f"🚀 [DEPLOY] Starting job deployment...")
-                # Use REST API deployment
-                deploy_result = deploy_and_run_job.func(
-                    json.dumps(final_job_config), run_now=False
-                )
+        try:
+            deploy_result = deploy_and_run_job.func(
+                json.dumps(final_job_config), run_now=run_now
+            )
 
-                # Check if deployment actually succeeded (REST API returns JSON)
-                if deploy_result:
-                    try:
-                        deploy_json = (
-                            json.loads(deploy_result)
-                            if isinstance(deploy_result, str)
-                            else deploy_result
-                        )
-                        if (
-                            "error" in str(deploy_json).lower()
-                            or "run_error" in deploy_json
-                        ):
-                            deployment_success = False
-                            deployment_error = str(deploy_json)
-                            print(f"❌ [DEPLOY FAILED] {deployment_error}")
-                        else:
-                            deployment_success = True
-                            job_id = deploy_json.get("job_id", "unknown")
-                            print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
-                            print(
-                                f"🎯 [JOB READY] Job ID {job_id} is ready to run in Databricks Jobs UI"
-                            )
-                    except Exception:
-                        # If we can't parse, assume success and log the result
-                        deployment_success = True
-                        print(f"✅ [DEPLOY RESULT] {deploy_result}")
+            # Simple success check
+            if deploy_result and "job_id" in str(deploy_result):
+                print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_result}")
+                if run_now:
+                    print(f"🚀 [JOB STARTED] Job is now running")
                 else:
-                    # No result returned - this is suspicious
-                    deployment_success = False
-                    deployment_error = "Deployment returned no result"
-                    print(f"❌ [DEPLOY FAILED] No result returned from deployment")
-
-            except Exception as e:
+                    print(f"🎯 [JOB READY] Job is ready to run in Databricks Jobs UI")
+                deployment_success = True
+                deployment_error = None
+            else:
+                print(f"❌ [DEPLOY FAILED] {deploy_result}")
                 deployment_success = False
-                deployment_error = f"Deployment exception: {str(e)}"
-                deploy_result = deployment_error
-                print(f"❌ [DEPLOY FAILED] Exception: {e}")
+                deployment_error = str(deploy_result)
+
+        except Exception as e:
+            print(f"❌ [DEPLOY FAILED] Exception: {e}")
+            deployment_success = False
+            deployment_error = str(e)
+            deploy_result = f"Error: {e}"
 
         # Final result summary
         total_tasks = sum(len(cr["tasks"]) for cr in chunk_results)
 
-        # Determine overall success
-        migration_success = deployment_success if deploy else True
+        # Overall success always depends on deployment now
+        migration_success = deployment_success
 
         if migration_success:
             print(f"\n🎉 [MIGRATION COMPLETE] All steps succeeded!")
         else:
-            print(
-                f"\n⚠️  [MIGRATION PARTIAL] Migration completed but deployment failed!"
-            )
+            print(f"\n❌ [MIGRATION FAILED] Job deployment failed!")
 
         print(
             f"📊 [SUMMARY] Processed {summary['total_processors']} processors → {total_tasks} tasks"
@@ -1263,14 +1215,8 @@ def orchestrate_chunked_nifi_migration(
         print(f"📊 [SUMMARY] Generated {len(all_step_files)} step files")
         print(f"📊 [SUMMARY] Output directory: {out}")
 
-        if deploy:
-            if deployment_success:
-                print(f"✅ [DEPLOY SUCCESS] Job deployed successfully")
-                print(
-                    f"🎯 [READY TO RUN] Visit Databricks Jobs UI to start your migration job"
-                )
-            else:
-                print(f"❌ [DEPLOY FAILED] {deployment_error}")
+        if deployment_error:
+            print(f"❌ [DEPLOY ERROR] {deployment_error}")
 
         result = {
             "migration_type": "chunked",
@@ -1283,7 +1229,6 @@ def orchestrate_chunked_nifi_migration(
             "cross_chunk_links_count": len(cross_chunk_links),
             "final_job_config_path": str(out / "jobs/job.chunked.json"),
             "notebook_path": notebook_path,
-            "deployment_requested": deploy,
             "deployment_success": deployment_success,
             "deploy_result": deploy_result,
             "deployment_error": deployment_error,
@@ -1559,7 +1504,7 @@ def orchestrate_intelligent_nifi_migration(
     job: str = "",
     notebook_path: str = "",
     existing_cluster_id: str = "",
-    deploy: bool = False,
+    run_now: bool = False,
     max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
 ) -> str:
     """
@@ -1577,7 +1522,7 @@ def orchestrate_intelligent_nifi_migration(
         job: Job name (optional, defaults to project name)
         notebook_path: Databricks notebook path for job execution
         existing_cluster_id: Existing cluster to use (optional)
-        deploy: Whether to deploy the generated job/pipeline
+        run_now: Whether to run the job immediately after creation
         max_processors_per_chunk: Max processors per chunk for large workflows
 
     Returns:
@@ -1626,7 +1571,7 @@ def orchestrate_intelligent_nifi_migration(
                 job=job or f"{project}_job",
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
-                deploy=deploy,
+                run_now=run_now,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
@@ -1672,7 +1617,7 @@ def orchestrate_intelligent_nifi_migration(
                     job=job or f"{project}_job",
                     notebook_path=notebook_path,
                     existing_cluster_id=existing_cluster_id,
-                    deploy=deploy,
+                    run_now=run_now,
                     max_processors_per_chunk=max_processors_per_chunk,
                 )
                 migration_result = json.loads(migration_result_str)
@@ -1688,7 +1633,7 @@ def orchestrate_intelligent_nifi_migration(
                 job=job or f"{project}_streaming_job",
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
-                deploy=deploy,
+                run_now=run_now,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
