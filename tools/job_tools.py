@@ -219,10 +219,10 @@ def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
     return json.dumps({"job_id": job_id}, indent=2)
 
 
-def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 30) -> dict:
+def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 45) -> dict:
     """
     Check the status of a Databricks job run.
-    Polls for up to max_wait_seconds to see if job actually starts running.
+    Waits 5 seconds initially, then polls for up to max_wait_seconds to verify job startup.
 
     Returns:
         {
@@ -249,6 +249,9 @@ def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 30) -
     run_page_url = f"{host}/#job/{job_id}/run/{run_id}"
 
     # Poll for status
+    # Wait 5 seconds initially to give job time to start
+    time.sleep(5)
+
     start_time = time.time()
     while time.time() - start_time < max_wait_seconds:
         try:
@@ -282,7 +285,7 @@ def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 30) -
                 }
             elif life_cycle_state in ["PENDING", "BLOCKED"]:
                 # Keep waiting
-                time.sleep(2)
+                time.sleep(3)
                 continue
             elif life_cycle_state in ["SKIPPED", "INTERNAL_ERROR"] or result_state in [
                 "FAILED",
@@ -306,7 +309,7 @@ def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 30) -
                 }
             else:
                 # Keep waiting for unclear states
-                time.sleep(2)
+                time.sleep(3)
                 continue
 
         except Exception as e:

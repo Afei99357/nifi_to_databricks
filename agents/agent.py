@@ -460,7 +460,6 @@ try:
 except Exception as e:
     logger.warning(f"MLflow autolog not available: {e}")
 
-logger.info("Creating single-round agent (simplified for NiFi migrations)")
 agent = create_tool_calling_agent(llm, TOOLS, system_prompt)
 AGENT = LangGraphResponsesAgent(agent)
 

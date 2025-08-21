@@ -809,7 +809,7 @@ def orchestrate_nifi_migration(
                     print(f"⏳ [STATUS CHECK] Verifying job startup...")
 
                     # Poll for actual job status
-                    status = check_job_run_status(job_id, run_id, max_wait_seconds=30)
+                    status = check_job_run_status(job_id, run_id, max_wait_seconds=45)
 
                     if status["status"] == "RUNNING":
                         print(f"✅ [JOB RUNNING] Job is actively running!")
@@ -1231,7 +1231,7 @@ def orchestrate_chunked_nifi_migration(
 
                         # Poll for actual job status
                         status = check_job_run_status(
-                            job_id, run_id, max_wait_seconds=30
+                            job_id, run_id, max_wait_seconds=45
                         )
 
                         if status["status"] == "RUNNING":
