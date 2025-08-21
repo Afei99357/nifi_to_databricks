@@ -103,6 +103,7 @@ class PatternRegistryUC:
         # runtime/cache fields
         self.cache: Dict[str, dict] = {}
         self.usage_stats: Dict[str, dict] = {}
+        self.usage_buffer: Dict[str, int] = {}  # Buffer usage counts to batch update
 
         # bootstrap UC tables
         self._ensure_tables()
@@ -490,8 +491,14 @@ class PatternRegistryUC:
         pat = self.patterns.get("processors", {}).get(processor)
         if pat:
             self.cache[cache_key] = pat
-            self.track_usage(processor)
+            self.track_usage_buffered(
+                processor
+            )  # Buffer usage instead of immediate write
         return pat
+
+    def has_pattern(self, processor: str) -> bool:
+        """Check if pattern exists without incrementing usage stats"""
+        return processor in self.patterns.get("processors", {})
 
     def get_complex_pattern(self, name: str) -> Optional[dict]:
         return self.complex.get(name)
@@ -596,11 +603,66 @@ class PatternRegistryUC:
 
     # JSON seeding functions removed - use Delta table operations only
 
-    def track_usage(self, processor: str) -> None:
+    def track_usage_buffered(self, processor: str) -> None:
+        """Buffer usage tracking - no immediate Delta writes"""
+        # Update in-memory stats
         stats = self.usage_stats.get(processor, {"count": 0})
         stats["count"] += 1
         stats["last_used"] = datetime.utcnow().isoformat()
         self.usage_stats[processor] = stats
+
+        # Buffer for batch update at end of migration
+        self.usage_buffer[processor] = self.usage_buffer.get(processor, 0) + 1
+
+    def track_usage(self, processor: str) -> None:
+        """Track processor usage with buffered writes for better performance"""
+        self.track_usage_buffered(processor)
+
+    def flush_usage_stats(self) -> None:
+        """Batch update usage counts to reduce Spark jobs"""
+        if not self.usage_buffer:
+            return
+
+        try:
+            current_time = datetime.utcnow()
+            current_user = os.environ.get(
+                "USER_EMAIL", os.environ.get("USER", "system")
+            )
+
+            # Prepare batch update data
+            rows = []
+            for processor, usage_increment in self.usage_buffer.items():
+                rows.append((processor, usage_increment, current_time))
+
+            if not rows:
+                return
+
+            # Create DataFrame for batch usage update
+            sdf = self.spark.createDataFrame(
+                rows, ["processor", "usage_increment", "last_used"]
+            )
+            sdf.createOrReplaceTempView("_nifi_usage_update")
+
+            # Single MERGE to update all usage counts
+            self.spark.sql(
+                f"""
+                MERGE INTO {self.processors_table} t
+                USING _nifi_usage_update s
+                  ON t.processor = s.processor
+                WHEN MATCHED THEN UPDATE SET
+                  t.usage_count = t.usage_count + s.usage_increment,
+                  t.last_used = s.last_used
+            """
+            )
+
+            print(
+                f"📊 [USAGE BATCH] Updated usage stats for {len(self.usage_buffer)} processors"
+            )
+
+        except Exception as e:
+            print(f"⚠️  [USAGE BATCH] Failed to update usage stats: {e}")
+        finally:
+            self.usage_buffer.clear()
 
 
 __all__ = ["PatternRegistryUC"]

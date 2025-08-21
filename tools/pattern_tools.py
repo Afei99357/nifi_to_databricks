@@ -41,25 +41,35 @@ def _buffer_generated_pattern(processor_class: str, pattern: dict) -> None:
 
 
 def flush_patterns_to_registry() -> None:
-    """Flush buffered patterns to UC in a single MERGE when possible."""
+    """Flush buffered patterns and usage stats to UC in batched operations."""
     global _bulk_buffer
-    if not _bulk_buffer:
-        return
+    registry = _get_registry()
+
+    # Flush new patterns first
+    if _bulk_buffer:
+        try:
+            if hasattr(registry, "add_patterns_bulk"):
+                registry.add_patterns_bulk(_bulk_buffer)
+                print(
+                    f"💾 [PATTERN BULK SAVED] {len(_bulk_buffer)} patterns → UC table"
+                )
+            else:
+                # Fallback: save individually
+                for proc, pat in _bulk_buffer.items():
+                    if hasattr(registry, "add_pattern"):
+                        registry.add_pattern(proc, pat)
+                print(f"💾 [PATTERN SAVED] {len(_bulk_buffer)} patterns (individual)")
+        except Exception as e:
+            print(f"❌ [DEBUG] Bulk save error: {e}")
+        finally:
+            _bulk_buffer = {}
+
+    # Flush usage stats in a single batch operation
     try:
-        registry = _get_registry()
-        if hasattr(registry, "add_patterns_bulk"):
-            registry.add_patterns_bulk(_bulk_buffer)
-            print(f"💾 [PATTERN BULK SAVED] {len(_bulk_buffer)} patterns → UC table")
-        else:
-            # Fallback: save individually
-            for proc, pat in _bulk_buffer.items():
-                if hasattr(registry, "add_pattern"):
-                    registry.add_pattern(proc, pat)
-            print(f"💾 [PATTERN SAVED] {len(_bulk_buffer)} patterns (individual)")
+        if hasattr(registry, "flush_usage_stats"):
+            registry.flush_usage_stats()
     except Exception as e:
-        print(f"❌ [DEBUG] Bulk save error: {e}")
-    finally:
-        _bulk_buffer = {}
+        print(f"❌ [DEBUG] Usage stats flush error: {e}")
 
 
 def get_buffered_patterns() -> Dict[str, dict]:
