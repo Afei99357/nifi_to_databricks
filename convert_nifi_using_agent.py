@@ -8,7 +8,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Simpler file
+# MAGIC ### Simpler file with deployment
 
 # COMMAND ----------
 
@@ -34,6 +34,48 @@ req = ResponsesAgentRequest(
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
                 "deploy=true"
+            ),
+        }
+    ]
+)
+
+resp = AGENT.predict(req)
+
+for item in resp.output:
+    if item.type == "message":
+        for block in item.content:
+            if block["type"] == "output_text":
+                print(block["text"])
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Simple file without deployment
+
+# COMMAND ----------
+
+from datetime import datetime
+
+from mlflow.types.responses import ResponsesAgentRequest
+
+from agents import AGENT
+
+current = datetime.now().strftime("%Y%m%d%H%M%S")
+
+req = ResponsesAgentRequest(
+    input=[
+        {
+            "role": "user",
+            "content": (
+                "Run orchestrate_chunked_nifi_migration with:\n"
+                "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_embed_groups.xml\n"
+                "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results\n"
+                f"""project=job_test_group_test_{current}\n"""
+                f"""job=job_test_feedback_{current}\n"""
+                f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_group_test_{current}/main\n"""
+                "max_processors_per_chunk=25\n"
+                "existing_cluster_id=0722-181403-vd3u4c6r\n"
+                "deploy=false"
             ),
         }
     ]
