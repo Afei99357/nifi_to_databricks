@@ -817,11 +817,9 @@ def orchestrate_nifi_migration(
                         deployment_success = True
                         job_id = deploy_json.get("job_id", "unknown")
                         print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
-                        print(f"📋 [NEXT STEP] Job created but not started. To run it:")
                         print(
-                            f"   - Go to Databricks Jobs UI and find Job ID: {job_id}"
+                            f"🎯 [JOB READY] Job ID {job_id} is ready to run in Databricks Jobs UI"
                         )
-                        print(f"   - Or use: databricks jobs run-now --job-id {job_id}")
                 except Exception:
                     deployment_success = True
                     print(f"✅ [DEPLOY RESULT] {deploy_res}")
@@ -1225,13 +1223,7 @@ def orchestrate_chunked_nifi_migration(
                             job_id = deploy_json.get("job_id", "unknown")
                             print(f"✅ [DEPLOY SUCCESS] Job created: {deploy_json}")
                             print(
-                                f"📋 [NEXT STEP] Job created but not started. To run it:"
-                            )
-                            print(
-                                f"   - Go to Databricks Jobs UI and find Job ID: {job_id}"
-                            )
-                            print(
-                                f"   - Or use: databricks jobs run-now --job-id {job_id}"
+                                f"🎯 [JOB READY] Job ID {job_id} is ready to run in Databricks Jobs UI"
                             )
                     except Exception:
                         # If we can't parse, assume success and log the result
@@ -1274,8 +1266,9 @@ def orchestrate_chunked_nifi_migration(
         if deploy:
             if deployment_success:
                 print(f"✅ [DEPLOY SUCCESS] Job deployed successfully")
-                print(f"💡 [REMINDER] Job was created but not started automatically")
-                print(f"   Visit Databricks Jobs UI to run your migration job")
+                print(
+                    f"🎯 [READY TO RUN] Visit Databricks Jobs UI to start your migration job"
+                )
             else:
                 print(f"❌ [DEPLOY FAILED] {deployment_error}")
 
