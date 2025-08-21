@@ -25,7 +25,7 @@ COMMENT 'NiFi processor to Databricks migration patterns';
 -- Add primary key constraint
 ALTER TABLE migration_patterns ADD CONSTRAINT pk_migration_patterns PRIMARY KEY (processor_class);
 
--- 2. Processor Mappings Table  
+-- 2. Processor Mappings Table
 -- Maps NiFi processors to their Databricks equivalents
 CREATE TABLE IF NOT EXISTS processor_mappings (
     nifi_processor STRING NOT NULL,
@@ -68,7 +68,7 @@ COMMENT 'NiFi controller service to Databricks mappings';
 
 -- Insert some common processor patterns to get started
 INSERT INTO migration_patterns (processor_class, databricks_equivalent, description, best_practices, code_template, last_seen_properties) VALUES
-('GetFile', 'Auto Loader', 'File ingestion via Auto Loader with schema evolution', 
+('GetFile', 'Auto Loader', 'File ingestion via Auto Loader with schema evolution',
  array('Use schemaLocation for schema tracking', 'Enable includeExistingFiles for initial backfill', 'Use cleanSource after successful processing'),
  'from pyspark.sql.functions import *
 df = (spark.readStream
@@ -84,7 +84,7 @@ df = (spark.readStream
  array('Use schemaLocation for schema tracking', 'Consider includeExistingFiles for backfill'),
  'from pyspark.sql.functions import *
 df = (spark.readStream
-      .format("cloudFiles") 
+      .format("cloudFiles")
       .option("cloudFiles.format", "{format}")
       .option("cloudFiles.inferColumnTypes", "true")
       .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
@@ -148,7 +148,7 @@ SHOW TABLES;
 
 -- Display table schemas
 DESCRIBE EXTENDED migration_patterns;
-DESCRIBE EXTENDED processor_mappings;  
+DESCRIBE EXTENDED processor_mappings;
 DESCRIBE EXTENDED migration_history;
 DESCRIBE EXTENDED controller_services;
 

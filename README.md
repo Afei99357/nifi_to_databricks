@@ -725,4 +725,14 @@ The hooks will now run automatically on every commit. If any hooks fail, the com
 - **Black**: Configured with 88 character line length
 - **isort**: Configured to work with Black
 - **flake8**: Lenient configuration for initial setup (ignores many common issues)
-- **mypy**: Currently disabled (commented out) - can be enabled later for stricter type checking
+- **mypy**: Enabled with lenient settings and module-specific overrides for gradual adoption
+
+#### MyPy Type Checking
+
+MyPy is configured to start lenient but provides a clear path to strictness:
+
+- **Current**: Basic type checking with module ignores for existing code
+- **Gradual**: Remove module overrides one-by-one as code is cleaned up
+- **Future**: Full strict mode for maximum type safety
+
+📖 **See [MyPy Strictness Guide](docs/mypy_strictness_guide.md)** for the complete graduation plan.

@@ -15,6 +15,7 @@ from registry import PatternRegistryUC as _UCRegistry
 _registry = None
 _bulk_buffer: Dict[str, dict] = {}
 
+
 def _get_registry():
     """Get the pattern registry, initializing it lazily."""
     global _registry
@@ -29,9 +30,11 @@ def _get_registry():
                 raise
     return _registry
 
+
 def _buffer_generated_pattern(processor_class: str, pattern: dict) -> None:
     global _bulk_buffer
     _bulk_buffer[processor_class] = pattern
+
 
 def flush_patterns_to_registry() -> None:
     """Flush buffered patterns to UC in a single MERGE when possible."""
@@ -40,13 +43,13 @@ def flush_patterns_to_registry() -> None:
         return
     try:
         registry = _get_registry()
-        if hasattr(registry, 'add_patterns_bulk'):
+        if hasattr(registry, "add_patterns_bulk"):
             registry.add_patterns_bulk(_bulk_buffer)
             print(f"💾 [PATTERN BULK SAVED] {len(_bulk_buffer)} patterns → UC table")
         else:
             # Fallback: save individually
             for proc, pat in _bulk_buffer.items():
-                if hasattr(registry, 'add_pattern'):
+                if hasattr(registry, "add_pattern"):
                     registry.add_pattern(proc, pat)
             print(f"💾 [PATTERN SAVED] {len(_bulk_buffer)} patterns (individual)")
     except Exception as e:
@@ -54,9 +57,11 @@ def flush_patterns_to_registry() -> None:
     finally:
         _bulk_buffer = {}
 
+
 def get_buffered_patterns() -> Dict[str, dict]:
     """Return a snapshot of the currently buffered patterns (not flushed)."""
     return dict(_bulk_buffer)
+
 
 def dump_buffer_to_file(path: str) -> None:
     """Write the buffered patterns to a JSON file for deferred persistence/audit."""
@@ -71,16 +76,19 @@ def dump_buffer_to_file(path: str) -> None:
     except Exception as e:
         print(f"⚠️  [DEBUG] Could not write pattern buffer file: {e}")
 
+
 class _FallbackRegistry:
     """Fallback registry for when Unity Catalog is not available."""
+
     def __init__(self):
         self._patterns = {}
-    
+
     def get_pattern(self, processor_class: str):
         return self._patterns.get(processor_class)
-    
+
     def add_pattern(self, processor_class: str, pattern: dict):
         self._patterns[processor_class] = pattern
+
 
 __all__ = [
     "generate_databricks_code",
@@ -161,14 +169,16 @@ def _render_pattern(processor_class: str, properties: Dict[str, Any]) -> Dict[st
 
 
 @tool
-def generate_databricks_code(processor_type: str, properties: str = "{}", force_regenerate: bool = False) -> str:
+def generate_databricks_code(
+    processor_type: str, properties: str = "{}", force_regenerate: bool = False
+) -> str:
     """
     Generate equivalent Databricks/PySpark code for a NiFi processor type.
     Returns a Python code string with best-practice comments when available.
-    
+
     Args:
         processor_type: NiFi processor class name
-        properties: JSON string of processor properties  
+        properties: JSON string of processor properties
         force_regenerate: If True, skip UC table lookup and force LLM generation
     """
     if isinstance(properties, str):
@@ -177,12 +187,14 @@ def generate_databricks_code(processor_type: str, properties: str = "{}", force_
         except Exception:
             properties = {}
 
-    processor_class = processor_type.split(".")[-1] if "." in processor_type else processor_type
-    
+    processor_class = (
+        processor_type.split(".")[-1] if "." in processor_type else processor_type
+    )
+
     # If force_regenerate is True, skip UC table lookup and use LLM directly
     if force_regenerate:
         return _generate_with_llm(processor_class, properties)
-    
+
     rendered = _render_pattern(processor_class, properties)
 
     if rendered["code"]:
@@ -191,13 +203,18 @@ def generate_databricks_code(processor_type: str, properties: str = "{}", force_
             code += f"# {rendered['description']}\n"
         code += f"\n{rendered['code']}"
         if rendered["best_practices"]:
-            code += "\n\n# Best Practices:\n" + "\n".join([f"# - {bp}" for bp in rendered["best_practices"]])
+            code += "\n\n# Best Practices:\n" + "\n".join(
+                [f"# - {bp}" for bp in rendered["best_practices"]]
+            )
         return code
 
     # Pattern not found in UC table - check if LLM generation is enabled
     import os
-    enable_llm_generation = os.environ.get("ENABLE_LLM_CODE_GENERATION", "false").lower() == "true"
-    
+
+    enable_llm_generation = (
+        os.environ.get("ENABLE_LLM_CODE_GENERATION", "false").lower() == "true"
+    )
+
     if enable_llm_generation:
         return _generate_with_llm(processor_class, properties)
     else:
@@ -247,7 +264,7 @@ Key Functionality:
 - Acts as a throttling mechanism
 
 PySpark Implementation:
-- Use DataFrame.limit() for simple rate limiting  
+- Use DataFrame.limit() for simple rate limiting
 - Use window functions for time-based rate control
 - Consider using Structured Streaming rate limiting options
 """,
@@ -278,40 +295,48 @@ PySpark Implementation:
 - Use spark.sql() for Spark SQL
 - Use DataFrame.jdbc() for external database connections
 - Handle connection properties and authentication
-"""
+""",
     }
-    
-    return guidance_map.get(processor_class, f"""
+
+    return guidance_map.get(
+        processor_class,
+        f"""
 PROCESSOR GUIDANCE - {processor_class}:
 Research the NiFi {processor_class} processor functionality based on its name and properties.
 Generate equivalent PySpark code that performs the same data processing operations.
 Focus on the specific properties provided to customize the implementation.
-""")
+""",
+    )
 
 
 def _generate_with_llm(processor_class: str, properties: dict) -> str:
     """
     Generate processor-specific PySpark code using LLM when pattern is not in UC table.
-    
+
     Args:
         processor_class: NiFi processor class name (e.g., "ControlRate", "ValidateRecord")
         properties: Processor configuration properties
-        
+
     Returns:
         Generated PySpark code with comments and logic
     """
     try:
         # Import here to avoid circular dependencies
-        from databricks_langchain import ChatDatabricks
         import os
-        
+
+        from databricks_langchain import ChatDatabricks
+
         # Get the model endpoint from environment
-        model_endpoint = os.environ.get("MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
+        model_endpoint = os.environ.get(
+            "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
+        )
         llm = ChatDatabricks(endpoint=model_endpoint)
-        
+
         # Create processor-specific prompt with detailed guidance
-        processor_guidance = _get_processor_specific_guidance(processor_class, properties)
-        
+        processor_guidance = _get_processor_specific_guidance(
+            processor_class, properties
+        )
+
         prompt = f"""You are a NiFi to Databricks migration expert. Generate specific PySpark code for the NiFi processor: {processor_class}
 
 {processor_guidance}
@@ -347,25 +372,27 @@ Generate the working PySpark code that implements {processor_class} functionalit
         # Call the LLM to generate code
         response = llm.invoke(prompt)
         generated_code = response.content.strip()
-        
+
         # Clean up the response - remove markdown if present
-        if generated_code.startswith('```python'):
-            generated_code = generated_code.replace('```python\n', '').replace('\n```', '')
-        elif generated_code.startswith('```'):
-            generated_code = generated_code.replace('```\n', '').replace('\n```', '')
-        
+        if generated_code.startswith("```python"):
+            generated_code = generated_code.replace("```python\n", "").replace(
+                "\n```", ""
+            )
+        elif generated_code.startswith("```"):
+            generated_code = generated_code.replace("```\n", "").replace("\n```", "")
+
         # Add header comment
         header = f"# {processor_class} → LLM Generated Code\n# Generated based on processor properties and NiFi documentation\n\n"
-        
+
         # Optionally save the generated pattern to UC table for future use
         _save_generated_pattern(processor_class, properties, generated_code)
-        
+
         return header + generated_code
-        
+
     except Exception as e:
         # Track fallback usage for maintenance review
         _track_fallback_processor(processor_class, properties, str(e))
-        
+
         # Fallback to improved generic template if LLM fails
         return f"""# {processor_class} → LLM Generation Failed
 # Error: {str(e)}
@@ -388,7 +415,7 @@ def _format_properties_as_comments(properties: dict) -> str:
     """Format properties dictionary as properly commented Python code."""
     if not properties:
         return "# No properties configured"
-    
+
     # Generate properly commented JSON-like format
     lines = ["# {"]
     for key, value in properties.items():
@@ -399,7 +426,7 @@ def _format_properties_as_comments(properties: dict) -> str:
         else:
             lines.append(f'#   "{key}": {value},')
     lines.append("# }")
-    
+
     return "\n".join(lines)
 
 
@@ -407,37 +434,39 @@ def _generate_property_comments(properties: dict) -> str:
     """Generate helpful comments about processor properties."""
     if not properties:
         return "# No properties configured"
-    
+
     comments = []
     for key, value in properties.items():
         if value is not None:
             comments.append(f"# - {key}: {value}")
         else:
             comments.append(f"# - {key}: (not set)")
-    
+
     return "\n".join(comments)
 
 
-def _track_fallback_processor(processor_class: str, properties: dict, error: str) -> None:
+def _track_fallback_processor(
+    processor_class: str, properties: dict, error: str
+) -> None:
     """Track processors that fell back to generic implementation for maintenance review."""
     try:
         import json
         import os
         from datetime import datetime
-        
+
         # Create fallback tracking record
         fallback_record = {
             "processor_class": processor_class,
             "properties": properties,
             "error": error,
             "timestamp": datetime.now().isoformat(),
-            "status": "fallback_used"
+            "status": "fallback_used",
         }
-        
+
         # Write to fallback tracking file in output directory
         # This will help maintainers identify which processors need attention
         fallback_file = "fallback_processors.jsonl"
-        
+
         # Try to write to current working directory or temp
         try:
             with open(fallback_file, "a", encoding="utf-8") as f:
@@ -445,17 +474,22 @@ def _track_fallback_processor(processor_class: str, properties: dict, error: str
         except Exception:
             # Fallback: try to write to temp directory
             import tempfile
-            fallback_file = os.path.join(tempfile.gettempdir(), "nifi_migration_fallbacks.jsonl")
+
+            fallback_file = os.path.join(
+                tempfile.gettempdir(), "nifi_migration_fallbacks.jsonl"
+            )
             with open(fallback_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(fallback_record) + "\n")
-                
+
         print(f"⚠️  Fallback used for {processor_class}. Tracked in: {fallback_file}")
-        
+
     except Exception as track_error:
         print(f"Warning: Could not track fallback for {processor_class}: {track_error}")
 
 
-def _save_generated_pattern(processor_class: str, properties: dict, generated_code: str) -> None:
+def _save_generated_pattern(
+    processor_class: str, properties: dict, generated_code: str
+) -> None:
     """
     Optionally save the LLM-generated pattern to UC table for future reuse.
     This builds up the pattern registry over time.
@@ -463,9 +497,9 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
     try:
         # Use the global registry to ensure tables are created once
         registry = _get_registry()
-        
+
         # Only save if we have a UC registry (not fallback)
-        if hasattr(registry, 'add_pattern') and hasattr(registry, 'spark'):
+        if hasattr(registry, "add_pattern") and hasattr(registry, "spark"):
             if registry.spark:
                 # Create a pattern from the generated code
                 pattern = {
@@ -476,19 +510,19 @@ def _save_generated_pattern(processor_class: str, properties: dict, generated_co
                     "best_practices": [
                         "Review and customize the generated code",
                         "Test thoroughly before production use",
-                        "Consider processor-specific optimizations"
+                        "Consider processor-specific optimizations",
                     ],
                     "generated_from_properties": properties,
-                    "generation_source": "llm_hybrid_approach"
+                    "generation_source": "llm_hybrid_approach",
                 }
-                
+
                 # Buffer to save in bulk later (no per-processor prints)
                 _buffer_generated_pattern(processor_class, pattern)
             else:
                 pass
         else:
             pass
-        
+
     except Exception as e:
         # Silent fail - reduce noise
         # Silent fail - saving is optional
@@ -553,8 +587,8 @@ def suggest_autoloader_options(properties: str = "{}") -> str:
         fmt = "parquet"
 
     code = (
-        'from pyspark.sql.functions import *\n'
-        'df = (spark.readStream\n'
+        "from pyspark.sql.functions import *\n"
+        "df = (spark.readStream\n"
         '      .format("cloudFiles")\n'
         f'      .option("cloudFiles.format", "{fmt}")\n'
         '      .option("cloudFiles.inferColumnTypes", "true")\n'
@@ -567,5 +601,10 @@ def suggest_autoloader_options(properties: str = "{}") -> str:
         "Set cloudFiles.validateOptions for strictness; cleanSource MOVE/DELETE for hygiene.",
     ]
 
-    result = {"code": code, "tips": tips, "continue_required": False, "tool_name": "suggest_autoloader_options"}
+    result = {
+        "code": code,
+        "tips": tips,
+        "continue_required": False,
+        "tool_name": "suggest_autoloader_options",
+    }
     return json.dumps(result, indent=2)

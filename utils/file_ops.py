@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import base64
+import codecs
+import os
 import re
 from pathlib import Path
 from typing import Union
-import os, requests, base64
-import codecs
+
+import requests
 
 PathLike = Union[str, Path]
 
@@ -47,7 +50,9 @@ def read_text(path: str) -> str:
         host = os.environ.get("DATABRICKS_HOST")
         token = os.environ.get("DATABRICKS_TOKEN")
         if not (host and token):
-            raise ValueError("Need DATABRICKS_HOST and DATABRICKS_TOKEN for /Workspace paths")
+            raise ValueError(
+                "Need DATABRICKS_HOST and DATABRICKS_TOKEN for /Workspace paths"
+            )
 
         url = host if host.startswith("http") else f"https://{host}"
         resp = requests.get(
@@ -70,4 +75,3 @@ def read_text(path: str) -> str:
 
     # Last resort: replace bad chars
     return raw.decode("utf-8", errors="replace")
-

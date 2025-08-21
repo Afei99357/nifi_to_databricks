@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming). 
+This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming).
 
 **Performance Optimizations (v2.1):**
 - **Batched LLM Generation**: Generates code for multiple processors in single requests (96% fewer API calls)
@@ -68,7 +68,7 @@ from agents import AGENT
 from mlflow.types.responses import ResponsesAgentRequest
 
 req = ResponsesAgentRequest(input=[{
-    "role": "user", 
+    "role": "user",
     "content": "Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
 }])
 
@@ -91,13 +91,13 @@ from mlflow.types.responses import ResponsesAgentRequest
 
 # For regular-sized NiFi files (<50 processors)
 req = ResponsesAgentRequest(input=[{
-    "role": "user", 
+    "role": "user",
     "content": "Run orchestrate_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
 }])
 
 # For large NiFi files (>50 processors or complex workflows)
 req = ResponsesAgentRequest(input=[{
-    "role": "user", 
+    "role": "user",
     "content": "Run orchestrate_chunked_nifi_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
 }])
 
@@ -132,7 +132,7 @@ with open("nifi_pipeline_file/example.xml", 'r') as f:
 analysis = analyze_nifi_architecture_requirements.func(xml_content)
 print("Architecture Analysis:", analysis)
 
-# Get architecture recommendation  
+# Get architecture recommendation
 recommendation = recommend_databricks_architecture.func(xml_content)
 print("Recommendation:", recommendation)
 ```
@@ -176,7 +176,7 @@ reg.add_pattern("CustomProcessor", {...})           # Add new pattern to UC tabl
 
 Required environment variables:
 - `DATABRICKS_HOSTNAME`: Your Databricks workspace URL
-- `DATABRICKS_TOKEN`: Personal access token or service principal token  
+- `DATABRICKS_TOKEN`: Personal access token or service principal token
 - `MODEL_ENDPOINT`: Foundation model endpoint (default: databricks-meta-llama-3-3-70b-instruct)
 - `NOTIFICATION_EMAIL`: Optional email for job failure notifications
 
@@ -199,7 +199,7 @@ LLM_SUB_BATCH_SIZE=5
 
 **Batch Size Tuning Guidelines:**
 - **Complex processors** (lots of properties): Use `MAX_PROCESSORS_PER_CHUNK=15`
-- **Simple processors**: Use `MAX_PROCESSORS_PER_CHUNK=25` 
+- **Simple processors**: Use `MAX_PROCESSORS_PER_CHUNK=25`
 - **Better fallback success**: Use `LLM_SUB_BATCH_SIZE=5` instead of default 10
 - **JSON parsing issues**: Reduce both batch sizes for higher success rates
 
@@ -289,7 +289,7 @@ The system now includes enhanced JSON parsing reliability to prevent "Invalid \e
 
 ### JSON Format Enforcement
 - **Explicit prompt rules**: LLM is instructed on proper JSON escape sequences
-- **Temperature control**: Uses `temperature=0.1` for more deterministic JSON responses  
+- **Temperature control**: Uses `temperature=0.1` for more deterministic JSON responses
 - **Format validation**: Multiple recovery attempts before falling back to individual generation
 
 ### Troubleshooting JSON Issues
@@ -301,7 +301,7 @@ If you see JSON parsing failures:
 
 ### Success Rate Optimization
 - **20 processors**: ~66% success rate (2/3 chunks)
-- **15 processors**: ~80-90% success rate  
+- **15 processors**: ~80-90% success rate
 - **5-8 processors (fallback)**: ~90% success rate
 
 **Result**: Dramatically fewer expensive individual processor API calls.

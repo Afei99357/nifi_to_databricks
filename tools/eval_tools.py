@@ -9,7 +9,9 @@ __all__ = ["evaluate_pipeline_outputs"]
 
 
 @tool
-def evaluate_pipeline_outputs(src_path: str, dst_path: str, key_cols_csv: str = "", float_tol: float = 1e-6) -> str:
+def evaluate_pipeline_outputs(
+    src_path: str, dst_path: str, key_cols_csv: str = "", float_tol: float = 1e-6
+) -> str:
     """
     Emit a PySpark code template that compares two Delta/Parquet datasets with robust float handling.
     Returns a Python code string intended to be run in a Databricks notebook.

@@ -19,30 +19,38 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
 # --------------------------
 # Environment configuration
 # --------------------------
 PATTERN_TABLE = os.environ.get("PATTERN_TABLE", "eliao.nifi_to_databricks.processors")
-COMPLEX_TABLE = os.environ.get("COMPLEX_TABLE", "eliao.nifi_to_databricks.complex_patterns")
-META_TABLE = os.environ.get("META_TABLE", "eliao.nifi_to_databricks.patterns_meta")               # optional
-RAW_TABLE = os.environ.get("RAW_TABLE", "eliao.nifi_to_databricks.patterns_raw_snapshots")        # optional
+COMPLEX_TABLE = os.environ.get(
+    "COMPLEX_TABLE", "eliao.nifi_to_databricks.complex_patterns"
+)
+META_TABLE = os.environ.get(
+    "META_TABLE", "eliao.nifi_to_databricks.patterns_meta"
+)  # optional
+RAW_TABLE = os.environ.get(
+    "RAW_TABLE", "eliao.nifi_to_databricks.patterns_raw_snapshots"
+)  # optional
 
 
 def _spark():
     """Return active SparkSession if running on Databricks / PySpark context, else None."""
     try:
         from pyspark.sql import SparkSession  # type: ignore
-        
+
         # Try to get existing active session first
         spark = SparkSession.getActiveSession()
         if spark:
             return spark
-            
+
         # If no active session, try to create one (for Databricks environment)
         try:
-            spark = SparkSession.builder.appName("NiFi_Migration_Pattern_Registry").getOrCreate()
+            spark = SparkSession.builder.appName(
+                "NiFi_Migration_Pattern_Registry"
+            ).getOrCreate()
             # Avoid sparkContext.appName in Spark Connect - just check if session is valid
             try:
                 app_name = spark.sparkContext.appName
@@ -54,7 +62,7 @@ def _spark():
         except Exception as create_error:
             print(f"⚠️  [SPARK] Could not create SparkSession: {create_error}")
             return None
-            
+
     except Exception as import_error:
         print(f"⚠️  [SPARK] PySpark not available: {import_error}")
         return None
@@ -77,13 +85,15 @@ class PatternRegistryUC:
         print(f"🔧 [UC INIT] Initializing Unity Catalog pattern registry...")
         self.spark = _spark()
         if not self.spark:
-            raise RuntimeError("SparkSession not available. PatternRegistryUC requires Databricks / Spark.")
+            raise RuntimeError(
+                "SparkSession not available. PatternRegistryUC requires Databricks / Spark."
+            )
 
         self.processors_table = processors_table or PATTERN_TABLE
         self.complex_table = complex_table or COMPLEX_TABLE
         self.meta_table = meta_table or META_TABLE
         self.raw_snapshots_table = raw_snapshots_table or RAW_TABLE
-        
+
         print(f"🔧 [UC INIT] Target tables:")
         print(f"  📊 Processors: {self.processors_table}")
         print(f"  🔗 Complex: {self.complex_table}")
@@ -128,14 +138,16 @@ class PatternRegistryUC:
             COMMENT 'NiFi processor to Databricks migration patterns with usage tracking'
             """
         )
-        
+
         # Add constraints and indexes for better performance
         try:
-            self.spark.sql(f"ALTER TABLE {self.processors_table} ADD CONSTRAINT pk_processors PRIMARY KEY (processor)")
+            self.spark.sql(
+                f"ALTER TABLE {self.processors_table} ADD CONSTRAINT pk_processors PRIMARY KEY (processor)"
+            )
         except Exception:
             pass  # Constraint might already exist
-            
-        # 2. Complex migration patterns table  
+
+        # 2. Complex migration patterns table
         self.spark.sql(
             f"""
             CREATE TABLE IF NOT EXISTS {self.complex_table} (
@@ -164,7 +176,7 @@ class PatternRegistryUC:
             COMMENT 'Complex multi-processor migration patterns and workflows'
             """
         )
-        
+
         # 3. Optional metadata table for registry versioning
         if self.meta_table:
             self.spark.sql(
@@ -183,7 +195,7 @@ class PatternRegistryUC:
                 COMMENT 'Registry metadata and versioning information'
                 """
             )
-            
+
         # 4. Optional raw snapshots table for debugging and rollback
         if self.raw_snapshots_table:
             self.spark.sql(
@@ -210,7 +222,7 @@ class PatternRegistryUC:
                 COMMENT 'Raw snapshots for debugging, rollback, and historical analysis'
                 """
             )
-            
+
         print(f"🔧 [UC SETUP] Created Delta tables with comprehensive schema:")
         print(f"  📊 Processors: {self.processors_table}")
         print(f"  🔗 Complex patterns: {self.complex_table}")
@@ -225,8 +237,14 @@ class PatternRegistryUC:
             rows = (
                 self.spark.table(self.processors_table)
                 .select(
-                    "processor", "category", "databricks_equivalent", "description", 
-                    "code_template", "best_practices", "pattern_json", "usage_count"
+                    "processor",
+                    "category",
+                    "databricks_equivalent",
+                    "description",
+                    "code_template",
+                    "best_practices",
+                    "pattern_json",
+                    "usage_count",
                 )
                 .collect()
             )
@@ -241,7 +259,7 @@ class PatternRegistryUC:
                         "description": r["description"] or "",
                         "code_template": r["code_template"],
                         "best_practices": r["best_practices"] or [],
-                        "usage_count": r["usage_count"] or 0
+                        "usage_count": r["usage_count"] or 0,
                     }
                     processors[r["processor"]] = pattern
                 elif r["pattern_json"]:
@@ -250,7 +268,9 @@ class PatternRegistryUC:
                         processors[r["processor"]] = json.loads(r["pattern_json"])
                     except Exception:
                         continue
-            print(f"📚 [UC LOAD] Loaded {len(processors)} processor patterns from UC table")
+            print(
+                f"📚 [UC LOAD] Loaded {len(processors)} processor patterns from UC table"
+            )
             return {"processors": processors}
         except Exception as e:
             print(f"⚠️  [UC LOAD] Failed to load patterns: {e}")
@@ -275,10 +295,10 @@ class PatternRegistryUC:
     def _upsert_processor_uc(self, processor: str, pattern: dict) -> None:
         import os
         from datetime import datetime
-        
+
         current_time = datetime.utcnow()
         current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
-        
+
         # Extract fields from pattern dict
         category = pattern.get("category", "llm_generated")
         databricks_equivalent = pattern.get("databricks_equivalent", "Unknown")
@@ -288,35 +308,47 @@ class PatternRegistryUC:
         generated_from_properties = pattern.get("generated_from_properties", {})
         generation_source = pattern.get("generation_source", "manual")
         pattern_json = json.dumps(pattern, ensure_ascii=False)
-        
+
         # Create DataFrame with comprehensive schema
-        data = [(
-            processor,
-            category,
-            databricks_equivalent, 
-            description,
-            code_template,
-            best_practices,
-            generated_from_properties,
-            generation_source,
-            pattern_json,
-            1,  # usage_count - start with 1 since we're using it
-            current_time,  # last_used
-            current_time,  # created_at
-            current_time,  # updated_at
-            current_user   # created_by
-        )]
-        
-        schema = [
-            "processor", "category", "databricks_equivalent", "description", 
-            "code_template", "best_practices", "generated_from_properties",
-            "generation_source", "pattern_json", "usage_count", "last_used",
-            "created_at", "updated_at", "created_by"
+        data = [
+            (
+                processor,
+                category,
+                databricks_equivalent,
+                description,
+                code_template,
+                best_practices,
+                generated_from_properties,
+                generation_source,
+                pattern_json,
+                1,  # usage_count - start with 1 since we're using it
+                current_time,  # last_used
+                current_time,  # created_at
+                current_time,  # updated_at
+                current_user,  # created_by
+            )
         ]
-        
+
+        schema = [
+            "processor",
+            "category",
+            "databricks_equivalent",
+            "description",
+            "code_template",
+            "best_practices",
+            "generated_from_properties",
+            "generation_source",
+            "pattern_json",
+            "usage_count",
+            "last_used",
+            "created_at",
+            "updated_at",
+            "created_by",
+        ]
+
         sdf = self.spark.createDataFrame(data, schema)
         sdf.createOrReplaceTempView("_nifi_proc_upsert")
-        
+
         self.spark.sql(
             f"""
             MERGE INTO {self.processors_table} t
@@ -350,7 +382,9 @@ class PatternRegistryUC:
 
     def _upsert_complex_uc(self, name: str, pattern: dict) -> None:
         data = [(name, json.dumps(pattern, ensure_ascii=False), datetime.utcnow())]
-        sdf = self.spark.createDataFrame(data, ["pattern_name", "pattern_json", "updated_at"])
+        sdf = self.spark.createDataFrame(
+            data, ["pattern_name", "pattern_json", "updated_at"]
+        )
         sdf.createOrReplaceTempView("_nifi_complex_upsert")
         self.spark.sql(
             f"""
@@ -366,36 +400,48 @@ class PatternRegistryUC:
         )
 
     def _upsert_processors_bulk_uc(self, patterns: Dict[str, dict]) -> None:
-        from datetime import datetime
         import os
+        from datetime import datetime
 
         current_time = datetime.utcnow()
         current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
 
         rows = []
         for processor, pattern in patterns.items():
-            rows.append((
-                processor,
-                pattern.get("category", "llm_generated"),
-                pattern.get("databricks_equivalent", "Unknown"),
-                pattern.get("description", f"Pattern for {processor}"),
-                pattern.get("code_template", ""),
-                pattern.get("best_practices", []),
-                pattern.get("generated_from_properties", {}),
-                pattern.get("generation_source", "manual"),
-                json.dumps(pattern, ensure_ascii=False),
-                1,
-                current_time,
-                current_time,
-                current_time,
-                current_user
-            ))
+            rows.append(
+                (
+                    processor,
+                    pattern.get("category", "llm_generated"),
+                    pattern.get("databricks_equivalent", "Unknown"),
+                    pattern.get("description", f"Pattern for {processor}"),
+                    pattern.get("code_template", ""),
+                    pattern.get("best_practices", []),
+                    pattern.get("generated_from_properties", {}),
+                    pattern.get("generation_source", "manual"),
+                    json.dumps(pattern, ensure_ascii=False),
+                    1,
+                    current_time,
+                    current_time,
+                    current_time,
+                    current_user,
+                )
+            )
 
         schema = [
-            "processor", "category", "databricks_equivalent", "description",
-            "code_template", "best_practices", "generated_from_properties",
-            "generation_source", "pattern_json", "usage_count", "last_used",
-            "created_at", "updated_at", "created_by"
+            "processor",
+            "category",
+            "databricks_equivalent",
+            "description",
+            "code_template",
+            "best_practices",
+            "generated_from_properties",
+            "generation_source",
+            "pattern_json",
+            "usage_count",
+            "last_used",
+            "created_at",
+            "updated_at",
+            "created_by",
         ]
 
         sdf = self.spark.createDataFrame(rows, schema)
@@ -441,7 +487,9 @@ class PatternRegistryUC:
         self.patterns["processors"][processor] = merged
         self._upsert_processor_uc(processor, merged)
 
-    def get_pattern(self, processor: str, context: Optional[dict] = None) -> Optional[dict]:
+    def get_pattern(
+        self, processor: str, context: Optional[dict] = None
+    ) -> Optional[dict]:
         cache_key = f"{processor}_{str(context)}"
         if cache_key in self.cache:
             return self.cache[cache_key]
@@ -490,12 +538,22 @@ class PatternRegistryUC:
             snapshot.get("created_by"),
             snapshot.get("tags", {}),
         )
-        sdf = self.spark.createDataFrame([row],
+        sdf = self.spark.createDataFrame(
+            [row],
             [
-                "snapshot_id", "snapshot_type", "migration_id", "processor_count",
-                "patterns_count", "nifi_xml_hash", "raw_json", "file_size_bytes",
-                "compression", "created_at", "created_by", "tags"
-            ]
+                "snapshot_id",
+                "snapshot_type",
+                "migration_id",
+                "processor_count",
+                "patterns_count",
+                "nifi_xml_hash",
+                "raw_json",
+                "file_size_bytes",
+                "compression",
+                "created_at",
+                "created_by",
+                "tags",
+            ],
         )
         sdf.createOrReplaceTempView("_nifi_snapshot_upsert")
         self.spark.sql(
@@ -508,7 +566,9 @@ class PatternRegistryUC:
             """
         )
 
-    def upsert_meta(self, key: str, value: str, category: str = "system", description: str = "") -> None:
+    def upsert_meta(
+        self, key: str, value: str, category: str = "system", description: str = ""
+    ) -> None:
         """Upsert a metadata key/value into the meta table."""
         if not self.meta_table:
             return

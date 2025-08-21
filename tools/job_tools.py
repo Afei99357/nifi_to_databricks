@@ -52,17 +52,22 @@ def create_job_config(
             }
         }
         if num_workers == 0:
-            cluster_block["new_cluster"]["spark_conf"].update({
-                "spark.databricks.cluster.profile": "singleNode",
-                "spark.master": "local[*]",
-            })
+            cluster_block["new_cluster"]["spark_conf"].update(
+                {
+                    "spark.databricks.cluster.profile": "singleNode",
+                    "spark.master": "local[*]",
+                }
+            )
 
     job_config = {
         "name": job_name,
         "tasks": [
             {
                 "task_key": f"{job_name}_task",
-                "notebook_task": {"notebook_path": notebook_path, "base_parameters": {}},
+                "notebook_task": {
+                    "notebook_path": notebook_path,
+                    "base_parameters": {},
+                },
                 **cluster_block,
                 "timeout_seconds": 3600,
                 "max_retries": 2,
@@ -188,7 +193,9 @@ def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    create = requests.post(f"{host}/api/2.1/jobs/create", json=cfg, headers=headers, timeout=60)
+    create = requests.post(
+        f"{host}/api/2.1/jobs/create", json=cfg, headers=headers, timeout=60
+    )
     if create.status_code >= 300:
         return f"Create failed: {create.status_code} {create.text}"
     job_id = create.json().get("job_id")
@@ -201,8 +208,13 @@ def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
             timeout=60,
         )
         if run.status_code >= 300:
-            return json.dumps({"job_id": job_id, "run_error": f"{run.status_code} {run.text}"}, indent=2)
-        return json.dumps({"job_id": job_id, "run_id": run.json().get("run_id")}, indent=2)
+            return json.dumps(
+                {"job_id": job_id, "run_error": f"{run.status_code} {run.text}"},
+                indent=2,
+            )
+        return json.dumps(
+            {"job_id": job_id, "run_id": run.json().get("run_id")}, indent=2
+        )
 
     return json.dumps({"job_id": job_id}, indent=2)
 
