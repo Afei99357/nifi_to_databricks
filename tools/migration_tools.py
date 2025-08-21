@@ -445,8 +445,6 @@ def build_migration_plan(xml_content: str) -> str:
             root = ET.fromstring(xml_content)
         else:
             # Input is likely a file path
-            import os
-
             if os.path.exists(xml_content):
                 with open(xml_content, "r") as f:
                     xml_text = f.read()

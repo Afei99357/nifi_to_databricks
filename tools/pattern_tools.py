@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from datetime import datetime
 from typing import Any, Dict
 
+from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
 
 # Import UC-backed registry (aliased for clarity)
@@ -209,8 +213,6 @@ def generate_databricks_code(
         return code
 
     # Pattern not found in UC table - check if LLM generation is enabled
-    import os
-
     enable_llm_generation = (
         os.environ.get("ENABLE_LLM_CODE_GENERATION", "false").lower() == "true"
     )
@@ -321,11 +323,6 @@ def _generate_with_llm(processor_class: str, properties: dict) -> str:
         Generated PySpark code with comments and logic
     """
     try:
-        # Import here to avoid circular dependencies
-        import os
-
-        from databricks_langchain import ChatDatabricks
-
         # Get the model endpoint from environment
         model_endpoint = os.environ.get(
             "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
@@ -450,10 +447,6 @@ def _track_fallback_processor(
 ) -> None:
     """Track processors that fell back to generic implementation for maintenance review."""
     try:
-        import json
-        import os
-        from datetime import datetime
-
         # Create fallback tracking record
         fallback_record = {
             "processor_class": processor_class,
@@ -473,8 +466,6 @@ def _track_fallback_processor(
                 f.write(json.dumps(fallback_record) + "\n")
         except Exception:
             # Fallback: try to write to temp directory
-            import tempfile
-
             fallback_file = os.path.join(
                 tempfile.gettempdir(), "nifi_migration_fallbacks.jsonl"
             )

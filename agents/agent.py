@@ -1,4 +1,5 @@
 # agent.py
+import copy
 import json
 import os
 from typing import Annotated, Any, Generator, Optional, Sequence, TypedDict, Union
@@ -68,8 +69,6 @@ class FixedChatDatabricks(ChatDatabricks):
 
     def _deep_copy_and_fix_tool(self, tool):
         """Deep copy a tool dict and fix its schema"""
-        import copy
-
         tool_copy = copy.deepcopy(tool)
         if "function" in tool_copy and "parameters" in tool_copy["function"]:
             _fix_additional_properties(tool_copy["function"]["parameters"])

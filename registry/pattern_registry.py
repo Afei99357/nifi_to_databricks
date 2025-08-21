@@ -293,9 +293,6 @@ class PatternRegistryUC:
 
     # ---------- Upserts ----------
     def _upsert_processor_uc(self, processor: str, pattern: dict) -> None:
-        import os
-        from datetime import datetime
-
         current_time = datetime.utcnow()
         current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
 
@@ -400,9 +397,6 @@ class PatternRegistryUC:
         )
 
     def _upsert_processors_bulk_uc(self, patterns: Dict[str, dict]) -> None:
-        import os
-        from datetime import datetime
-
         current_time = datetime.utcnow()
         current_user = os.environ.get("USER_EMAIL", os.environ.get("USER", "system"))
 

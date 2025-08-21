@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -94,8 +95,6 @@ def extract_complete_workflow_map(xml_content: str) -> str:
         ):
             root = ET.fromstring(xml_content)
         else:
-            import os
-
             if os.path.exists(xml_content):
                 with open(xml_content, "r") as f:
                     xml_text = f.read()
