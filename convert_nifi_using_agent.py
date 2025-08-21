@@ -92,7 +92,7 @@ for item in resp.output:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Morw Complex NIFI Workflow
+# MAGIC More Complex NIFI Workflow
 
 # COMMAND ----------
 
