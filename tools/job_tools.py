@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import requests
@@ -17,6 +19,7 @@ __all__ = [
     "create_job_config",
     "create_job_config_from_plan",
     "deploy_and_run_job",
+    "deploy_bundle",
     "scaffold_asset_bundle",
 ]
 
@@ -217,6 +220,76 @@ def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
         )
 
     return json.dumps({"job_id": job_id}, indent=2)
+
+
+@tool
+def deploy_bundle(project_directory: str, validate_only: bool = False) -> str:
+    """
+    Deploy a Databricks Bundle from the project directory.
+    Automatically changes to the project directory to avoid .bundles in wrong location.
+
+    Args:
+        project_directory: Path to the project directory containing databricks.yml
+        validate_only: If True, only validates the bundle without deploying
+
+    Returns:
+        Success/failure message with deployment details
+    """
+    project_path = Path(project_directory).resolve()
+    databricks_yml = project_path / "databricks.yml"
+
+    if not databricks_yml.exists():
+        return f"❌ No databricks.yml found in {project_directory}"
+
+    # Change to project directory to ensure .bundles is created there
+    original_cwd = os.getcwd()
+
+    try:
+        os.chdir(project_path)
+        print(f"📁 Changed to project directory: {project_path}")
+
+        if validate_only:
+            print("🔍 Validating bundle...")
+            result = subprocess.run(
+                ["databricks", "bundle", "validate"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            command = "validate"
+        else:
+            print("🚀 Deploying bundle...")
+            result = subprocess.run(
+                ["databricks", "bundle", "deploy"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            command = "deploy"
+
+        if result.returncode == 0:
+            success_msg = f"✅ Bundle {command} successful!"
+            if result.stdout:
+                success_msg += f"\n\nOutput:\n{result.stdout}"
+            return success_msg
+        else:
+            error_msg = f"❌ Bundle {command} failed (exit code {result.returncode})"
+            if result.stderr:
+                error_msg += f"\n\nError:\n{result.stderr}"
+            if result.stdout:
+                error_msg += f"\n\nOutput:\n{result.stdout}"
+            return error_msg
+
+    except subprocess.TimeoutExpired:
+        return f"❌ Bundle {command} timed out"
+    except FileNotFoundError:
+        return "❌ Databricks CLI not found. Install with: pip install databricks-cli"
+    except Exception as e:
+        return f"❌ Bundle {command} failed: {str(e)}"
+    finally:
+        # Always restore original directory
+        os.chdir(original_cwd)
+        print(f"📁 Restored to original directory: {original_cwd}")
 
 
 @tool

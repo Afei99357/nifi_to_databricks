@@ -58,6 +58,7 @@ from tools.job_tools import (
     create_job_config,
     create_job_config_from_plan,
     deploy_and_run_job,
+    deploy_bundle,
     scaffold_asset_bundle,
 )
 from tools.xml_tools import extract_nifi_parameters_and_services, parse_nifi_template
@@ -504,6 +505,7 @@ def convert_flow(
     notebook_path: str = "",
     emit_job_json: bool = True,
     deploy_job: bool = False,
+    use_bundle_deploy: bool = False,
     also_import_notebook: bool = True,
     # Cluster controls
     existing_cluster_id: str = "",
@@ -732,6 +734,7 @@ def orchestrate_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     deploy: bool = False,
+    use_bundle_deploy: bool = False,
 ) -> str:
     """
     End-to-end orchestration:
@@ -755,6 +758,7 @@ def orchestrate_nifi_migration(
             notebook_path=notebook_path,
             emit_job_json=True,
             deploy_job=False,
+            use_bundle_deploy=use_bundle_deploy,
             also_import_notebook=True,
             existing_cluster_id=existing_cluster_id,
         )
@@ -789,16 +793,22 @@ def orchestrate_nifi_migration(
     }
 
     # --- 4) Optionally create the job (don't run)
-    if deploy:
-        deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
-        try:
-            result["deploy_result"] = (
-                json.loads(deploy_res)
-                if str(deploy_res).startswith("{")
-                else deploy_res
-            )
-        except Exception:
+    if deploy_job:
+        if use_bundle_deploy:
+            # Use bundle deployment (avoids .bundles in wrong directory)
+            deploy_res = deploy_bundle.func(str(out), validate_only=False)
             result["deploy_result"] = deploy_res
+        else:
+            # Use REST API deployment
+            deploy_res = deploy_and_run_job.func(dag_job_json, run_now=False)
+            try:
+                result["deploy_result"] = (
+                    json.loads(deploy_res)
+                    if str(deploy_res).startswith("{")
+                    else deploy_res
+                )
+            except Exception:
+                result["deploy_result"] = deploy_res
 
     return json.dumps(result, indent=2)
 
@@ -1150,9 +1160,16 @@ def orchestrate_chunked_nifi_migration(
         # Step 9: Optional deployment
         deploy_result = None
         if deploy:
-            deploy_result = deploy_and_run_job.func(
-                json.dumps(final_job_config), run_now=False
-            )
+            if use_bundle_deploy:
+                # Use bundle deployment (avoids .bundles in wrong directory)
+                deploy_result = deploy_bundle.func(
+                    str(project_out), validate_only=False
+                )
+            else:
+                # Use REST API deployment
+                deploy_result = deploy_and_run_job.func(
+                    json.dumps(final_job_config), run_now=False
+                )
 
         # Final result summary
         total_tasks = sum(len(cr["tasks"]) for cr in chunk_results)
@@ -1453,6 +1470,7 @@ def orchestrate_intelligent_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     deploy: bool = False,
+    use_bundle_deploy: bool = False,
     max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
 ) -> str:
     """
@@ -1520,6 +1538,7 @@ def orchestrate_intelligent_nifi_migration(
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
+                use_bundle_deploy=use_bundle_deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
@@ -1566,6 +1585,7 @@ def orchestrate_intelligent_nifi_migration(
                     notebook_path=notebook_path,
                     existing_cluster_id=existing_cluster_id,
                     deploy=deploy,
+                    use_bundle_deploy=use_bundle_deploy,
                     max_processors_per_chunk=max_processors_per_chunk,
                 )
                 migration_result = json.loads(migration_result_str)
@@ -1582,6 +1602,7 @@ def orchestrate_intelligent_nifi_migration(
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
                 deploy=deploy,
+                use_bundle_deploy=use_bundle_deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
