@@ -76,7 +76,7 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 The migration system now includes significant performance optimizations and enhanced JSON reliability:
 
 - **⚡ Batched LLM Generation**: Generate code for multiple processors in single requests (up to 96% fewer API calls)
-- **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops  
+- **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops
 - **📊 Real-time Progress Tracking**: Visual progress indicators show exactly what's happening
 - **🛡️ Robust Error Handling**: Graceful fallbacks prevent migration failures
 - **🔧 Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
@@ -143,7 +143,7 @@ RAW_TABLE=eliao.nifi_to_databricks.patterns_raw_snapshots
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications
 - `PATTERN_TABLE`: Unity Catalog table for processor patterns (enables pattern learning)
-- `COMPLEX_TABLE`: Unity Catalog table for complex migration patterns  
+- `COMPLEX_TABLE`: Unity Catalog table for complex migration patterns
 - `META_TABLE`: Unity Catalog table for pattern metadata and versioning
 - `RAW_TABLE`: Unity Catalog table for raw pattern snapshots
 
@@ -178,7 +178,7 @@ The migration tool uses four Delta tables in Unity Catalog to store patterns and
 ### Table Schema Details
 
 #### 1. `migration_patterns` Table
-**Purpose**: Stores processor conversion patterns and code templates  
+**Purpose**: Stores processor conversion patterns and code templates
 **Location**: `nifi_migration.patterns.migration_patterns`
 
 | Column | Type | Description |
@@ -201,7 +201,7 @@ code_template: "df.select(from_json(col('json_data'), schema).alias('parsed'))"
 ```
 
 #### 2. `processor_mappings` Table
-**Purpose**: Maps NiFi processors to Databricks services with complexity indicators  
+**Purpose**: Maps NiFi processors to Databricks services with complexity indicators
 **Location**: `nifi_migration.patterns.processor_mappings`
 
 | Column | Type | Description |
@@ -222,7 +222,7 @@ migration_notes: "Requires Kafka cluster configuration and checkpointing"
 ```
 
 #### 3. `migration_history` Table
-**Purpose**: Tracks migration execution results and statistics  
+**Purpose**: Tracks migration execution results and statistics
 **Location**: `nifi_migration.patterns.migration_history`
 
 | Column | Type | Description |
@@ -250,7 +250,7 @@ migration_type: "chunked"
 ```
 
 #### 4. `controller_services` Table
-**Purpose**: Maps NiFi controller services to Databricks configurations  
+**Purpose**: Maps NiFi controller services to Databricks configurations
 **Location**: `nifi_migration.patterns.controller_services`
 
 | Column | Type | Description |
@@ -295,7 +295,7 @@ from agents import AGENT
 from mlflow.types.responses import ResponsesAgentRequest
 
 req = ResponsesAgentRequest(input=[{
-    "role": "user", 
+    "role": "user",
     "content": """
     Run orchestrate_intelligent_nifi_migration with:
     xml_path=/Volumes/catalog/schema/nifi_files/my_workflow.xml
@@ -526,7 +526,7 @@ NiFi XML Analysis
 The system analyzes your NiFi XML to detect:
 
 - **🔄 Streaming Sources**: ListenHTTP, ConsumeKafka, ListenTCP, ConsumeJMS, etc.
-- **📁 Batch Sources**: GetFile, ListFile, QueryDatabaseTable, etc.  
+- **📁 Batch Sources**: GetFile, ListFile, QueryDatabaseTable, etc.
 - **🔧 Transformations**: EvaluateJsonPath, UpdateAttribute, ConvertRecord, etc.
 - **🔀 Routing Logic**: RouteOnAttribute, RouteOnContent, conditional processing
 - **📊 JSON Processing**: EvaluateJsonPath, SplitJson, JSON transformations
@@ -629,7 +629,7 @@ If you experience JSON parsing failures or performance issues, tune these settin
 # For complex processors with lots of properties
 export MAX_PROCESSORS_PER_CHUNK=15
 
-# For better fallback success rate  
+# For better fallback success rate
 export LLM_SUB_BATCH_SIZE=5
 
 # For simple processors
@@ -638,7 +638,7 @@ export MAX_PROCESSORS_PER_CHUNK=25
 
 **Success Rate Patterns:**
 - 15-20 processors: ~80-90% success rate
-- 20-25 processors: ~66% success rate  
+- 20-25 processors: ~66% success rate
 - 5-8 processors (fallback): ~90% success rate
 
 ### Chunked Migration Troubleshooting
@@ -676,10 +676,47 @@ print(f"Funnels: {result['summary']['total_funnels']}")
 ## 🤝 Contributing
 
 1. Add new processor patterns to the registry
-2. Extend tools for specific use cases  
+2. Extend tools for specific use cases
 3. Improve error handling and validation
 4. Add support for additional NiFi components
 
 ## 📄 License
 
 This project is designed for enterprise data platform migrations. Please review your organization's policies for AI-assisted code generation and data processing tools.
+
+## Development Setup
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality. The hooks are configured to run automatically on every commit and include:
+
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **flake8**: Linting (with lenient settings for initial setup)
+- **General checks**: Trailing whitespace, end-of-file, large files, merge conflicts, debug statements
+
+#### Setup
+
+1. Install dev dependencies:
+   ```bash
+   uv sync --group dev
+   ```
+
+2. Install pre-commit hooks:
+   ```bash
+   uv run pre-commit install
+   ```
+
+3. (Optional) Run hooks on all files:
+   ```bash
+   uv run pre-commit run --all-files
+   ```
+
+The hooks will now run automatically on every commit. If any hooks fail, the commit will be blocked until the issues are fixed.
+
+#### Configuration
+
+- **Black**: Configured with 88 character line length
+- **isort**: Configured to work with Black
+- **flake8**: Lenient configuration for initial setup (ignores many common issues)
+- **mypy**: Currently disabled (commented out) - can be enabled later for stricter type checking

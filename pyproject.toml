@@ -1,0 +1,25 @@
+[project]
+name = "nifi-to-databricks"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "backoff>=2.2.1",
+    "databricks>=0.2",
+    "databricks-langchain>=0.5.1",
+    "json-repair>=0.50.0",
+    "langgraph==0.5.3",
+    "lxml>=6.0.0",
+    "mlflow-skinny[databricks]>=3.3.1",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "black>=24.1.1",
+    "isort>=5.13.2",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "types-requests>=2.31.0",
+]
