@@ -3,10 +3,6 @@
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 dbutils.library.restartPython()
 
 # COMMAND ----------
