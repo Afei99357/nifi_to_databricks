@@ -3,11 +3,21 @@
 .env.local
 .env.*.local
 
+# checking
+.mypy_cache
+
 # Migration outputs - don't commit generated results
 output_results/
 outputs/
 migrations/
 generated/
+
+# Temporary and scratch files
+scratch.txt
+scratch.*
+
+# NiFi pipeline files - often contain sensitive data
+nifi_pipeline_file/
 
 # Python
 __pycache__/
@@ -76,6 +86,9 @@ Thumbs.db
 *.temp
 *.log
 *.bak
+
+# Metrics tracking
+.exception_metrics.json
 
 # Unity Catalog temporary files
 *.uc_temp

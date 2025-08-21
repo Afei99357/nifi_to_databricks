@@ -1,0 +1,75 @@
+[project]
+name = "nifi-to-databricks"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "backoff>=2.2.1",
+    "databricks>=0.2",
+    "databricks-langchain>=0.5.1",
+    "json-repair>=0.50.0",
+    "langgraph==0.5.3",
+    "lxml>=6.0.0",
+    "mlflow-skinny[databricks]>=3.3.1",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "black>=24.1.1",
+    "isort>=5.13.2",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "types-requests>=2.31.0",
+]
+
+[tool.mypy]
+# Start with lenient settings, gradually tighten as codebase improves
+python_version = "3.13"
+ignore_missing_imports = true
+no_strict_optional = true
+
+# Basic type checking (enabled from start)
+check_untyped_defs = true
+disallow_untyped_calls = false  # TODO: Enable when ready for stricter checking
+disallow_untyped_defs = false   # TODO: Enable when ready for stricter checking
+disallow_incomplete_defs = false # TODO: Enable when ready for stricter checking
+
+# Error reporting
+show_error_codes = true
+pretty = true
+color_output = true
+
+# Warnings (start lenient)
+warn_redundant_casts = true
+warn_unused_ignores = false     # TODO: Enable to catch unnecessary # type: ignore
+warn_return_any = false         # TODO: Enable when return types are more consistent
+warn_unreachable = true
+
+# Advanced strictness (disabled for now, enable incrementally)
+# disallow_any_generics = true     # TODO: Enable for stricter generic typing
+# disallow_subclassing_any = true  # TODO: Enable for stricter inheritance
+# strict_equality = true           # TODO: Enable for stricter equality checks
+# strict_concatenate = true        # TODO: Enable for stricter string/list concat
+
+# Module-specific overrides for gradual adoption
+[[tool.mypy.overrides]]
+module = "tools.*"
+ignore_errors = true  # TODO: Remove once tools module is type-clean
+
+[[tool.mypy.overrides]]
+module = "agents.*"
+ignore_errors = true  # TODO: Remove once agents module is type-clean
+
+[[tool.mypy.overrides]]
+module = "registry.*"
+ignore_errors = true  # TODO: Remove once registry module is type-clean
+
+[[tool.mypy.overrides]]
+module = "convert_nifi_using_agent"
+ignore_errors = true  # TODO: Fix dbutils import (Databricks-specific)
+
+[[tool.mypy.overrides]]
+module = "utils.xml_utils"
+ignore_errors = true  # TODO: Fix Collection indexing issue

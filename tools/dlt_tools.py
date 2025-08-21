@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+
 from langchain_core.tools import tool
 
 __all__ = ["generate_dlt_expectations", "generate_dlt_pipeline_config"]
@@ -32,7 +33,9 @@ def generate_dlt_expectations(table_name: str, rules_json: str) -> str:
 
 
 @tool
-def generate_dlt_pipeline_config(pipeline_name: str, catalog: str, db_schema: str, notebook_path: str) -> str:
+def generate_dlt_pipeline_config(
+    pipeline_name: str, catalog: str, db_schema: str, notebook_path: str
+) -> str:
     """
     Return minimal JSON config for a DLT/Lakeflow pipeline.
     """

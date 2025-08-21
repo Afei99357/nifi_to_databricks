@@ -9,7 +9,6 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
-
 __all__ = [
     "parse_nifi_template_impl",
     "extract_nifi_parameters_and_services_impl",
@@ -81,7 +80,9 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
             for rel in connection.findall(".//selectedRelationships")
             if rel is not None and rel.text
         ]
-        connections.append({"source": source, "destination": dest, "relationships": rels})
+        connections.append(
+            {"source": source, "destination": dest, "relationships": rels}
+        )
 
     return {
         "processors": processors,
