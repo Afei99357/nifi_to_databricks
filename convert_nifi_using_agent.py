@@ -91,6 +91,11 @@ for item in resp.output:
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC Morw Complex NIFI Workflow
+
+# COMMAND ----------
+
 from datetime import datetime
 
 from mlflow.types.responses import ResponsesAgentRequest

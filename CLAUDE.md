@@ -179,7 +179,7 @@ Required environment variables:
 DATABRICKS_TOKEN=your-token
 DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
 MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
-AGENT_MAX_ROUNDS=5
+AGENT_MAX_ROUNDS=3
 ENABLE_LLM_CODE_GENERATION=true
 MAX_PROCESSORS_PER_CHUNK=20
 LLM_SUB_BATCH_SIZE=5
