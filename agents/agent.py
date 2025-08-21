@@ -188,7 +188,6 @@ def create_tool_calling_agent(
     model: LanguageModelLike,
     tools: Union[ToolNode, Sequence[BaseTool]],
     system_prompt: Optional[str] = None,
-    max_rounds: int = 10,
 ) -> Any:
     model = model.bind_tools(tools)
 
@@ -278,39 +277,31 @@ def create_tool_calling_agent(
             logger.debug(f"Error while inspecting tool outputs for continue flag: {e}")
 
         rounds = state.get("rounds", 0) or 0
-        logger.debug(
-            f"Agent continuation check: wants_tool={wants_tool}, tool_signaled_continue={tool_signaled_continue}, rounds={rounds}, max_rounds={max_rounds}"
-        )
 
-        # If a tool explicitly requested continuation, honor it (subject to max_rounds)
-        if tool_signaled_continue and rounds < max_rounds:
-            state["rounds"] = rounds + 1
-            logger.info(
-                f"Tool(s) {signaled_tools} requested continuation — invoking tools round {state['rounds']} of {max_rounds}"
-            )
-            print(
-                f"🔄 [AGENT ROUND {state['rounds']}/{max_rounds}] Tool signaled continue: {signaled_tools}"
-            )
+        # For first request: allow one tool call
+        if wants_tool and rounds == 0:
+            state["rounds"] = 1
+            logger.info("Agent invoking tool (expecting single-round completion)")
+            print("🔄 [AGENT] Model requested tool call")
             return "continue"
 
-        # Otherwise, continue only when model explicitly requests tool calls and rounds not exceeded
-        if wants_tool and rounds < max_rounds:
-            state["rounds"] = rounds + 1
-            logger.info(f"Agent invoking tool round {state['rounds']} of {max_rounds}")
-            print(
-                f"🔄 [AGENT ROUND {state['rounds']}/{max_rounds}] Model requested tool call"
-            )
-            return "continue"
+        # After first tool execution: always end (single-round expectation)
+        if rounds > 0:
+            if wants_tool or tool_signaled_continue:
+                logger.warning(
+                    "Tool requested continuation but single-round agent expects completion"
+                )
+                print(
+                    "⚠️  [AGENT] Tool requested continuation, but single-round mode active - ending"
+                )
+            else:
+                logger.info("Tool completed successfully")
+                print("✅ [AGENT COMPLETE] Migration finished successfully")
+            return "end"
 
-        # Otherwise end the workflow
-        if (wants_tool or tool_signaled_continue) and rounds >= max_rounds:
-            logger.warning(
-                f"Max agent-tool rounds reached ({rounds}/{max_rounds}); stopping further tool calls"
-            )
-            print(f"🛑 [AGENT COMPLETE] Max rounds reached; stopping")
-        else:
-            logger.debug("Agent not requesting further tool calls; ending")
-            print(f"✅ [AGENT COMPLETE] Migration finished successfully")
+        # No tool requested initially: end immediately
+        logger.debug("Agent not requesting tool calls; ending")
+        print("✅ [AGENT COMPLETE] No tool calls requested")
         return "end"
 
     pre = (
@@ -469,24 +460,8 @@ try:
 except Exception as e:
     logger.warning(f"MLflow autolog not available: {e}")
 
-# Allow dynamic configuration of agent max rounds via env var AGENT_MAX_ROUNDS
-try:
-    _env_max = os.environ.get("AGENT_MAX_ROUNDS")
-    if _env_max is not None:
-        try:
-            _max_rounds = int(_env_max)
-        except Exception:
-            logger.warning(
-                f"Invalid AGENT_MAX_ROUNDS='{_env_max}', falling back to default=10"
-            )
-            _max_rounds = 10
-    else:
-        _max_rounds = 10
-except Exception:
-    _max_rounds = 10
-
-logger.info(f"Creating agent with max_rounds={_max_rounds}")
-agent = create_tool_calling_agent(llm, TOOLS, system_prompt, max_rounds=_max_rounds)
+logger.info("Creating single-round agent (simplified for NiFi migrations)")
+agent = create_tool_calling_agent(llm, TOOLS, system_prompt)
 AGENT = LangGraphResponsesAgent(agent)
 
 try:

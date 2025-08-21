@@ -99,7 +99,6 @@ MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
 NOTIFICATION_EMAIL=your-email@company.com
 
 # Agent Configuration (Controls LLM call behavior)
-AGENT_MAX_ROUNDS=3                    # Max agent-tool rounds (default: 3)
 ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
 # Batch Processing Configuration (Performance tuning)
@@ -121,7 +120,6 @@ LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10
 - `MODEL_ENDPOINT`: Foundation model endpoint for the AI agent (uses Llama 3.3 70B by default)
 
 **Agent Configuration Variables:**
-- `AGENT_MAX_ROUNDS`: Maximum agent-tool rounds (default: 10, recommended: 5 for efficiency)
 - `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM code generation (default: true)
 
 **Batch Processing Configuration Variables:**
@@ -359,7 +357,7 @@ def my_custom_tool(parameter: str) -> str:
 
 ### Performance Issues (Fixed in v2.1)
 
-8. **Excessive LLM Calls**: Set `AGENT_MAX_ROUNDS=3` and `ENABLE_LLM_CODE_GENERATION=true` for optimal performance
+8. **Excessive LLM Calls**: Set `ENABLE_LLM_CODE_GENERATION=true` for optimal performance (single-round agent)
 9. **Slow Code Generation**: The system now uses batched LLM generation (1 call per chunk vs 1 per processor)
 10. **Agent Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
 11. **JSON Parsing Failures**: Fixed "Invalid \escape" errors with explicit JSON format enforcement in prompts

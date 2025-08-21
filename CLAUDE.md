@@ -8,7 +8,7 @@ This is a NiFi to Databricks migration tool that uses LangGraph agents to conver
 
 **Performance Optimizations (v2.1):**
 - **Batched LLM Generation**: Generates code for multiple processors in single requests (96% fewer API calls)
-- **Smart Agent Limiting**: Completes in 1-2 rounds with `AGENT_MAX_ROUNDS` control
+- **Single-Round Agent**: Simplified to complete migrations in exactly 1 agent round
 - **Real-time Progress Tracking**: Visual indicators show migration progress and call counts
 - **Robust Error Handling**: Graceful fallbacks and comprehensive logging
 - **Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
@@ -169,7 +169,6 @@ Required environment variables:
 - `NOTIFICATION_EMAIL`: Optional email for job failure notifications
 
 **Performance Configuration (v2.1):**
-- `AGENT_MAX_ROUNDS`: Maximum agent-tool rounds (default: 10, recommended: 5)
 - `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM generation (default: true)
 - `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30)
 - `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5)
@@ -179,7 +178,6 @@ Required environment variables:
 DATABRICKS_TOKEN=your-token
 DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
 MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
-AGENT_MAX_ROUNDS=3
 ENABLE_LLM_CODE_GENERATION=true
 MAX_PROCESSORS_PER_CHUNK=20
 LLM_SUB_BATCH_SIZE=5
