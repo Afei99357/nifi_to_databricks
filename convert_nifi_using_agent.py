@@ -41,11 +41,11 @@ req = ResponsesAgentRequest(
 
 resp = AGENT.predict(req)
 
-for item in resp.output:
-    if item.type == "message":
-        for block in item.content:
-            if block["type"] == "output_text":
-                print(block["text"])
+# for item in resp.output:
+#     if item.type == "message":
+#         for block in item.content:
+#             if block["type"] == "output_text":
+#                 print(block["text"])
 
 # COMMAND ----------
 
@@ -83,11 +83,11 @@ req = ResponsesAgentRequest(
 
 resp = AGENT.predict(req)
 
-for item in resp.output:
-    if item.type == "message":
-        for block in item.content:
-            if block["type"] == "output_text":
-                print(block["text"])
+# for item in resp.output:
+#     if item.type == "message":
+#         for block in item.content:
+#             if block["type"] == "output_text":
+#                 print(block["text"])
 
 # COMMAND ----------
 
@@ -117,19 +117,19 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_feedback_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "run_now=true"
+                "run_now=false"
             ),
         }
     ]
 )
 
-resp = AGENT.predict(req)
+# resp = AGENT.predict(req)
 
-for item in resp.output:
-    if item.type == "message":
-        for block in item.content:
-            if block["type"] == "output_text":
-                print(block["text"])
+# for item in resp.output:
+#     if item.type == "message":
+#         for block in item.content:
+#             if block["type"] == "output_text":
+#                 print(block["text"])
 
 # COMMAND ----------
 
@@ -159,7 +159,7 @@ req = ResponsesAgentRequest(
                 f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_track-out_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "run_now=true"
+                "run_now=false"
             ),
         }
     ]
@@ -167,8 +167,8 @@ req = ResponsesAgentRequest(
 
 resp = AGENT.predict(req)
 
-for item in resp.output:
-    if item.type == "message":
-        for block in item.content:
-            if block["type"] == "output_text":
-                print(block["text"])
+# for item in resp.output:
+#     if item.type == "message":
+#         for block in item.content:
+#             if block["type"] == "output_text":
+#                 print(block["text"])
