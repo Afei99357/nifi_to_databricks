@@ -69,9 +69,9 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 - Python environment with required dependencies
 - NiFi XML template files for migration
 
-### 🔥 **Performance Improvements** (v2.1)
+### 🔥 **Performance Improvements** (v2.2)
 
-The migration system now includes significant performance optimizations and enhanced JSON reliability:
+The migration system now includes significant performance optimizations, enhanced JSON reliability, and honest job status reporting:
 
 - **⚡ Batched LLM Generation**: Generate code for multiple processors in single requests (up to 96% fewer API calls)
 - **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops
@@ -79,9 +79,13 @@ The migration system now includes significant performance optimizations and enha
 - **🛡️ Robust Error Handling**: Graceful fallbacks prevent migration failures
 - **🔧 Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
 - **⚙️ Configurable Batch Sizes**: Tune `MAX_PROCESSORS_PER_CHUNK` and `LLM_SUB_BATCH_SIZE` for optimal performance
+- **✅ Verified Job Status**: Real job execution verification with 5-second startup wait and 45-second polling
+- **🔗 Direct Monitoring Links**: Databricks Jobs UI links for immediate job monitoring and debugging
+- **🎯 Honest Messaging**: Clear distinction between "job triggered" vs "job running" vs "job failed"
 
 **Example Performance**: 100-processor workflow goes from 100+ LLM calls → 4-6 batched calls
 **JSON Reliability**: Eliminates "Invalid \escape" errors with explicit prompt formatting rules
+**Job Status Accuracy**: Eliminates false "Job is actively running" reports for jobs that actually fail
 
 ### Environment Setup
 
@@ -98,14 +102,17 @@ MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
 # Email Configuration (Optional)
 NOTIFICATION_EMAIL=your-email@company.com
 
-# Agent Configuration (Controls LLM call behavior)
+# Agent Configuration
 ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
 # Batch Processing Configuration (Performance tuning)
 MAX_PROCESSORS_PER_CHUNK=20          # Processors per batch (default: 20, tune 15-30)
 LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10, recommended: 5)
 
-# Pattern Registry removed - generates fresh code each time
+# Job Status Polling Configuration
+JOB_STATUS_INITIAL_WAIT=5            # Seconds to wait before first status check (default: 5)
+JOB_STATUS_POLL_INTERVAL=3           # Seconds between status checks (default: 3)
+JOB_STATUS_MAX_WAIT=45               # Total seconds to wait for job status (default: 45)
 ```
 
 **How to configure:**
@@ -125,6 +132,11 @@ LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10
 **Batch Processing Configuration Variables:**
 - `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30 based on complexity)
 - `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5 for better success rate)
+
+**Job Status Polling Variables:**
+- `JOB_STATUS_INITIAL_WAIT`: Seconds to wait before first status check (default: 5)
+- `JOB_STATUS_POLL_INTERVAL`: Seconds between status checks (default: 3)
+- `JOB_STATUS_MAX_WAIT`: Total seconds to wait for job status (default: 45)
 
 **Optional Variables:**
 - `NOTIFICATION_EMAIL`: Email for job failure notifications

@@ -790,7 +790,7 @@ def orchestrate_nifi_migration(
     }
 
     # --- 4) Always create the job in Databricks
-    print(f"🚀 [DEPLOY] Creating Databricks job...")
+    print(f"\n🚀 [DEPLOY] Creating Databricks job...")
 
     try:
         deploy_res = deploy_and_run_job.func(dag_job_json, run_now=run_now)
@@ -1207,7 +1207,7 @@ def orchestrate_chunked_nifi_migration(
         _write_text(out / "notebooks/main", orchestrator)
 
         # --- 9) Always create the job in Databricks
-        print(f"🚀 [DEPLOY] Creating Databricks job...")
+        print(f"\n🚀 [DEPLOY] Creating Databricks job...")
 
         try:
             deploy_result = deploy_and_run_job.func(
