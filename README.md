@@ -1,12 +1,12 @@
 # NiFi to Databricks Migration Tool
 
-An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based data pipelines) into Databricks jobs using AI agents. The system leverages LangGraph agents with access to specialized tools to automate the complex process of translating NiFi processors, connections, and configurations into equivalent Databricks PySpark code and job definitions.
+An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based data pipelines) into Databricks Jobs or Delta Live Tables (DLT) pipelines using AI agents. The system leverages LangGraph agents with access to specialized tools to automate the complex process of translating NiFi processors, connections, and configurations into equivalent Databricks PySpark code and pipeline definitions.
 
 ## 🎯 Overview
 
 This project addresses the challenge of migrating legacy NiFi workflows to modern Databricks infrastructure. Instead of manual conversion, it uses:
 
-- **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and recommends optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming)
+- **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and chooses optimal Databricks architecture (Jobs for batch workflows, DLT Pipelines for streaming workflows)
 - **AI-Powered Agent**: LangGraph-based conversational agent using Databricks Foundation Models
 - **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
 - **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
@@ -43,23 +43,25 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 The tool now automatically analyzes NiFi workflows and recommends the optimal Databricks architecture:
 
 **Architecture Options:**
-- **Databricks Jobs**: Batch orchestration for file-based ETL workflows
-- **DLT Pipeline**: Streaming ETL with transformations, JSON processing, and routing
-- **Structured Streaming**: Custom streaming logic for real-time data processing
+- **Databricks Jobs**: Batch orchestration for file-based ETL workflows with task dependencies
+- **DLT Pipelines**: Streaming ETL with automatic lineage, data quality, and bronze→silver→gold layers
 
-**Decision Factors:**
-- **Source Types**: Batch (GetFile) vs Streaming (ListenHTTP, ConsumeKafka)
-- **Transformations**: JSON processing, routing logic, complex transformations
+**Decision Logic:**
+- **Streaming Sources Detected** → DLT Pipeline (ListenHTTP, ConsumeKafka, ListenTCP)
+- **Batch Sources Only** → Databricks Jobs (GetFile, ListFile, QueryDatabaseTable)
+- **Universal Parsing**: Works with any NiFi workflow structure and processor dependencies
 - **Sinks**: File outputs vs external systems
 - **Complexity**: Workflow size and interconnection complexity
 
 ### Core Components
 
-- **Agent System** (`agents/`, `nifi_databricks_agent.py`): LangGraph-based conversational interface
-- **Migration Tools** (`tools/`): Specialized tools for each aspect of the conversion process
+- **Agent System** (`agents/agent.py`): LangGraph-based conversational agent with MLflow integration
+- **Intelligent Migration** (`tools/migration_tools.py`): Architecture analysis and automatic Jobs vs DLT selection
+- **DLT Generation** (`tools/dlt_tools.py`): Complete Delta Live Tables pipeline generation with connection parsing
+- **XML Analysis** (`tools/xml_tools.py`): NiFi template parsing and architecture requirement analysis
 - **Code Generation** (`tools/generator_tools.py`): LLM-powered PySpark code generation with builtin templates
-- **Configuration** (`config/`): Environment management and logging
-- **Utilities** (`utils/`): File operations, XML processing, and helper functions
+- **Job Creation** (`tools/job_tools.py`): Databricks Jobs API integration and deployment
+- **Configuration** (`config/settings.py`): Environment management and logging
 
 ## 🚀 Quick Start
 
@@ -206,8 +208,10 @@ The agent has access to specialized tools in the `tools/` folder:
 - **`eval_tools.py`**: Pipeline validation and data comparison utilities
 
 ### Key Functions
-- **`orchestrate_nifi_migration`**: Standard migration for smaller workflows
-- **`orchestrate_databricks_job_migration`**: Advanced chunked processing for large workflows
+- **`orchestrate_intelligent_nifi_migration`**: **⭐ RECOMMENDED** - Automatically analyzes NiFi XML and chooses optimal architecture (Jobs vs DLT)
+- **`orchestrate_databricks_job_migration`**: Force Databricks Jobs creation for any workflow (manual override)
+- **`orchestrate_nifi_migration`**: Legacy standard migration for smaller workflows
+- **`generate_dlt_pipeline_from_nifi`**: Convert NiFi workflows to Delta Live Tables with proper processor dependencies
 - **`extract_complete_workflow_map`**: Captures full NiFi structure including funnels
 - **`chunk_nifi_xml_by_process_groups`**: Intelligent workflow chunking
 - **`reconstruct_full_workflow`**: Merges chunks with preserved connectivity
