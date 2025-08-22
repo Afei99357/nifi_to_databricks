@@ -1657,6 +1657,7 @@ def orchestrate_intelligent_nifi_migration(
     notebook_path: str = "",
     existing_cluster_id: str = "",
     run_now: bool = False,
+    deploy: bool = False,
     max_processors_per_chunk: int = MAX_PROCS_PER_CHUNK_DEFAULT,
 ) -> str:
     """
@@ -1675,6 +1676,7 @@ def orchestrate_intelligent_nifi_migration(
         notebook_path: Databricks notebook path for job execution
         existing_cluster_id: Existing cluster to use (optional)
         run_now: Whether to run the job immediately after creation
+        deploy: Whether to deploy the generated pipeline/job
         max_processors_per_chunk: Max processors per chunk for large workflows
 
     Returns:
@@ -1723,7 +1725,7 @@ def orchestrate_intelligent_nifi_migration(
                 job=job or f"{project}_job",
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
-                run_now=run_now,
+                run_now=deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
@@ -1913,7 +1915,7 @@ If notebook import fails:
                     job=job or f"{project}_job",
                     notebook_path=notebook_path,
                     existing_cluster_id=existing_cluster_id,
-                    run_now=run_now,
+                    run_now=deploy,
                     max_processors_per_chunk=max_processors_per_chunk,
                 )
                 migration_result = json.loads(migration_result_str)
@@ -1930,7 +1932,7 @@ If notebook import fails:
                 job=job or f"{project}_job",
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
-                run_now=run_now,
+                run_now=deploy,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
