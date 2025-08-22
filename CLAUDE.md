@@ -24,11 +24,11 @@ The system provides both programmatic APIs and an agent-based interface for auto
 
 - **Migration Tools**: Modular tools for different aspects of NiFi conversion
   - `tools/xml_tools.py`: NiFi XML parsing, template extraction, and intelligent architecture analysis
-  - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks with intelligent migration orchestration
+  - `tools/migration_tools.py`: Core conversion logic with intelligent orchestration (Jobs vs DLT auto-selection)
+  - `tools/dlt_tools.py`: **Complete Delta Live Tables pipeline generation** with processor dependency parsing
   - `tools/chunking_tools.py`: Large NiFi XML file chunking and reconstruction utilities
   - `tools/job_tools.py`: Databricks Jobs API integration and job creation
   - `tools/generator_tools.py`: Code generation utilities with LLM-powered PySpark code creation
-  - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
   - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
 # Pattern Registry removed - generates fresh code each time
@@ -39,14 +39,17 @@ The system provides both programmatic APIs and an agent-based interface for auto
 
 ### Migration Process
 
-#### Standard Migration (files <50 processors)
-1. **XML Parsing**: Extracts processors, connections, and properties from NiFi templates
-2. **Code Generation**: Creates PySpark code for each processor using builtin templates and LLM generation with proper dependencies
-3. **Job Creation**: Generates Databricks Jobs with DAG-aware task dependencies
-4. **Asset Bundling**: Creates complete Databricks project with notebooks and configurations
+#### Intelligent Migration (Recommended - Auto-detects Architecture)
+1. **Architecture Analysis**: Automatically analyzes NiFi XML for processor types and patterns
+2. **Decision Engine**: Chooses optimal Databricks architecture:
+   - **Streaming Sources** (ListenHTTP, ConsumeKafka) → **DLT Pipeline**
+   - **Batch Sources** (GetFile, ListFile) → **Databricks Jobs**
+3. **Universal Execution**: Automatically handles chunking for large workflows
+4. **Proper Dependencies**: Universal NiFi connection parsing ensures correct processor flow chains
 
-#### Chunked Migration (large files >50 processors)
-1. **XML Chunking**: Splits NiFi workflow by process groups while preserving graph relationships
+#### Legacy Manual Migration Options
+- **Standard Migration** (files <50 processors): Force Databricks Jobs creation
+- **Chunked Migration** (large files >50 processors): Force Databricks Jobs with chunking
 2. **Chunk Processing**: Processes each chunk individually to avoid context limits
 3. **Code Generation**: Creates PySpark code for processors within each chunk using builtin templates and LLM generation
 4. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job
@@ -56,7 +59,7 @@ The system provides both programmatic APIs and an agent-based interface for auto
 
 ### Testing the Migration Agent
 
-#### Intelligent Migration (Recommended)
+#### Intelligent Migration (Recommended - ✅ COMPLETED)
 The agent automatically analyzes your NiFi workflow and chooses the optimal Databricks architecture:
 
 ```python
@@ -66,17 +69,18 @@ from mlflow.types.responses import ResponsesAgentRequest
 
 req = ResponsesAgentRequest(input=[{
     "role": "user",
-    "content": "Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
+    "content": "Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name> deploy=false"
 }])
 
 resp = AGENT.predict(req)
 ```
 
-This will:
-1. Analyze the NiFi XML for processor types and patterns
-2. Recommend optimal architecture (Databricks Jobs, DLT Pipeline, or Structured Streaming)
-3. Execute the appropriate migration strategy
-4. Save architecture analysis results
+**✅ What it does:**
+1. **Analyzes NiFi XML** for processor types, connections, and patterns
+2. **Auto-selects architecture**: Streaming sources → DLT Pipeline, Batch sources → Databricks Jobs
+3. **Universal parsing**: Works with any NiFi workflow structure and size
+4. **Correct dependencies**: Generates proper processor flow chains (e.g., ListenHTTP → EvaluateJsonPath → RouteOnAttribute → PutHDFS branches)
+5. **Saves results**: Complete DLT notebooks or Job configurations ready for deployment
 
 #### Manual Migration (Legacy)
 For when you want to specify the approach manually:
@@ -95,7 +99,7 @@ req = ResponsesAgentRequest(input=[{
 # For large NiFi files (>50 processors or complex workflows)
 req = ResponsesAgentRequest(input=[{
     "role": "user",
-    "content": "Run orchestrate_chunked_nifi_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
+    "content": "Run orchestrate_databricks_job_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
 }])
 
 resp = AGENT.predict(req)
@@ -103,11 +107,11 @@ resp = AGENT.predict(req)
 
 ### Running Migrations Programmatically
 
-#### Intelligent Migration (Recommended)
+#### Intelligent Migration (Recommended - ✅ COMPLETED)
 ```python
 from tools.migration_tools import orchestrate_intelligent_nifi_migration
 
-# Intelligent migration - automatically chooses best architecture
+# ✅ Intelligent migration - automatically chooses Jobs vs DLT
 result = orchestrate_intelligent_nifi_migration(
     xml_path="nifi_pipeline_file/example.xml",
     out_dir="output_results/intelligent_project",
@@ -115,6 +119,11 @@ result = orchestrate_intelligent_nifi_migration(
     notebook_path="/Workspace/Users/me@company.com/project/main",
     deploy=False  # Set to True to deploy automatically
 )
+
+# ✅ Works for any NiFi workflow:
+# - Streaming (ListenHTTP, ConsumeKafka) → Generates DLT Pipeline
+# - Batch (GetFile, QueryDatabase) → Generates Databricks Jobs
+# - Universal connection parsing → Correct processor dependencies
 ```
 
 #### Architecture Analysis Tools
@@ -136,7 +145,7 @@ print("Recommendation:", recommendation)
 
 #### Manual Migration (Legacy)
 ```python
-from tools.migration_tools import convert_flow, orchestrate_chunked_nifi_migration
+from tools.migration_tools import convert_flow, orchestrate_databricks_job_migration
 
 # Standard migration for smaller files
 result = convert_flow(
@@ -148,7 +157,7 @@ result = convert_flow(
 )
 
 # Chunked migration for large files
-result = orchestrate_chunked_nifi_migration(
+result = orchestrate_databricks_job_migration(
     xml_path="nifi_pipeline_file/large_example.xml",
     out_dir="output_results/large_project",
     project="my_large_project",
@@ -234,7 +243,7 @@ The migration system now provides comprehensive progress tracking:
 
 **Agent Level:**
 ```
-🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
+🔧 [TOOL REQUEST] orchestrate_databricks_job_migration
 🔄 [AGENT ROUND 1/5] Model requested tool call
 ✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
 ```

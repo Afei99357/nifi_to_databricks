@@ -188,7 +188,7 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
     try:
         root = ET.fromstring(xml_content)
 
-        # Processor classification
+        # Real data flow processors (exclude utilities)
         streaming_sources = {
             "ListenHTTP",
             "ConsumeKafka",
@@ -212,6 +212,40 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
             "ListS3",
             "GetHDFS",
             "QueryDatabaseTable",
+        }
+
+        # Real streaming sinks (exclude utility sinks)
+        streaming_sinks = {
+            "PublishKafka",
+            "PublishJMS",
+            "PublishMQTT",
+            "PutElasticsearch",
+            "InvokeHTTP",  # Only if used for real data publishing
+        }
+
+        # Real batch sinks (exclude utility sinks)
+        batch_sinks = {
+            "PutHDFS",
+            "PutFile",
+            "PutS3Object",
+            "PutDatabase",
+            "PutDatabaseRecord",
+            "MergeContent",
+        }
+
+        # Utility processors to ignore in architecture decisions
+        utility_sources = {
+            "GenerateFlowFile",  # Test data generator
+            "GenerateTableFetch",  # Metadata only (sometimes)
+        }
+
+        utility_sinks = {
+            "LogAttribute",  # Debug/logging only
+            "PutEmail",  # Notifications only
+            "PutSlack",  # Notifications only
+            "PutSyslog",  # Debug/logging only
+            "DebugFlow",  # Debug only
+            "Notify",  # Notifications only
         }
 
         transform_processors = {
@@ -247,66 +281,123 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
             "JoltTransformJSON",
         }
 
-        external_sinks = {
-            "PublishKafka",
-            "InvokeHTTP",
-            "PutEmail",
-            "PutSFTP",
-            "PutFTP",
-            "PublishJMS",
-            "PublishMQTT",
-            "PutElasticsearch",
-            "PutSlack",
-        }
-
-        file_sinks = {"PutHDFS", "PutFile", "PutS3Object", "MergeContent"}
-
         # Initialize feature flags
         feature_flags = {
-            "has_streaming": False,
-            "has_batch": False,
+            "has_streaming_sources": False,
+            "has_batch_sources": False,
+            "has_streaming_sinks": False,
+            "has_batch_sinks": False,
             "has_transforms": False,
-            "has_external_sinks": False,
             "has_routing": False,
             "has_json_processing": False,
         }
 
         # Initialize processor analysis
         processor_analysis = {
-            "sources": [],
+            "entry_points": [],  # Real entry points only
+            "sink_points": [],  # Real sink points only
             "transforms": [],
-            "sinks": [],
+            "utilities": [],  # Utility processors (ignored in decisions)
             "total_count": 0,
         }
 
-        # Analyze all processors
+        # First, get all processors and connections
+        all_processors = []
+        all_connections = []
+
         for processor in root.findall(".//processors"):
+            proc_id = (processor.findtext("id") or "").strip()
             proc_type = (processor.findtext("type") or "").strip()
             proc_name = (processor.findtext("name") or "Unknown").strip()
-
-            # Extract just the class name from full path
             class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
 
+            all_processors.append(
+                {
+                    "id": proc_id,
+                    "name": proc_name,
+                    "type": proc_type,
+                    "class_name": class_name,
+                }
+            )
+
+        for connection in root.findall(".//connections"):
+            source_id = (connection.findtext(".//source/id") or "").strip()
+            dest_id = (connection.findtext(".//destination/id") or "").strip()
+            all_connections.append({"source": source_id, "destination": dest_id})
+
+        # Find actual entry points (no incoming connections, exclude utilities)
+        entry_processor_ids = set()
+        for proc in all_processors:
+            has_incoming = any(
+                conn["destination"] == proc["id"] for conn in all_connections
+            )
+            if not has_incoming and proc["class_name"] not in utility_sources:
+                entry_processor_ids.add(proc["id"])
+
+        # Find actual sink points (no outgoing connections, exclude utilities)
+        sink_processor_ids = set()
+        for proc in all_processors:
+            has_outgoing = any(conn["source"] == proc["id"] for conn in all_connections)
+            if not has_outgoing and proc["class_name"] not in utility_sinks:
+                sink_processor_ids.add(proc["id"])
+
+        # Analyze processors with proper entry/sink detection
+        for proc in all_processors:
+            class_name = proc["class_name"]
+            proc_name = proc["name"]
             processor_analysis["total_count"] += 1
 
-            # Classify processor and set feature flags
-            if class_name in streaming_sources:
-                feature_flags["has_streaming"] = True
-                processor_analysis["sources"].append(
-                    {
-                        "name": proc_name,
-                        "type": class_name,
-                        "category": "streaming_source",
-                    }
+            # Skip utility processors in architecture decisions
+            if class_name in utility_sources or class_name in utility_sinks:
+                processor_analysis["utilities"].append(
+                    {"name": proc_name, "type": class_name, "category": "utility"}
                 )
+                continue
 
-            elif class_name in batch_sources:
-                feature_flags["has_batch"] = True
-                processor_analysis["sources"].append(
-                    {"name": proc_name, "type": class_name, "category": "batch_source"}
-                )
+            # Classify real entry points
+            if proc["id"] in entry_processor_ids:
+                if class_name in streaming_sources:
+                    feature_flags["has_streaming_sources"] = True
+                    processor_analysis["entry_points"].append(
+                        {
+                            "name": proc_name,
+                            "type": class_name,
+                            "category": "streaming_source",
+                        }
+                    )
+                elif class_name in batch_sources:
+                    feature_flags["has_batch_sources"] = True
+                    processor_analysis["entry_points"].append(
+                        {
+                            "name": proc_name,
+                            "type": class_name,
+                            "category": "batch_source",
+                        }
+                    )
 
-            elif class_name in transform_processors:
+            # Classify real sink points
+            if proc["id"] in sink_processor_ids:
+                if class_name in streaming_sinks:
+                    feature_flags["has_streaming_sinks"] = True
+                    processor_analysis["sink_points"].append(
+                        {
+                            "name": proc_name,
+                            "type": class_name,
+                            "category": "streaming_sink",
+                        }
+                    )
+                elif class_name in batch_sinks:
+                    feature_flags["has_batch_sinks"] = True
+                    processor_analysis["sink_points"].append(
+                        {
+                            "name": proc_name,
+                            "type": class_name,
+                            "category": "batch_sink",
+                        }
+                    )
+
+            # Classify transforms and routing (all processors, not just entry/sink)
+            if class_name in transform_processors:
                 feature_flags["has_transforms"] = True
                 processor_analysis["transforms"].append(
                     {"name": proc_name, "type": class_name, "category": "transform"}
@@ -318,28 +409,19 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
                     {"name": proc_name, "type": class_name, "category": "routing"}
                 )
 
-            elif class_name in external_sinks:
-                feature_flags["has_external_sinks"] = True
-                processor_analysis["sinks"].append(
-                    {"name": proc_name, "type": class_name, "category": "external_sink"}
-                )
-
-            elif class_name in file_sinks:
-                processor_analysis["sinks"].append(
-                    {"name": proc_name, "type": class_name, "category": "file_sink"}
-                )
-
             # Check for JSON processing
             if class_name in json_processors:
                 feature_flags["has_json_processing"] = True
 
         # Determine complexity level
         complexity_factors = [
-            feature_flags["has_streaming"]
-            and feature_flags["has_batch"],  # Mixed sources
+            feature_flags["has_streaming_sources"]
+            and feature_flags["has_batch_sources"],  # Mixed source types
+            feature_flags["has_streaming_sinks"]
+            and feature_flags["has_batch_sinks"],  # Mixed sink types
             feature_flags["has_routing"],  # Conditional logic
             feature_flags["has_json_processing"],  # Complex transformations
-            len(processor_analysis["sinks"]) > 2,  # Multiple outputs
+            len(processor_analysis["sink_points"]) > 2,  # Multiple outputs
             processor_analysis["total_count"] > 10,  # Large workflow
         ]
 
@@ -398,17 +480,19 @@ def recommend_databricks_architecture(xml_content: str) -> str:
         confidence = "high"
         alternative_options = []
 
-        # Decision Rule 1: Pure batch processing
+        # Decision Rule 1: Pure batch processing (batch sources, batch sinks)
         if (
-            feature_flags["has_batch"]
-            and not feature_flags["has_streaming"]
-            and not feature_flags["has_routing"]
+            feature_flags["has_batch_sources"]
+            and not feature_flags["has_streaming_sources"]
+            and not feature_flags["has_streaming_sinks"]
         ):
 
             recommendation = "databricks_job"
-            reasoning.append("Only batch file sources detected (GetFile, ListFile)")
-            reasoning.append("No streaming sources or complex routing logic")
-            reasoning.append("Simple batch orchestration is sufficient")
+            reasoning.append("Only batch sources detected (GetFile, ListFile)")
+            reasoning.append("Only batch/file sinks (PutHDFS, PutFile)")
+            reasoning.append(
+                "No streaming sources or sinks - simple batch orchestration sufficient"
+            )
 
             architecture_details = {
                 "job_type": "scheduled_batch",
@@ -424,79 +508,51 @@ def recommend_databricks_architecture(xml_content: str) -> str:
                 }
             )
 
-        # Decision Rule 2: Streaming sources present
-        elif feature_flags["has_streaming"]:
-
-            # Sub-rule: Streaming + transformations/routing = DLT
-            if (
-                feature_flags["has_transforms"]
-                or feature_flags["has_routing"]
-                or feature_flags["has_json_processing"]
-            ):
-
-                recommendation = "dlt_pipeline"
-                reasoning.append(
-                    "Streaming sources detected (ListenHTTP, ConsumeKafka, etc.)"
-                )
-                reasoning.append("Complex transformations and/or routing logic present")
-                reasoning.append("DLT provides best streaming ETL capabilities")
-
-                architecture_details = {
-                    "pipeline_type": "streaming_etl",
-                    "source_pattern": "Structured Streaming sources",
-                    "transform_pattern": "Declarative SQL/PySpark transformations",
-                    "sink_pattern": "Delta Live Tables with data quality",
-                }
-
-                alternative_options.append(
-                    {
-                        "option": "structured_streaming",
-                        "reason": "If you need custom streaming logic not suited for DLT",
-                    }
-                )
-
-            # Sub-rule: Simple streaming without complex transforms
-            else:
-                recommendation = "structured_streaming"
-                reasoning.append(
-                    "Streaming sources present but minimal transformations"
-                )
-                reasoning.append("Custom Structured Streaming may be more appropriate")
-
-                architecture_details = {
-                    "pipeline_type": "custom_streaming",
-                    "source_pattern": "readStream() operations",
-                    "sink_pattern": "writeStream() to Delta tables",
-                }
-
-                alternative_options.append(
-                    {
-                        "option": "dlt_pipeline",
-                        "reason": "If transformations grow more complex over time",
-                    }
-                )
-
-        # Decision Rule 3: Mixed batch + streaming
-        elif feature_flags["has_batch"] and feature_flags["has_streaming"]:
+        # Decision Rule 2: Any streaming sources -> DLT Pipeline
+        elif feature_flags["has_streaming_sources"]:
 
             recommendation = "dlt_pipeline"
-            reasoning.append("Mixed batch and streaming sources detected")
             reasoning.append(
-                "DLT can handle both batch and streaming in unified pipeline"
+                "Streaming sources detected (ListenHTTP, ConsumeKafka, etc.)"
             )
-            reasoning.append("Complexity level: " + complexity_level)
+            reasoning.append("DLT provides best streaming ETL capabilities")
+            reasoning.append("Handles both simple and complex transformations")
 
             architecture_details = {
-                "pipeline_type": "unified_batch_streaming",
-                "batch_sources": "Auto Loader for files",
-                "streaming_sources": "Structured Streaming",
-                "unified_processing": "DLT tables handle both patterns",
+                "pipeline_type": "streaming_etl",
+                "source_pattern": "Structured Streaming sources",
+                "transform_pattern": "Declarative SQL/PySpark transformations",
+                "sink_pattern": "Delta Live Tables with data quality",
             }
 
             alternative_options.append(
                 {
                     "option": "databricks_job",
-                    "reason": "Multi-task job with separate batch and streaming tasks",
+                    "reason": "If you prefer task-based orchestration over streaming",
+                }
+            )
+
+        # Decision Rule 3: Batch sources with streaming sinks (Hybrid pattern)
+        elif (
+            feature_flags["has_batch_sources"] and feature_flags["has_streaming_sinks"]
+        ):
+
+            recommendation = "hybrid_split"
+            reasoning.append("Batch sources feeding streaming sinks detected")
+            reasoning.append("GetFile/QueryDB → PublishKafka/PutElasticsearch pattern")
+            reasoning.append("Requires hybrid approach: Job → Delta → DLT Pipeline")
+
+            architecture_details = {
+                "pipeline_type": "hybrid_batch_to_streaming",
+                "part_a": "Databricks Job reads batch sources → writes Delta",
+                "part_b": "DLT Pipeline reads Delta as stream → publishes to streaming sinks",
+                "orchestration": "Job runs first, then DLT pipeline consumes results",
+            }
+
+            alternative_options.append(
+                {
+                    "option": "dlt_pipeline",
+                    "reason": "If you can convert batch sources to streaming (Auto Loader)",
                 }
             )
 

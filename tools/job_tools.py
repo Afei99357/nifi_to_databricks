@@ -39,25 +39,30 @@ def create_job_config(
     if cluster_id:
         cluster_block = {"existing_cluster_id": cluster_id}
     else:
-        cluster_block = {
-            "new_cluster": {
-                "spark_version": spark_version,
-                "node_type_id": node_type_id,
-                "num_workers": num_workers,
-                "autotermination_minutes": autotermination_minutes,
-                "spark_conf": {
-                    "spark.sql.adaptive.enabled": "true",
-                    "spark.sql.adaptive.coalescePartitions.enabled": "true",
-                },
-            }
+        new_cluster_config = {
+            "spark_version": spark_version,
+            "node_type_id": node_type_id,
+            "num_workers": num_workers,
+            "spark_conf": {
+                "spark.sql.adaptive.enabled": "true",
+                "spark.sql.adaptive.coalescePartitions.enabled": "true",
+            },
         }
+
+        # Only set autotermination for multi-node clusters
+        # Single-node clusters are "automated" and don't support autotermination
+        if num_workers > 0:
+            new_cluster_config["autotermination_minutes"] = autotermination_minutes
+
         if num_workers == 0:
-            cluster_block["new_cluster"]["spark_conf"].update(
+            new_cluster_config["spark_conf"].update(
                 {
                     "spark.databricks.cluster.profile": "singleNode",
                     "spark.master": "local[*]",
                 }
             )
+
+        cluster_block = {"new_cluster": new_cluster_config}
 
     job_config = {
         "name": job_name,
@@ -134,20 +139,25 @@ def create_job_config_from_plan(
     def _cluster_block():
         if cluster_id:
             return {"existing_cluster_id": cluster_id}
-        newc = {
-            "new_cluster": {
-                "spark_version": spark_version,
-                "node_type_id": node_type_id,
-                "num_workers": num_workers,
-                "autotermination_minutes": autotermination_minutes,
-            }
+
+        new_cluster_config = {
+            "spark_version": spark_version,
+            "node_type_id": node_type_id,
+            "num_workers": num_workers,
         }
+
+        # Only set autotermination for multi-node clusters
+        # Single-node clusters are "automated" and don't support autotermination
+        if num_workers > 0:
+            new_cluster_config["autotermination_minutes"] = autotermination_minutes
+
         if num_workers == 0:
-            newc["new_cluster"]["spark_conf"] = {
+            new_cluster_config["spark_conf"] = {
                 "spark.databricks.cluster.profile": "singleNode",
                 "spark.master": "local[*]",
             }
-        return newc
+
+        return {"new_cluster": new_cluster_config}
 
     tasks = []
     for t in tasks_meta:
