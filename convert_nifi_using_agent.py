@@ -26,11 +26,11 @@ req = ResponsesAgentRequest(
             "role": "user",
             "content": (
                 "Run orchestrate_intelligent_nifi_migration with:\n"
-                "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_embed_groups.xml\n"
+                "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/json_log_process_pipeline.xml\n"
                 "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results\n"
-                f"""project=job_test_group_test_{current}\n"""
-                f"""job=job_test_feedback_{current}\n"""
-                f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/nifi2dbx_group_test_{current}/main\n"""
+                f"""project=jaon_log_progress_workflow_{current}\n"""
+                f"""job=jaon_log_progress_workflow_{current}\n"""
+                f"""notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/jaon_log_progress_workflow_{current}/main\n"""
                 "max_processors_per_chunk=25\n"
                 "existing_cluster_id=0722-181403-vd3u4c6r\n"
                 "deploy=false"
