@@ -1190,8 +1190,12 @@ def orchestrate_databricks_job_migration(
                 "spark_version": "16.4.x-scala2.12",
                 "node_type_id": "Standard_DS3_v2",
                 "num_workers": 0,
-                "autotermination_minutes": 60,
             }
+            # Single-node clusters don't support autotermination (they're "automated")
+            # Only add autotermination for multi-node clusters
+            if cluster_config["num_workers"] > 0:
+                cluster_config["autotermination_minutes"] = 60
+
             for task in final_job_config.get("tasks", []):
                 task["new_cluster"] = cluster_config
 
