@@ -70,28 +70,26 @@ MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20
 
 def _extract_chunk_index(chunk_id: str) -> int:
     """
-    Extract numeric chunk index from various chunk ID formats.
+    Extract numeric chunk index from actual chunk ID formats used in the system.
 
     Examples:
     - chunk_0 -> 0
     - chunk_1 -> 1
-    - chunk___root__ -> 0
-    - chunk___root____sb0 -> 0
+    - chunk_0__sb0 -> 0 (sub-batch of chunk_0)
+    - chunk_group1_2 -> 2 (batch 2 of group1)
     """
     try:
-        if "___root__" in chunk_id:
-            return 0  # Root chunk is always index 0
-        elif "__sb" in chunk_id:
+        if "__sb" in chunk_id:
             # Sub-batch: extract from the parent chunk part before __sb
             parent_part = chunk_id.split("__sb")[0]
             return _extract_chunk_index(parent_part)
         else:
-            # Normal format: chunk_N
+            # Normal formats: chunk_N, chunk_groupN, chunk_groupN_M
             parts = chunk_id.split("_")
             for part in reversed(parts):  # Check from end to start
                 if part.isdigit():
                     return int(part)
-            return 0  # Default fallback
+            return 0  # Default fallback for non-numeric patterns
     except (ValueError, IndexError):
         return 0  # Safe fallback
 
