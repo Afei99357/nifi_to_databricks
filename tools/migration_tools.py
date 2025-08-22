@@ -68,6 +68,34 @@ from utils import extract_nifi_parameters_and_services_impl, parse_nifi_template
 MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
 
 
+def _extract_chunk_index(chunk_id: str) -> int:
+    """
+    Extract numeric chunk index from various chunk ID formats.
+
+    Examples:
+    - chunk_0 -> 0
+    - chunk_1 -> 1
+    - chunk___root__ -> 0
+    - chunk___root____sb0 -> 0
+    """
+    try:
+        if "___root__" in chunk_id:
+            return 0  # Root chunk is always index 0
+        elif "__sb" in chunk_id:
+            # Sub-batch: extract from the parent chunk part before __sb
+            parent_part = chunk_id.split("__sb")[0]
+            return _extract_chunk_index(parent_part)
+        else:
+            # Normal format: chunk_N
+            parts = chunk_id.split("_")
+            for part in reversed(parts):  # Check from end to start
+                if part.isdigit():
+                    return int(part)
+            return 0  # Default fallback
+    except (ValueError, IndexError):
+        return 0  # Safe fallback
+
+
 def _generate_batch_processor_code(
     processors: List[Dict[str, Any]],
     chunk_id: str,
@@ -306,7 +334,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
             # Construct notebook path for this task based on out_dir + project structure
             task_name = _safe_name(spec["name"])
-            chunk_index = int(chunk_id.split("_")[-1]) if "_" in chunk_id else 0
+            chunk_index = _extract_chunk_index(chunk_id)
             if out_dir and project:
                 task_notebook_path = (
                     f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
@@ -377,11 +405,7 @@ df.write.format('delta').mode('append').save('/path/to/output')
 """
                         # Construct notebook path for this task based on out_dir + project structure
                         task_name = _safe_name(proc_name)
-                        chunk_index = (
-                            int(subset_id.split("_")[0].replace("chunk", ""))
-                            if "chunk" in subset_id
-                            else 0
-                        )
+                        chunk_index = _extract_chunk_index(subset_id)
                         if out_dir and project:
                             task_notebook_path = f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
                         else:
@@ -426,7 +450,7 @@ df.write.format('delta').mode('append').save('/path/to/output')
 """
                 # Construct notebook path for this task based on out_dir + project structure
                 task_name = _safe_name(proc_name)
-                chunk_index = int(chunk_id.split("_")[-1]) if "_" in chunk_id else 0
+                chunk_index = _extract_chunk_index(chunk_id)
                 if out_dir and project:
                     task_notebook_path = f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
                 else:
