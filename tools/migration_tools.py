@@ -1763,7 +1763,7 @@ def orchestrate_intelligent_nifi_migration(
                         project_name=project,
                         max_processors_per_chunk=max_processors_per_chunk,
                         catalog="main",
-                        schema="default",
+                        schema_name="default",
                         notebook_path=notebook_path,
                     )
                 else:
@@ -1777,7 +1777,7 @@ def orchestrate_intelligent_nifi_migration(
                         xml_content=xml_content,
                         project_name=project,
                         catalog="main",
-                        schema="default",
+                        schema_name="default",
                         notebook_path=notebook_path,
                     )
 
