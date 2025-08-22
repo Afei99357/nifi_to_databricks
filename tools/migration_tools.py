@@ -70,28 +70,26 @@ MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20
 
 def _extract_chunk_index(chunk_id: str) -> int:
     """
-    Extract numeric chunk index from various chunk ID formats.
+    Extract numeric chunk index from actual chunk ID formats used in the system.
 
     Examples:
     - chunk_0 -> 0
     - chunk_1 -> 1
-    - chunk___root__ -> 0
-    - chunk___root____sb0 -> 0
+    - chunk_0__sb0 -> 0 (sub-batch of chunk_0)
+    - chunk_group1_2 -> 2 (batch 2 of group1)
     """
     try:
-        if "___root__" in chunk_id:
-            return 0  # Root chunk is always index 0
-        elif "__sb" in chunk_id:
+        if "__sb" in chunk_id:
             # Sub-batch: extract from the parent chunk part before __sb
             parent_part = chunk_id.split("__sb")[0]
             return _extract_chunk_index(parent_part)
         else:
-            # Normal format: chunk_N
+            # Normal formats: chunk_N, chunk_groupN, chunk_groupN_M
             parts = chunk_id.split("_")
             for part in reversed(parts):  # Check from end to start
                 if part.isdigit():
                     return int(part)
-            return 0  # Default fallback
+            return 0  # Default fallback for non-numeric patterns
     except (ValueError, IndexError):
         return 0  # Safe fallback
 
@@ -1489,10 +1487,11 @@ def _analyze_nifi_requirements_internal(xml_content: str) -> dict:
         }
 
         feature_flags = {
-            "has_streaming": False,
-            "has_batch": False,
+            "has_streaming_sources": False,
+            "has_batch_sources": False,
+            "has_streaming_sinks": False,
+            "has_batch_sinks": False,
             "has_transforms": False,
-            "has_external_sinks": False,
             "has_routing": False,
             "has_json_processing": False,
         }
@@ -1513,7 +1512,7 @@ def _analyze_nifi_requirements_internal(xml_content: str) -> dict:
             processor_analysis["total_count"] += 1
 
             if class_name in streaming_sources:
-                feature_flags["has_streaming"] = True
+                feature_flags["has_streaming_sources"] = True
                 processor_analysis["sources"].append(
                     {
                         "name": proc_name,
@@ -1522,7 +1521,7 @@ def _analyze_nifi_requirements_internal(xml_content: str) -> dict:
                     }
                 )
             elif class_name in batch_sources:
-                feature_flags["has_batch"] = True
+                feature_flags["has_batch_sources"] = True
                 processor_analysis["sources"].append(
                     {"name": proc_name, "type": class_name, "category": "batch_source"}
                 )
@@ -1585,14 +1584,14 @@ def _recommend_architecture_internal(analysis: dict) -> dict:
 
         # Decision Rule 1: Pure batch processing
         if (
-            feature_flags["has_batch"]
-            and not feature_flags["has_streaming"]
-            and not feature_flags["has_routing"]
+            feature_flags["has_batch_sources"]
+            and not feature_flags["has_streaming_sources"]
+            and not feature_flags["has_streaming_sinks"]
         ):
 
             recommendation = "databricks_job"
             reasoning.append("Only batch file sources detected (GetFile, ListFile)")
-            reasoning.append("No streaming sources or complex routing logic")
+            reasoning.append("No streaming sources or sinks")
             reasoning.append("Simple batch orchestration is sufficient")
 
             architecture_details = {
@@ -1602,40 +1601,22 @@ def _recommend_architecture_internal(analysis: dict) -> dict:
                 "scheduling": "Triggered or scheduled execution",
             }
 
-        # Decision Rule 2: Streaming sources present
-        elif feature_flags["has_streaming"]:
+        # Decision Rule 2: Streaming sources present -> DLT Pipeline
+        elif feature_flags["has_streaming_sources"]:
 
-            if (
-                feature_flags["has_transforms"]
-                or feature_flags["has_routing"]
-                or feature_flags["has_json_processing"]
-            ):
+            recommendation = "dlt_pipeline"
+            reasoning.append(
+                "Streaming sources detected (ListenHTTP, ConsumeKafka, etc.)"
+            )
+            reasoning.append("DLT provides best streaming ETL capabilities")
+            reasoning.append("Handles both simple and complex transformations")
 
-                recommendation = "dlt_pipeline"
-                reasoning.append(
-                    "Streaming sources detected (ListenHTTP, ConsumeKafka, etc.)"
-                )
-                reasoning.append("Complex transformations and/or routing logic present")
-                reasoning.append("DLT provides best streaming ETL capabilities")
-
-                architecture_details = {
-                    "pipeline_type": "streaming_etl",
-                    "source_pattern": "Structured Streaming sources",
-                    "transform_pattern": "Declarative SQL/PySpark transformations",
-                    "sink_pattern": "Delta Live Tables with data quality",
-                }
-            else:
-                recommendation = "structured_streaming"
-                reasoning.append(
-                    "Streaming sources present but minimal transformations"
-                )
-                reasoning.append("Custom Structured Streaming may be more appropriate")
-
-                architecture_details = {
-                    "pipeline_type": "custom_streaming",
-                    "source_pattern": "readStream() operations",
-                    "sink_pattern": "writeStream() to Delta tables",
-                }
+            architecture_details = {
+                "pipeline_type": "streaming_etl",
+                "source_pattern": "Structured Streaming sources",
+                "transform_pattern": "Declarative SQL/PySpark transformations",
+                "sink_pattern": "Delta Live Tables with data quality",
+            }
 
         # Default fallback
         else:
@@ -1749,30 +1730,174 @@ def orchestrate_intelligent_nifi_migration(
         elif architecture_type == "dlt_pipeline":
             logger.info("Executing DLT Pipeline migration...")
 
-            # Use DLT-specific migration approach
+            # Use enhanced DLT generation tools
             try:
-                # Create a simple DLT config without calling external tools
-                dlt_result = {
-                    "name": f"{project}_dlt_pipeline",
-                    "storage": f"/pipelines/{project}_dlt_pipeline",
-                    "target": f"main.{project}_dlt",
-                    "development": True,
-                    "continuous": True,
-                    "libraries": [
-                        {
-                            "notebook": {
-                                "path": notebook_path
-                                or f"/Workspace/Users/me@company.com/{project}/main"
-                            }
-                        }
-                    ],
-                }
+                # Detect user for proper notebook path
+                user = (
+                    os.environ.get("WORKSPACE_USER")
+                    or os.environ.get("USER_EMAIL")
+                    or "Shared"
+                )
+                if not notebook_path:
+                    if "@" in user:
+                        notebook_path = (
+                            f"/Workspace/Users/{user}/{project}/dlt_pipeline"
+                        )
+                    else:
+                        notebook_path = f"/Workspace/Shared/{project}/dlt_pipeline"
+
+                processor_count = analysis["processor_analysis"]["total_count"]
+
+                # Choose chunked or standard DLT generation based on size
+                if processor_count > max_processors_per_chunk:
+                    logger.info(
+                        f"Large DLT workflow detected ({processor_count} processors > {max_processors_per_chunk})"
+                    )
+                    logger.info("Using chunked DLT generation...")
+
+                    from tools.dlt_tools import generate_chunked_dlt_pipeline_from_nifi
+
+                    dlt_result_str = generate_chunked_dlt_pipeline_from_nifi.func(
+                        xml_content=xml_content,
+                        project_name=project,
+                        max_processors_per_chunk=max_processors_per_chunk,
+                        catalog="main",
+                        schema="default",
+                        notebook_path=notebook_path,
+                    )
+                else:
+                    logger.info(
+                        f"Standard DLT generation for {processor_count} processors"
+                    )
+
+                    from tools.dlt_tools import generate_dlt_pipeline_from_nifi
+
+                    dlt_result_str = generate_dlt_pipeline_from_nifi.func(
+                        xml_content=xml_content,
+                        project_name=project,
+                        catalog="main",
+                        schema="default",
+                        notebook_path=notebook_path,
+                    )
+
+                dlt_result = json.loads(dlt_result_str)
+
+                if "error" in dlt_result:
+                    raise Exception(dlt_result["error"])
+
+                # Create output directory structure for DLT
+                root = Path(out_dir)
+                proj_name = _safe_name(project)
+                out = root / proj_name
+                (out / "notebooks").mkdir(parents=True, exist_ok=True)
+                (out / "conf").mkdir(parents=True, exist_ok=True)
+
+                # Write DLT notebook
+                dlt_notebook_path = out / "notebooks/dlt_pipeline.py"
+                _write_text(dlt_notebook_path, dlt_result["sql_notebook_content"])
+
+                # Write DLT pipeline config
+                dlt_config_path = out / "conf/dlt_pipeline.json"
+                _write_text(
+                    dlt_config_path, json.dumps(dlt_result["pipeline_config"], indent=2)
+                )
+
+                # Write README for DLT project
+                pipeline_name = dlt_result["pipeline_config"]["name"]
+                target_catalog = dlt_result["pipeline_config"]["target"]
+                migration_type = dlt_result.get("migration_type", "dlt_pipeline")
+                is_chunked = migration_type == "chunked_dlt_pipeline"
+
+                chunked_info = ""
+                if is_chunked:
+                    chunk_count = dlt_result.get("chunk_count", 0)
+                    chunked_info = f"""
+
+## Chunked Migration
+- **Total Chunks**: {chunk_count}
+- **Migration Type**: Large workflow chunked processing
+- **Cross-Chunk Lineage**: Automatically maintained across chunks"""
+
+                readme_content = f"""# {project} - DLT Pipeline Migration
+
+Generated from NiFi workflow using Delta Live Tables.{chunked_info}
+
+## Files Generated
+- `notebooks/dlt_pipeline.py` - DLT notebook with streaming tables
+- `conf/dlt_pipeline.json` - DLT pipeline configuration
+
+## Configuration
+- **Pipeline Name**: `{pipeline_name}`
+- **Target Catalog**: `{target_catalog}`
+- **Notebook Path**: `{notebook_path}`
+- **Processors**: {dlt_result.get("processor_count", "unknown")}
+
+## Deployment Options
+
+### Option 1: Databricks CLI
+```bash
+# Install Databricks CLI if needed
+pip install databricks-cli
+
+# Create DLT pipeline
+databricks pipelines create --settings conf/dlt_pipeline.json
+```
+
+### Option 2: Databricks UI
+1. Go to **Workflows** → **Delta Live Tables**
+2. Click **Create Pipeline**
+3. Import settings from `conf/dlt_pipeline.json`
+4. Upload notebook from `notebooks/dlt_pipeline.py`
+
+### Option 3: Manual Setup
+1. Create new DLT pipeline in UI
+2. Set target to `{target_catalog}` (or adjust as needed)
+3. Add notebook library: `{notebook_path}`
+4. Configure as **Continuous** pipeline
+
+## Troubleshooting
+
+### Unity Catalog Issues
+If you see "Catalog 'main' not found":
+1. **Check Unity Catalog**: Ensure workspace has Unity Catalog enabled
+2. **Use different catalog**: Edit `conf/dlt_pipeline.json` → change `"target"` to your catalog
+3. **Use Hive metastore**: Change target to just `"default"` (without catalog)
+
+### Permission Issues
+If you see "Permission denied":
+1. **Check permissions**: Ensure you can create tables in `{target_catalog}`
+2. **Use different schema**: Change target to `main.your_schema` or `your_catalog.your_schema`
+3. **Contact admin**: Request access to Unity Catalog
+
+### Notebook Path Issues
+If notebook import fails:
+1. **Upload manually**: Copy content from `notebooks/dlt_pipeline.py` to Databricks notebook
+2. **Adjust path**: Edit `conf/dlt_pipeline.json` → update `"libraries"` → `"notebook"` → `"path"`
+
+## Architecture
+- **Source**: NiFi processors → DLT streaming tables
+- **Pattern**: Bronze → Silver → Gold data flow
+- **Benefits**: Automatic lineage, data quality expectations, streaming ETL
+
+## Next Steps
+1. Review generated DLT SQL in `notebooks/dlt_pipeline.py`
+2. Adjust data sources and paths as needed
+3. Test pipeline with sample data
+4. Deploy using one of the options above
+"""
+                _write_text(out / "README.md", readme_content)
 
                 migration_result = {
-                    "migration_type": "dlt_pipeline",
-                    "dlt_config": dlt_result,
-                    "project_path": out_dir,
-                    "pipeline_name": f"{project}_dlt_pipeline",
+                    "migration_type": migration_type,
+                    "dlt_config": dlt_result["pipeline_config"],
+                    "dlt_notebook_path": str(dlt_notebook_path),
+                    "dlt_config_path": str(dlt_config_path),
+                    "project_path": str(out),
+                    "pipeline_name": dlt_result["pipeline_config"]["name"],
+                    "processor_count": dlt_result["processor_count"],
+                    "chunk_count": dlt_result.get("chunk_count", 1),
+                    "chunked": is_chunked,
+                    "success": True,
                 }
 
             except Exception as dlt_error:
@@ -1792,28 +1917,22 @@ def orchestrate_intelligent_nifi_migration(
                 )
                 migration_result = json.loads(migration_result_str)
 
-        elif architecture_type == "structured_streaming":
-            logger.info("Executing Structured Streaming migration...")
+        else:
+            # Default fallback to Job migration
+            logger.info("Executing Databricks Job migration (default)...")
 
-            # Use job migration with streaming-optimized settings using .func()
+            # Use job migration as fallback
             migration_result_str = orchestrate_chunked_nifi_migration.func(
                 xml_path=xml_path,
                 out_dir=out_dir,
                 project=project,
-                job=job or f"{project}_streaming_job",
+                job=job or f"{project}_job",
                 notebook_path=notebook_path,
                 existing_cluster_id=existing_cluster_id,
                 run_now=run_now,
                 max_processors_per_chunk=max_processors_per_chunk,
             )
             migration_result = json.loads(migration_result_str)
-
-            # Add streaming-specific notes
-            migration_result["streaming_notes"] = [
-                "Generated as Databricks Job with streaming-capable tasks",
-                "Consider converting to dedicated Structured Streaming application",
-                "Review generated code for streaming optimizations",
-            ]
 
         # Combine results
         result = {
