@@ -483,7 +483,7 @@ __all__ = [
     "orchestrate_nifi_migration",
     "convert_flow",
     "build_migration_plan",
-    "orchestrate_chunked_nifi_migration",
+    "orchestrate_databricks_job_migration",
     "process_nifi_chunk",
 ]
 
@@ -1006,7 +1006,7 @@ def process_nifi_chunk(
 
 
 @tool
-def orchestrate_chunked_nifi_migration(
+def orchestrate_databricks_job_migration(
     xml_path: str,
     out_dir: str,
     project: str,
@@ -1017,9 +1017,9 @@ def orchestrate_chunked_nifi_migration(
     run_now: bool = False,
 ) -> str:
     """
-    End-to-end chunked migration for large NiFi XML files.
+    End-to-end migration of NiFi workflows to Databricks Jobs.
 
-    This tool handles large NiFi XML files by:
+    This tool converts NiFi XML workflows to Databricks Jobs by:
     1. Chunking the XML by process groups and processor batches
     2. Processing each chunk individually (avoids context limits)
     3. Reconstructing the full workflow with proper task dependencies
@@ -1401,7 +1401,7 @@ def orchestrate_chunked_nifi_migration(
             "deploy_result": deploy_result,
             "deployment_error": deployment_error,
             "continue_required": False,
-            "tool_name": "orchestrate_chunked_nifi_migration",
+            "tool_name": "orchestrate_databricks_job_migration",
         }
 
         return json.dumps(result, indent=2)
@@ -1718,7 +1718,7 @@ def orchestrate_intelligent_nifi_migration(
             logger.info("Executing Databricks Job migration...")
 
             # Call chunked migration using .func() but this is the final migration call
-            migration_result_str = orchestrate_chunked_nifi_migration.func(
+            migration_result_str = orchestrate_databricks_job_migration.func(
                 xml_path=xml_path,
                 out_dir=out_dir,
                 project=project,
@@ -1908,7 +1908,7 @@ If notebook import fails:
                 logger.info("Falling back to Databricks Job migration...")
 
                 # Fallback to job migration using .func()
-                migration_result_str = orchestrate_chunked_nifi_migration.func(
+                migration_result_str = orchestrate_databricks_job_migration.func(
                     xml_path=xml_path,
                     out_dir=out_dir,
                     project=project,
@@ -1925,7 +1925,7 @@ If notebook import fails:
             logger.info("Executing Databricks Job migration (default)...")
 
             # Use job migration as fallback
-            migration_result_str = orchestrate_chunked_nifi_migration.func(
+            migration_result_str = orchestrate_databricks_job_migration.func(
                 xml_path=xml_path,
                 out_dir=out_dir,
                 project=project,
@@ -1987,6 +1987,6 @@ If notebook import fails:
                 "intelligent_migration": True,
                 "success": False,
                 "error": str(e),
-                "fallback_suggestion": "Try using orchestrate_chunked_nifi_migration directly",
+                "fallback_suggestion": "Try using orchestrate_databricks_job_migration directly",
             }
         )

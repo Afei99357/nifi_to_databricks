@@ -207,7 +207,7 @@ The agent has access to specialized tools in the `tools/` folder:
 
 ### Key Functions
 - **`orchestrate_nifi_migration`**: Standard migration for smaller workflows
-- **`orchestrate_chunked_nifi_migration`**: Advanced chunked processing for large workflows
+- **`orchestrate_databricks_job_migration`**: Advanced chunked processing for large workflows
 - **`extract_complete_workflow_map`**: Captures full NiFi structure including funnels
 - **`chunk_nifi_xml_by_process_groups`**: Intelligent workflow chunking
 - **`reconstruct_full_workflow`**: Merges chunks with preserved connectivity

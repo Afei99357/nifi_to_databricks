@@ -95,7 +95,7 @@ req = ResponsesAgentRequest(input=[{
 # For large NiFi files (>50 processors or complex workflows)
 req = ResponsesAgentRequest(input=[{
     "role": "user",
-    "content": "Run orchestrate_chunked_nifi_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
+    "content": "Run orchestrate_databricks_job_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
 }])
 
 resp = AGENT.predict(req)
@@ -136,7 +136,7 @@ print("Recommendation:", recommendation)
 
 #### Manual Migration (Legacy)
 ```python
-from tools.migration_tools import convert_flow, orchestrate_chunked_nifi_migration
+from tools.migration_tools import convert_flow, orchestrate_databricks_job_migration
 
 # Standard migration for smaller files
 result = convert_flow(
@@ -148,7 +148,7 @@ result = convert_flow(
 )
 
 # Chunked migration for large files
-result = orchestrate_chunked_nifi_migration(
+result = orchestrate_databricks_job_migration(
     xml_path="nifi_pipeline_file/large_example.xml",
     out_dir="output_results/large_project",
     project="my_large_project",
@@ -234,7 +234,7 @@ The migration system now provides comprehensive progress tracking:
 
 **Agent Level:**
 ```
-🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
+🔧 [TOOL REQUEST] orchestrate_databricks_job_migration
 🔄 [AGENT ROUND 1/5] Model requested tool call
 ✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
 ```
