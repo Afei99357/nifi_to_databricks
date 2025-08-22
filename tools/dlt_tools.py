@@ -125,8 +125,10 @@ from pyspark.sql.types import *
 """
         )
 
-        # Create a processor ID to table name mapping
+        # Create a processor ID to table name mapping and identify entry points
         processor_id_to_table = {}
+        entry_point_tables = []
+
         for proc in processors:
             proc_name = proc.get("name", f"processor_{proc.get('id', '')}")
             table_name = (
@@ -135,6 +137,15 @@ from pyspark.sql.types import *
                 .replace(" ", "_")
             )
             processor_id_to_table[proc.get("id", "")] = table_name
+
+            # Track entry points (processors with no upstream connections)
+            if not proc.get("upstream_processors", []):
+                entry_point_tables.append(table_name)
+
+        # Use first entry point as default bronze table if needed
+        default_bronze_table = (
+            entry_point_tables[0] if entry_point_tables else f"{project_name}_bronze"
+        )
 
         # Process each processor into a DLT table
         for i, proc in enumerate(processors):
@@ -200,8 +211,8 @@ from pyspark.sql.types import *
                         upstream_id, f"{project_name}_unknown_source"
                     )
                 else:
-                    # Transform without upstream - create dummy bronze reference
-                    upstream_table = f"{project_name}_bronze"
+                    # Transform without upstream - use entry point table
+                    upstream_table = default_bronze_table
 
                 sql_sections.append(
                     _generate_transform_sql(
@@ -224,6 +235,10 @@ from pyspark.sql.types import *
                             if "_" in proc_name
                             else "default"
                         )
+                        # Ensure we don't create circular references
+                        if upstream_table == table_name:
+                            upstream_table = default_bronze_table
+
                         sql_sections.append(
                             _generate_filtered_sink_sql(
                                 table_name,
@@ -240,8 +255,8 @@ from pyspark.sql.types import *
                             )
                         )
                 else:
-                    # Generic processor without upstream - create dummy bronze reference
-                    upstream_table = f"{project_name}_bronze"
+                    # Generic processor without upstream - use entry point table
+                    upstream_table = default_bronze_table
                     sql_sections.append(
                         _generate_generic_sql(
                             table_name, class_name, properties, upstream_table
