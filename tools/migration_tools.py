@@ -69,7 +69,11 @@ MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20
 
 
 def _generate_batch_processor_code(
-    processors: List[Dict[str, Any]], chunk_id: str, project: str
+    processors: List[Dict[str, Any]],
+    chunk_id: str,
+    project: str,
+    notebook_path: str = "",
+    out_dir: str = "",
 ) -> List[Dict[str, Any]]:
     """
     Generate Databricks code for multiple processors in a single LLM call to reduce API requests.
@@ -300,14 +304,29 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
             # Registry removed - no pattern buffering
 
+            # Construct notebook path for this task based on out_dir + project structure
+            task_name = _safe_name(spec["name"])
+            chunk_index = int(chunk_id.split("_")[-1]) if "_" in chunk_id else 0
+            if out_dir and project:
+                task_notebook_path = (
+                    f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
+                )
+            else:
+                task_notebook_path = (
+                    f"{notebook_path}/src/steps/{chunk_index:02d}_{task_name}.py"
+                    if notebook_path
+                    else ""
+                )
+
             task = {
                 "id": spec["id"],
-                "name": _safe_name(spec["name"]),
+                "name": task_name,
                 "type": spec["type"],
                 "code": code,
                 "properties": spec["properties"],
                 "chunk_id": chunk_id,
                 "processor_index": idx,
+                "notebook_path": task_notebook_path,
             }
             generated_tasks.append(task)
 
@@ -334,7 +353,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                 try:
                     # Reuse batch pathway for each sub-batch
                     sub_tasks = _generate_batch_processor_code(
-                        subset, subset_id, project
+                        subset, subset_id, project, notebook_path, out_dir
                     )
                     generated_tasks.extend(sub_tasks)
                 except Exception:
@@ -356,14 +375,31 @@ df = spark.read.format('delta').load('/path/to/input')
 # TODO: Implement {proc_type} logic
 df.write.format('delta').mode('append').save('/path/to/output')
 """
+                        # Construct notebook path for this task based on out_dir + project structure
+                        task_name = _safe_name(proc_name)
+                        chunk_index = (
+                            int(subset_id.split("_")[0].replace("chunk", ""))
+                            if "chunk" in subset_id
+                            else 0
+                        )
+                        if out_dir and project:
+                            task_notebook_path = f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
+                        else:
+                            task_notebook_path = (
+                                f"{notebook_path}/src/steps/{chunk_index:02d}_{task_name}.py"
+                                if notebook_path
+                                else ""
+                            )
+
                         task = {
                             "id": processor.get("id", f"{subset_id}_task_{idx}"),
-                            "name": _safe_name(proc_name),
+                            "name": task_name,
                             "type": proc_type,
                             "code": code,
                             "properties": props,
                             "chunk_id": subset_id,
                             "processor_index": start + idx,
+                            "notebook_path": task_notebook_path,
                         }
                         generated_tasks.append(task)
             return generated_tasks
@@ -388,14 +424,27 @@ df = spark.read.format('delta').load('/path/to/input')
 # TODO: Implement {proc_type} logic
 df.write.format('delta').mode('append').save('/path/to/output')
 """
+                # Construct notebook path for this task based on out_dir + project structure
+                task_name = _safe_name(proc_name)
+                chunk_index = int(chunk_id.split("_")[-1]) if "_" in chunk_id else 0
+                if out_dir and project:
+                    task_notebook_path = f"{out_dir}/{project}/src/steps/{chunk_index:02d}_{task_name}.py"
+                else:
+                    task_notebook_path = (
+                        f"{notebook_path}/src/steps/{chunk_index:02d}_{task_name}.py"
+                        if notebook_path
+                        else ""
+                    )
+
                 task = {
                     "id": processor.get("id", f"{chunk_id}_task_{idx}"),
-                    "name": _safe_name(proc_name),
+                    "name": task_name,
                     "type": proc_type,
                     "code": code,
                     "properties": props,
                     "chunk_id": chunk_id,
                     "processor_index": idx,
+                    "notebook_path": task_notebook_path,
                 }
                 generated_tasks.append(task)
             return generated_tasks
@@ -863,7 +912,13 @@ def orchestrate_nifi_migration(
 
 
 @tool
-def process_nifi_chunk(chunk_data: str, project: str, chunk_index: int = 0) -> str:
+def process_nifi_chunk(
+    chunk_data: str,
+    project: str,
+    chunk_index: int = 0,
+    notebook_path: str = "",
+    out_dir: str = "",
+) -> str:
     """
     Process a single NiFi chunk and generate Databricks code for its processors.
 
@@ -885,7 +940,9 @@ def process_nifi_chunk(chunk_data: str, project: str, chunk_index: int = 0) -> s
         generated_tasks = []
 
         # Generate code for all processors in a single batched LLM call
-        generated_tasks = _generate_batch_processor_code(processors, chunk_id, project)
+        generated_tasks = _generate_batch_processor_code(
+            processors, chunk_id, project, notebook_path, out_dir
+        )
 
         # Analyze connections for task ordering within chunk
         task_dependencies = {}
@@ -1033,7 +1090,11 @@ def orchestrate_chunked_nifi_migration(
             # Process this chunk
             chunk_result = json.loads(
                 process_nifi_chunk.func(
-                    chunk_data=chunk_data, project=project, chunk_index=i
+                    chunk_data=chunk_data,
+                    project=project,
+                    chunk_index=i,
+                    notebook_path=notebook_path,
+                    out_dir=out_dir,
                 )
             )
 

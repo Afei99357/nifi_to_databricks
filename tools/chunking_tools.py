@@ -747,7 +747,8 @@ def _generate_multi_task_job_config(workflow: Dict[str, Any]) -> Dict[str, Any]:
             "task_key": task_name,
             "notebook_task": {
                 "notebook_path": task.get(
-                    "notebook_path", "/Workspace/generated_tasks/" + task_name
+                    "notebook_path",
+                    f"/Workspace/generated_tasks/{task_name}_MISSING_PATH",
                 ),
                 "source": "WORKSPACE",
             },
