@@ -114,10 +114,10 @@ def create_dlt_sql_from_processors(
 
         # Add header
         sql_sections.append(
-            f"""-- Databricks notebook source
--- DLT Pipeline generated from NiFi workflow
--- Project: {project_name}
--- Generated: Auto-migration from NiFi XML
+            f"""# Databricks notebook source
+# DLT Pipeline generated from NiFi workflow
+# Project: {project_name}
+# Generated: Auto-migration from NiFi XML
 
 import dlt
 from pyspark.sql.functions import *
@@ -125,11 +125,23 @@ from pyspark.sql.types import *
 """
         )
 
+        # Create a processor ID to table name mapping
+        processor_id_to_table = {}
+        for proc in processors:
+            proc_name = proc.get("name", f"processor_{proc.get('id', '')}")
+            table_name = (
+                f"{project_name}_{proc_name}".lower()
+                .replace("-", "_")
+                .replace(" ", "_")
+            )
+            processor_id_to_table[proc.get("id", "")] = table_name
+
         # Process each processor into a DLT table
         for i, proc in enumerate(processors):
             proc_type = proc.get("type", "Unknown")
             proc_name = proc.get("name", f"processor_{i}")
             properties = proc.get("properties", {})
+            upstream_processor_ids = proc.get("upstream_processors", [])
 
             # Extract class name from full Java path
             class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
@@ -150,12 +162,17 @@ from pyspark.sql.types import *
                     _generate_batch_source_sql(table_name, class_name, properties)
                 )
             elif class_name in transform_processors:
-                # Find upstream table (simplified - assumes sequential processing)
-                upstream_table = (
-                    f"{project_name}_processor_{i-1}"
-                    if i > 0
-                    else f"{project_name}_bronze"
-                )
+                # Find upstream table from actual connections
+                upstream_table = None
+                if upstream_processor_ids:
+                    # Use first upstream processor as source
+                    upstream_id = upstream_processor_ids[0]
+                    upstream_table = processor_id_to_table.get(
+                        upstream_id, f"{project_name}_unknown_source"
+                    )
+                else:
+                    # No upstream processors - might be an entry point
+                    upstream_table = f"{project_name}_bronze"
                 sql_sections.append(
                     _generate_transform_sql(
                         table_name, class_name, properties, upstream_table
@@ -163,11 +180,17 @@ from pyspark.sql.types import *
                 )
             else:
                 # Generic processor
-                upstream_table = (
-                    f"{project_name}_processor_{i-1}"
-                    if i > 0
-                    else f"{project_name}_bronze"
-                )
+                upstream_table = None
+                if upstream_processor_ids:
+                    # Use first upstream processor as source
+                    upstream_id = upstream_processor_ids[0]
+                    upstream_table = processor_id_to_table.get(
+                        upstream_id, f"{project_name}_unknown_source"
+                    )
+                else:
+                    # No upstream processors - might be an entry point
+                    upstream_table = f"{project_name}_bronze"
+
                 sql_sections.append(
                     _generate_generic_sql(
                         table_name, class_name, properties, upstream_table
@@ -381,7 +404,7 @@ def _generate_generic_sql(
 )
 def {table_name}():
     # TODO: Implement specific logic for {processor_type}
-    # Properties: {json.dumps(properties, indent=2)}
+    # Key properties: Directory={properties.get('Directory', 'N/A')}, Strategy={properties.get('Conflict Resolution Strategy', 'N/A')}
     return (
         dlt.read_stream("{upstream_table}")
         .select("*", current_timestamp().alias("processed_at"))
@@ -417,11 +440,21 @@ def generate_dlt_pipeline_from_nifi(
         root = ET.fromstring(xml_content)
         processors = []
 
+        # Extract processor IDs and build connection mapping
+        processor_id_to_name = {}
         for processor in root.findall(".//processors"):
+            proc_id = processor.get("id", "")
+            proc_name = (processor.findtext("name") or "Unknown").strip()
+            proc_type = (processor.findtext("type") or "Unknown").strip()
+
+            processor_id_to_name[proc_id] = proc_name
+
             proc_info = {
-                "name": (processor.findtext("name") or "Unknown").strip(),
-                "type": (processor.findtext("type") or "Unknown").strip(),
+                "id": proc_id,
+                "name": proc_name,
+                "type": proc_type,
                 "properties": {},
+                "upstream_processors": [],  # Will be filled from connections
             }
 
             # Extract properties
@@ -434,6 +467,16 @@ def generate_dlt_pipeline_from_nifi(
                         proc_info["properties"][k] = v
 
             processors.append(proc_info)
+
+        # Build connection mapping
+        processor_by_id = {p["id"]: p for p in processors}
+        for connection in root.findall(".//connections"):
+            source_id = connection.get("sourceId", "")
+            dest_id = connection.get("destinationId", "")
+
+            if dest_id in processor_by_id:
+                if source_id in processor_by_id:
+                    processor_by_id[dest_id]["upstream_processors"].append(source_id)
 
         # Generate DLT SQL content
         sql_content = create_dlt_sql_from_processors.func(
@@ -717,12 +760,12 @@ def _merge_chunk_dlt_sql(
 ) -> str:
     """Merge all chunk SQL into single DLT notebook."""
 
-    header = f"""-- Databricks notebook source
--- Chunked DLT Pipeline generated from NiFi workflow
--- Project: {project_name}
--- Total Chunks: {total_chunks}
--- Total Processors: {total_processors}
--- Generated: Auto-migration from large NiFi XML
+    header = f"""# Databricks notebook source
+# Chunked DLT Pipeline generated from NiFi workflow
+# Project: {project_name}
+# Total Chunks: {total_chunks}
+# Total Processors: {total_processors}
+# Generated: Auto-migration from large NiFi XML
 
 import dlt
 from pyspark.sql.functions import *
