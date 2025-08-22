@@ -22,7 +22,7 @@ from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
 from langchain_core.tools import tool
 
-from config import logger
+from config import DATABRICKS_HOSTNAME, logger
 
 # Registry removed - generating fresh each time
 from utils import read_text as _read_text
@@ -897,12 +897,12 @@ def orchestrate_nifi_migration(
                 elif run_now and not run_id:
                     print(f"⚠️  [JOB CREATED] Job created but run trigger failed")
                     print(
-                        f"🔗 [MANUAL RUN] Start manually: https://databricks.com/#job/{job_id}"
+                        f"🔗 [MANUAL RUN] Start manually: {DATABRICKS_HOSTNAME}/#job/{job_id}"
                     )
                 else:
                     print(f"🎯 [JOB READY] Job ready for manual execution")
                     print(
-                        f"🔗 [RUN MANUALLY] Start job: https://databricks.com/#job/{job_id}"
+                        f"🔗 [RUN MANUALLY] Start job: {DATABRICKS_HOSTNAME}/#job/{job_id}"
                     )
 
                 deployment_success = True
@@ -1336,12 +1336,12 @@ def orchestrate_databricks_job_migration(
                     elif run_now and not run_id:
                         print(f"⚠️  [JOB CREATED] Job created but run trigger failed")
                         print(
-                            f"🔗 [MANUAL RUN] Start manually: https://databricks.com/#job/{job_id}"
+                            f"🔗 [MANUAL RUN] Start manually: {DATABRICKS_HOSTNAME}/#job/{job_id}"
                         )
                     else:
                         print(f"🎯 [JOB READY] Job ready for manual execution")
                         print(
-                            f"🔗 [RUN MANUALLY] Start job: https://databricks.com/#job/{job_id}"
+                            f"🔗 [RUN MANUALLY] Start job: {DATABRICKS_HOSTNAME}/#job/{job_id}"
                         )
 
                     deployment_success = True
