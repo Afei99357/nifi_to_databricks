@@ -1546,7 +1546,8 @@ def _analyze_nifi_requirements_internal(xml_content: str) -> dict:
 
         # Determine complexity level
         complexity_factors = [
-            feature_flags["has_streaming"] and feature_flags["has_batch"],
+            feature_flags["has_streaming_sources"]
+            and feature_flags["has_batch_sources"],
             feature_flags["has_routing"],
             feature_flags["has_json_processing"],
             len(processor_analysis["sinks"]) > 2,

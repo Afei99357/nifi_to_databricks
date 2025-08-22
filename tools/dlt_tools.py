@@ -393,7 +393,7 @@ def generate_dlt_pipeline_from_nifi(
     xml_content: str,
     project_name: str,
     catalog: str = "main",
-    schema: str = "default",
+    schema_name: str = "default",
     notebook_path: str = "/Workspace/Users/me@company.com/dlt_pipeline",
 ) -> str:
     """
@@ -406,7 +406,7 @@ def generate_dlt_pipeline_from_nifi(
         xml_content: NiFi XML template content
         project_name: Project name for generated assets
         catalog: Unity Catalog name
-        schema: Schema name within catalog
+        schema_name: Schema name within catalog
         notebook_path: Path where DLT notebook will be created
 
     Returns:
@@ -444,7 +444,7 @@ def generate_dlt_pipeline_from_nifi(
         pipeline_config = {
             "name": f"{project_name}_dlt_pipeline",
             "storage": f"/pipelines/{project_name}_dlt_pipeline",
-            "target": f"{catalog}.{schema}",
+            "target": f"{catalog}.{schema_name}",
             "development": True,
             "continuous": True,
             "libraries": [{"notebook": {"path": notebook_path}}],
@@ -476,7 +476,7 @@ def generate_chunked_dlt_pipeline_from_nifi(
     project_name: str,
     max_processors_per_chunk: int = 25,
     catalog: str = "main",
-    schema: str = "default",
+    schema_name: str = "default",
     notebook_path: str = "/Workspace/Users/me@company.com/dlt_pipeline",
 ) -> str:
     """
@@ -493,7 +493,7 @@ def generate_chunked_dlt_pipeline_from_nifi(
         project_name: Project name for generated assets
         max_processors_per_chunk: Maximum processors per chunk
         catalog: Unity Catalog name
-        schema: Schema name within catalog
+        schema_name: Schema name within catalog
         notebook_path: Path where DLT notebook will be created
 
     Returns:
@@ -566,7 +566,7 @@ def generate_chunked_dlt_pipeline_from_nifi(
         pipeline_config = {
             "name": f"{project_name}_dlt_pipeline",
             "storage": f"/pipelines/{project_name}_dlt_pipeline",
-            "target": f"{catalog}.{schema}",
+            "target": f"{catalog}.{schema_name}",
             "development": True,
             "continuous": True,
             "libraries": [{"notebook": {"path": notebook_path}}],
