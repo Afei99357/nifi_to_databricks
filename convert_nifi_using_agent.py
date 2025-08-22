@@ -123,7 +123,7 @@ req = ResponsesAgentRequest(
     ]
 )
 
-# resp = AGENT.predict(req)
+resp = AGENT.predict(req)
 
 # for item in resp.output:
 #     if item.type == "message":
