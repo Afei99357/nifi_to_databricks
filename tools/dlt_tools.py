@@ -153,49 +153,100 @@ from pyspark.sql.types import *
                 .replace(" ", "_")
             )
 
+            # Handle entry points (processors with no upstream connections)
+            is_entry_point = not upstream_processor_ids
+
             if class_name in streaming_sources:
-                sql_sections.append(
-                    _generate_streaming_source_sql(table_name, class_name, properties)
-                )
+                if is_entry_point:
+                    # Entry point streaming sources are bronze tables
+                    sql_sections.append(
+                        _generate_streaming_source_sql(
+                            table_name, class_name, properties
+                        )
+                    )
+                else:
+                    # Streaming source with upstream - treat as transform
+                    upstream_id = upstream_processor_ids[0]
+                    upstream_table = processor_id_to_table.get(
+                        upstream_id, f"{project_name}_unknown_source"
+                    )
+                    sql_sections.append(
+                        _generate_transform_sql(
+                            table_name, class_name, properties, upstream_table
+                        )
+                    )
             elif class_name in batch_sources:
-                sql_sections.append(
-                    _generate_batch_source_sql(table_name, class_name, properties)
-                )
+                if is_entry_point:
+                    # Entry point batch sources are bronze tables
+                    sql_sections.append(
+                        _generate_batch_source_sql(table_name, class_name, properties)
+                    )
+                else:
+                    # Batch source with upstream - treat as transform
+                    upstream_id = upstream_processor_ids[0]
+                    upstream_table = processor_id_to_table.get(
+                        upstream_id, f"{project_name}_unknown_source"
+                    )
+                    sql_sections.append(
+                        _generate_transform_sql(
+                            table_name, class_name, properties, upstream_table
+                        )
+                    )
             elif class_name in transform_processors:
-                # Find upstream table from actual connections
-                upstream_table = None
+                # Transformations always need upstream tables
                 if upstream_processor_ids:
-                    # Use first upstream processor as source
                     upstream_id = upstream_processor_ids[0]
                     upstream_table = processor_id_to_table.get(
                         upstream_id, f"{project_name}_unknown_source"
                     )
                 else:
-                    # No upstream processors - might be an entry point
+                    # Transform without upstream - create dummy bronze reference
                     upstream_table = f"{project_name}_bronze"
+
                 sql_sections.append(
                     _generate_transform_sql(
                         table_name, class_name, properties, upstream_table
                     )
                 )
             else:
-                # Generic processor
-                upstream_table = None
+                # Generic processor (sinks like PutHDFS)
                 if upstream_processor_ids:
-                    # Use first upstream processor as source
                     upstream_id = upstream_processor_ids[0]
                     upstream_table = processor_id_to_table.get(
                         upstream_id, f"{project_name}_unknown_source"
                     )
-                else:
-                    # No upstream processors - might be an entry point
-                    upstream_table = f"{project_name}_bronze"
 
-                sql_sections.append(
-                    _generate_generic_sql(
-                        table_name, class_name, properties, upstream_table
+                    # Special handling for processors downstream of RouteOnAttribute
+                    if class_name == "PutHDFS":
+                        # Generate filtered sink based on route condition
+                        route_name = (
+                            proc_name.lower().split("_")[-1]
+                            if "_" in proc_name
+                            else "default"
+                        )
+                        sql_sections.append(
+                            _generate_filtered_sink_sql(
+                                table_name,
+                                class_name,
+                                properties,
+                                upstream_table,
+                                route_name,
+                            )
+                        )
+                    else:
+                        sql_sections.append(
+                            _generate_generic_sql(
+                                table_name, class_name, properties, upstream_table
+                            )
+                        )
+                else:
+                    # Generic processor without upstream - create dummy bronze reference
+                    upstream_table = f"{project_name}_bronze"
+                    sql_sections.append(
+                        _generate_generic_sql(
+                            table_name, class_name, properties, upstream_table
+                        )
                     )
-                )
 
         return "\n\n".join(sql_sections)
 
@@ -335,27 +386,42 @@ def _generate_transform_sql(
 def {table_name}():
     return (
         dlt.read_stream("{upstream_table}")
-        .select({", ".join(select_exprs)})
+        .select({", ".join(f'"{expr}"' if expr == "*" else expr for expr in select_exprs)})
     )"""
 
     elif processor_type == "RouteOnAttribute":
-        # Create branching logic - simplified to single route for demo
-        route_conditions = [
-            f"{k}: {v}"
+        # Extract route conditions from properties
+        route_conditions = {
+            k: v
             for k, v in properties.items()
-            if not k.startswith("Routing Strategy")
-        ]
+            if not k.startswith("Routing Strategy") and not k.startswith("Store State")
+        }
+
+        # Generate routing logic with when/otherwise chain
+        route_logic_lines = []
+        route_names = list(route_conditions.keys())
+
+        if route_names:
+            # Build when/otherwise chain for routing
+            when_chain = f'when(col("log_level") == "{route_names[0].upper()}", lit("{route_names[0]}"))'
+            for route_name in route_names[1:]:
+                when_chain += f'.when(col("log_level") == "{route_name.upper()}", lit("{route_name}"))'
+            when_chain += '.otherwise(lit("other"))'
+        else:
+            when_chain = 'lit("default")'
 
         return f"""@dlt.table(
     name="{table_name}",
     comment="Routing logic from NiFi {processor_type}"
 )
 def {table_name}():
-    # Route conditions: {', '.join(route_conditions)}
+    # Route conditions: {', '.join([f'{k}: {v}' for k, v in route_conditions.items()])}
     return (
         dlt.read_stream("{upstream_table}")
-        .filter(col("some_field").isNotNull())  # Add specific routing logic here
-        .select("*", lit("matched_route").alias("route_result"))
+        .select(
+            "*",
+            {when_chain}.alias("route_result")
+        )
     )"""
 
     elif processor_type == "UpdateAttribute":
@@ -375,7 +441,7 @@ def {table_name}():
 def {table_name}():
     return (
         dlt.read_stream("{upstream_table}")
-        .select({", ".join(attr_exprs)})
+        .select({", ".join(f'"{expr}"' if expr == "*" else expr for expr in attr_exprs)})
     )"""
 
     else:
@@ -387,6 +453,31 @@ def {table_name}():
     return (
         dlt.read_stream("{upstream_table}")
         .select("*")  # Add transformation logic here
+    )"""
+
+
+def _generate_filtered_sink_sql(
+    table_name: str,
+    processor_type: str,
+    properties: Dict[str, Any],
+    upstream_table: str,
+    route_name: str,
+) -> str:
+    """Generate DLT SQL for sink processors that filter based on routing."""
+
+    directory = properties.get("Directory", "/path/to/output")
+
+    return f"""@dlt.table(
+    name="{table_name}",
+    comment="Filtered sink for {route_name} route from NiFi {processor_type}"
+)
+def {table_name}():
+    # Output directory: {directory}
+    # Filter condition: route_result == "{route_name}"
+    return (
+        dlt.read_stream("{upstream_table}")
+        .filter(col("route_result") == "{route_name}")
+        .select("*", current_timestamp().alias("processed_at"))
     )"""
 
 
