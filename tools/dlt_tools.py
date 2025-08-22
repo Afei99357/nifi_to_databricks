@@ -549,7 +549,7 @@ def generate_dlt_pipeline_from_nifi(
         # Extract processor IDs and build connection mapping
         processor_id_to_name = {}
         for processor in root.findall(".//processors"):
-            proc_id = processor.get("id", "")
+            proc_id = processor.findtext("id", "")  # Use findtext instead of get
             proc_name = (processor.findtext("name") or "Unknown").strip()
             proc_type = (processor.findtext("type") or "Unknown").strip()
 
@@ -577,11 +577,15 @@ def generate_dlt_pipeline_from_nifi(
         # Build connection mapping
         processor_by_id = {p["id"]: p for p in processors}
         for connection in root.findall(".//connections"):
-            source_id = connection.get("sourceId", "")
-            dest_id = connection.get("destinationId", "")
+            # Extract source and destination IDs from child elements
+            source_node = connection.find("source")
+            dest_node = connection.find("destination")
 
-            if dest_id in processor_by_id:
-                if source_id in processor_by_id:
+            if source_node is not None and dest_node is not None:
+                source_id = source_node.findtext("id", "")
+                dest_id = dest_node.findtext("id", "")
+
+                if dest_id in processor_by_id and source_id in processor_by_id:
                     processor_by_id[dest_id]["upstream_processors"].append(source_id)
 
         # Generate DLT SQL content
