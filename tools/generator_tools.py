@@ -52,6 +52,153 @@ def _get_context_aware_input_dataframe(
     return "df"
 
 
+def _get_intermediate_table_name(processor_class: str, context: Dict[str, Any]) -> str:
+    """
+    Generate intermediate Delta table name for passing data between job tasks.
+    """
+    processor_name = context.get("processor_name", processor_class).lower()
+    processor_index = context.get("processor_index", 0)
+    project = context.get("project", "migration")
+    chunk_id = context.get("chunk_id", "chunk_0")
+
+    # Clean names for table naming
+    safe_name = processor_name.replace(" ", "_").replace("-", "_")[:15]
+    safe_project = project.replace(" ", "_").replace("-", "_")[:15]
+
+    return f"temp_{safe_project}_{chunk_id}_{processor_index:02d}_{safe_name}"
+
+
+def _generate_data_passing_strategy(
+    processor_class: str, context: Dict[str, Any]
+) -> Dict[str, str]:
+    """
+    Use LLM to analyze workflow context and generate appropriate data passing strategy.
+    Returns data passing code snippets and TODO comments for this specific workflow.
+    """
+    try:
+        import os
+
+        from databricks_langchain import ChatDatabricks
+
+        model_endpoint = os.environ.get(
+            "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
+        )
+        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.1)
+
+        previous_processors = context.get("previous_processors", [])
+        processor_index = context.get("processor_index", 0)
+
+        # Create workflow context summary for LLM
+        workflow_summary = {
+            "current_processor": {"type": processor_class, "index": processor_index},
+            "previous_processors": [
+                {"type": p.get("type", ""), "name": p.get("name", "")}
+                for p in previous_processors
+            ],
+            "total_processors": processor_index + 1,
+            "execution_context": "Databricks Jobs - each processor runs as separate Python task",
+        }
+
+        prompt = f"""You are a Databricks migration expert. Analyze this NiFi-to-Databricks workflow and generate data passing strategy.
+
+WORKFLOW CONTEXT:
+{json.dumps(workflow_summary, indent=2)}
+
+CHALLENGE: Each processor runs as a separate Databricks job task (separate Python process), so variables can't be passed directly.
+
+TASK: Generate specific data passing strategy for processor "{processor_class}" at index {processor_index}.
+
+Consider these approaches:
+1. **Intermediate Delta Tables**: Save/read via temp tables (good for most cases)
+2. **Unity Catalog Tables**: Use persistent catalog tables
+3. **Cloud Storage**: Save/read via Delta Lake files
+4. **Job Parameters**: Pass metadata/paths as job parameters
+5. **Streaming**: Use Delta Live Tables or Structured Streaming
+
+REQUIREMENTS:
+1. Analyze the specific processor types in this workflow
+2. Recommend the BEST data passing approach for this combination
+3. Generate code snippets with proper error handling
+4. Include TODO comments for manual configuration
+5. Consider data volume, real-time needs, and persistence requirements
+
+RESPONSE FORMAT (JSON):
+{{
+    "strategy": "brief description of chosen approach",
+    "input_code": "Python code to read data from previous processor (or null if source)",
+    "output_code": "Python code to save data for next processor (or null if sink)",
+    "todo_comments": ["List of TODO items for manual review"],
+    "reasoning": "Why this approach is best for this workflow"
+}}
+
+Generate the optimal data passing strategy:"""
+
+        response = llm.invoke(prompt)
+
+        # Parse LLM response
+        try:
+            import json
+
+            strategy = json.loads(response.content.strip())
+            return strategy
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails
+            return {
+                "strategy": "Intermediate Delta Tables (fallback)",
+                "input_code": (
+                    f"# Read from previous processor\ndf = spark.read.format('delta').table('temp_workflow_{processor_index-1:02d}')"
+                    if processor_index > 0
+                    else None
+                ),
+                "output_code": f"# Save for next processor\ndf.write.format('delta').mode('overwrite').saveAsTable('temp_workflow_{processor_index:02d}')",
+                "todo_comments": [
+                    "Review table names and permissions",
+                    "Consider data retention policies for temp tables",
+                    "Verify error handling and checkpointing",
+                ],
+                "reasoning": "LLM response parsing failed, using safe default approach",
+            }
+
+    except Exception as e:
+        # Complete fallback if LLM fails
+        return {
+            "strategy": "Basic Delta Tables (error fallback)",
+            "input_code": (
+                f"df = spark.read.format('delta').table('temp_{processor_index-1:02d}')"
+                if processor_index > 0
+                else None
+            ),
+            "output_code": f"df.write.format('delta').mode('overwrite').saveAsTable('temp_{processor_index:02d}')",
+            "todo_comments": [
+                f"LLM data passing analysis failed: {str(e)}",
+                "Manually implement appropriate data passing strategy",
+                "Consider: Delta tables, job parameters, or streaming approaches",
+            ],
+            "reasoning": "Error occurred during LLM analysis, using minimal fallback",
+        }
+
+
+def _get_previous_processor_table(context: Dict[str, Any]) -> str:
+    """
+    Get the intermediate table name from the previous processor in the workflow.
+    """
+    previous_processors = context.get("previous_processors", [])
+
+    if not previous_processors:
+        return None
+
+    # Find the most recent previous processor
+    prev_proc = previous_processors[-1]
+    prev_context = {
+        "processor_name": prev_proc.get("name", ""),
+        "processor_index": len(previous_processors) - 1,
+        "project": context.get("project", "migration"),
+        "chunk_id": context.get("chunk_id", "chunk_0"),
+    }
+
+    return _get_intermediate_table_name(prev_proc.get("type", "Unknown"), prev_context)
+
+
 def _get_context_aware_output_dataframe(
     processor_class: str, context: Dict[str, Any]
 ) -> str:
@@ -88,10 +235,13 @@ def _get_builtin_pattern(
     pattern = {}
     lc = processor_class.lower()
 
-    # Extract context-aware DataFrame names
+    # Extract context-aware DataFrame names and LLM-generated data passing strategy
     context = workflow_context or {}
     input_df = _get_context_aware_input_dataframe(processor_class, context)
     output_df = _get_context_aware_output_dataframe(processor_class, context)
+
+    # Get LLM-driven data passing strategy for this specific workflow
+    data_strategy = _generate_data_passing_strategy(processor_class, context)
 
     if "getfile" in lc or "listfile" in lc:
         pattern = {
@@ -104,12 +254,20 @@ def _get_builtin_pattern(
             ],
             "code_template": (
                 "from pyspark.sql.functions import *\n\n"
+                "# Read streaming data with Auto Loader\n"
                 "{output_dataframe} = (spark.readStream\n"
                 "      .format('cloudFiles')\n"
                 "      .option('cloudFiles.format', '{format}')\n"
                 "      .option('cloudFiles.inferColumnTypes', 'true')\n"
                 "      .option('cloudFiles.schemaEvolutionMode', 'addNewColumns')\n"
-                "      .load('{path}'))"
+                "      .load('{path}'))\n\n"
+                "# ===========================================\n"
+                "# LLM-GENERATED DATA PASSING STRATEGY: {data_strategy_name}\n"
+                "# Reasoning: {data_strategy_reasoning}\n"
+                "# ===========================================\n"
+                "{data_output_code}\n\n"
+                "# TODO: Manual Review Required\n"
+                "{data_todo_comments}"
             ),
         }
     elif "puthdfs" in lc or "putfile" in lc:
@@ -132,6 +290,11 @@ def _get_builtin_pattern(
                     "Set up proper permissions and governance",
                 ],
                 "code_template": (
+                    "# ===========================================\n"
+                    "# LLM-GENERATED DATA PASSING STRATEGY: {data_strategy_name}\n"
+                    "# Reasoning: {data_strategy_reasoning}\n"
+                    "# ===========================================\n\n"
+                    "{data_input_code}\n\n"
                     "# TODO: UPDATE TABLE REFERENCE - Converted from legacy HDFS path: {Directory}\n"
                     "# Original NiFi path: {Directory}\n"
                     "# Please update with your actual Unity Catalog table reference\n"
@@ -140,8 +303,12 @@ def _get_builtin_pattern(
                     "target_table = 'main.default.sensor_data'  # TODO: Replace with your actual catalog.schema.table\n\n"
                     "# Write to Unity Catalog Delta table\n"
                     "{input_dataframe}.write.format('delta').mode('append').saveAsTable(target_table)\n\n"
-                    "# Alternative: Write to specific location\n"
-                    "# {input_dataframe}.write.format('delta').mode('append').option('path', '/Volumes/catalog/schema/table/data').saveAsTable(target_table)"
+                    "# ===========================================\n"
+                    "# DATA PASSING - Save for next processor\n"
+                    "# ===========================================\n"
+                    "{data_output_code}\n\n"
+                    "# TODO: Manual Review Required\n"
+                    "{data_todo_comments}"
                 ),
             }
         else:
@@ -154,7 +321,13 @@ def _get_builtin_pattern(
                     "Compact small files (OPTIMIZE / auto-opt)",
                     "Consider Z-ORDER for skewed query patterns",
                 ],
-                "code_template": "{input_dataframe}.write.format('delta').mode('{mode}').save('{Directory}')",
+                "code_template": (
+                    "from pyspark.sql.functions import *\n\n"
+                    "# Read data from previous job task's intermediate table\n"
+                    "{input_dataframe} = spark.read.format('delta').table('{previous_table}')\n\n"
+                    "# Write to Delta Lake location\n"
+                    "{input_dataframe}.write.format('delta').mode('{mode}').save('{Directory}')"
+                ),
             }
     elif "routeonattribute" in lc:
         pattern = {
@@ -224,11 +397,26 @@ def _get_builtin_pattern(
     code = None
     if "code_template" in pattern:
         code = pattern["code_template"]
+        # Format TODO comments as Python comments
+        todo_comments = "\n".join(
+            [f"# TODO: {comment}" for comment in data_strategy.get("todo_comments", [])]
+        )
+
         injections = {
             "processor_class": processor_class,
             "properties": _format_properties_as_comments(properties or {}),
             "input_dataframe": input_df,
             "output_dataframe": output_df,
+            # LLM-generated data passing strategy
+            "data_strategy_name": data_strategy.get("strategy", "Unknown"),
+            "data_strategy_reasoning": data_strategy.get(
+                "reasoning", "No reasoning provided"
+            ),
+            "data_input_code": data_strategy.get("input_code")
+            or "# No input code needed (source processor)",
+            "data_output_code": data_strategy.get("output_code")
+            or "# No output code needed (sink processor)",
+            "data_todo_comments": todo_comments,
             **{k: v for k, v in (properties or {}).items()},
         }
         for k, v in injections.items():
