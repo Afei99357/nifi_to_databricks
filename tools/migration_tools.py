@@ -16,7 +16,7 @@ from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
 from langchain_core.tools import tool
 
-from config import logger
+from config import DATABRICKS_HOSTNAME, logger
 
 # Registry removed - generating fresh each time
 from utils import read_text as _read_text
@@ -392,6 +392,17 @@ def _default_notebook_path(project: str) -> str:
     base = f"/Users/{user}" if "@" in user else "/Shared"
     proj_name = _safe_name(project)
     return f"{base}/{proj_name}/main"
+
+
+def _get_job_url(job_id: str) -> str:
+    """Generate correct Databricks job URL using workspace hostname."""
+    if DATABRICKS_HOSTNAME:
+        # Remove trailing slash and ensure proper format
+        base_url = DATABRICKS_HOSTNAME.rstrip("/")
+        return f"{base_url}/#job/{job_id}"
+    else:
+        # Fallback to generic URL if hostname not configured
+        return f"https://databricks.com/#job/{job_id}"
 
 
 __all__ = [
@@ -880,14 +891,10 @@ def orchestrate_chunked_nifi_migration(
                             print(f"📊 [RESULTS] View output: {status['run_page_url']}")
                     elif run_now and not run_id:
                         print(f"⚠️  [JOB CREATED] Job created but run trigger failed")
-                        print(
-                            f"🔗 [MANUAL RUN] Start manually: https://databricks.com/#job/{job_id}"
-                        )
+                        print(f"🔗 [MANUAL RUN] Start manually: {_get_job_url(job_id)}")
                     else:
                         print(f"🎯 [JOB READY] Job ready for manual execution")
-                        print(
-                            f"🔗 [RUN MANUALLY] Start job: https://databricks.com/#job/{job_id}"
-                        )
+                        print(f"🔗 [RUN MANUALLY] Start job: {_get_job_url(job_id)}")
 
                     deployment_success = True
                     deployment_error = None
