@@ -687,6 +687,7 @@ def orchestrate_chunked_nifi_migration(
                 chunk_results_json=json.dumps(chunk_results),
                 cross_chunk_links_json=json.dumps(cross_chunk_links),
                 workflow_map_json=json.dumps(workflow_map_result),
+                base_notebook_path=notebook_path,
             )
         )
 

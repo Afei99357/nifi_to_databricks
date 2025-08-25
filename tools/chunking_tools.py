@@ -569,7 +569,10 @@ def chunk_large_process_group(
 
 @tool
 def reconstruct_full_workflow(
-    chunk_results_json: str, cross_chunk_links_json: str, workflow_map_json: str = None
+    chunk_results_json: str,
+    cross_chunk_links_json: str,
+    workflow_map_json: str = None,
+    base_notebook_path: str = "",
 ) -> str:
     """
     Reconstruct a complete Databricks workflow from individual chunk processing results.
@@ -578,6 +581,7 @@ def reconstruct_full_workflow(
         chunk_results_json: JSON string list of chunk result dicts
         cross_chunk_links_json: JSON string list describing cross-chunk links
         workflow_map_json: Optional JSON string with complete workflow map for connectivity
+        base_notebook_path: Base notebook path in Databricks workspace for computing task paths
 
     Returns:
         JSON with reconstructed workflow including task dependencies and orchestration
@@ -726,7 +730,7 @@ def reconstruct_full_workflow(
         }
 
         # Generate Databricks job configuration with proper task dependencies
-        job_config = _generate_multi_task_job_config(workflow)
+        job_config = _generate_multi_task_job_config(workflow, base_notebook_path)
         workflow["databricks_job_config"] = job_config
 
         return json.dumps(workflow, indent=2)
@@ -735,20 +739,32 @@ def reconstruct_full_workflow(
         return json.dumps({"error": f"Error reconstructing workflow: {str(e)}"})
 
 
-def _generate_multi_task_job_config(workflow: Dict[str, Any]) -> Dict[str, Any]:
+def _generate_multi_task_job_config(
+    workflow: Dict[str, Any], base_notebook_path: str = ""
+) -> Dict[str, Any]:
     """Generate Databricks multi-task job configuration from workflow."""
     tasks = []
 
-    for task in workflow["tasks"]:
+    for i, task in enumerate(workflow["tasks"]):
         task_name = task.get("name", task.get("id", "unknown"))
         dependencies = workflow["task_dependencies"].get(task_name, [])
+
+        # Compute correct notebook path based on file naming pattern: src/steps/{idx:02d}_{task_name}
+        if base_notebook_path:
+            # Remove .py extension and build correct path
+            notebook_path = (
+                f"{base_notebook_path.rstrip('/')}/src/steps/{i:02d}_{task_name}"
+            )
+        else:
+            # Fallback to task-provided path or default
+            notebook_path = task.get(
+                "notebook_path", f"/Workspace/generated_tasks/{task_name}"
+            )
 
         databricks_task = {
             "task_key": task_name,
             "notebook_task": {
-                "notebook_path": task.get(
-                    "notebook_path", "/Workspace/generated_tasks/" + task_name
-                ),
+                "notebook_path": notebook_path,
                 "source": "WORKSPACE",
             },
             "depends_on": (
