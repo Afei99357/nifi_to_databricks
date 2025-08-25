@@ -59,10 +59,72 @@ def _generate_batch_processor_code(
 ) -> List[Dict[str, Any]]:
     """
     Generate Databricks code for multiple processors in a single LLM call to reduce API requests.
+    Uses built-in patterns when available, only sends remaining processors to LLM.
     """
     try:
         print(
             f"🧠 [LLM BATCH] Generating code for {len(processors)} processors in {chunk_id}"
+        )
+
+        # Import the builtin pattern function
+        from tools.generator_tools import _get_builtin_pattern
+
+        # Separate processors into those with built-in patterns and those needing LLM generation
+        builtin_tasks = []
+        llm_needed_processors = []
+        processor_specs = []
+        processor_types = []
+
+        for idx, processor in enumerate(processors):
+            proc_type = processor.get("type", "Unknown")
+            proc_name = processor.get("name", f"processor_{idx}")
+            props = processor.get("properties", {})
+
+            # Check if there's a built-in pattern for this processor
+            pattern = _get_builtin_pattern(proc_type, props)
+
+            if pattern["code"]:  # Built-in pattern available
+                # Use built-in pattern with Unity Catalog conversion
+                class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
+                processor_types.append(f"{class_name} (built-in)")
+
+                task = {
+                    "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                    "name": _safe_name(proc_name),
+                    "type": proc_type,
+                    "code": pattern["code"],
+                    "properties": props,
+                    "chunk_id": chunk_id,
+                    "processor_index": idx,
+                }
+                builtin_tasks.append(task)
+            else:  # No built-in pattern, needs LLM generation
+                class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
+                processor_types.append(f"{class_name} (LLM)")
+
+                llm_needed_processors.append(processor)
+                processor_specs.append(
+                    {
+                        "index": idx,
+                        "type": proc_type,
+                        "name": proc_name,
+                        "properties": props,
+                        "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                    }
+                )
+
+        print(f"🔍 [LLM BATCH] Processor types: {', '.join(processor_types)}")
+
+        # If all processors have built-in patterns, return early
+        if not llm_needed_processors:
+            print(
+                f"✨ [LLM BATCH] All {len(processors)} processors used built-in patterns"
+            )
+            return builtin_tasks
+
+        # Continue with LLM generation for remaining processors
+        print(
+            f"🚀 [LLM BATCH] Sending {len(llm_needed_processors)} processors to LLM..."
         )
 
         # Get the model endpoint from environment
@@ -70,31 +132,6 @@ def _generate_batch_processor_code(
             "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
         )
         llm = ChatDatabricks(endpoint=model_endpoint)
-
-        # Prepare batch request for all processors
-        processor_specs = []
-        processor_types = []
-        for idx, processor in enumerate(processors):
-            proc_type = processor.get("type", "Unknown")
-            proc_name = processor.get("name", f"processor_{idx}")
-            props = processor.get("properties", {})
-
-            # Extract just the class name for display
-            class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
-            processor_types.append(class_name)
-
-            processor_specs.append(
-                {
-                    "index": idx,
-                    "type": proc_type,
-                    "name": proc_name,
-                    "properties": props,
-                    "id": processor.get("id", f"{chunk_id}_task_{idx}"),
-                }
-            )
-
-        print(f"🔍 [LLM BATCH] Processor types: {', '.join(processor_types)}")
-        print(f"🚀 [LLM BATCH] Sending batch request to {model_endpoint}...")
 
         # Create batched prompt for all processors
         batch_prompt = f"""You are a NiFi to Databricks migration expert. Generate PySpark code for multiple NiFi processors in a single response.
@@ -299,13 +336,17 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
         # Registry removed - generating fresh each time
 
+        # Combine built-in patterns with LLM-generated tasks
+        all_tasks = builtin_tasks + generated_tasks
+
         print(
-            f"✨ [LLM BATCH] Generated {len(generated_tasks)} processor tasks for {chunk_id}"
+            f"✨ [LLM BATCH] Generated {len(all_tasks)} processor tasks for {chunk_id} "
+            f"({len(builtin_tasks)} built-in, {len(generated_tasks)} LLM)"
         )
         logger.info(
-            f"Generated code for {len(generated_tasks)} processors in single LLM call"
+            f"Generated code for {len(all_tasks)} processors: {len(builtin_tasks)} built-in patterns, {len(generated_tasks)} LLM-generated"
         )
-        return generated_tasks
+        return all_tasks
 
     except Exception as e:
         logger.error(f"Batch code generation failed: {e}")
@@ -401,8 +442,16 @@ def _get_job_url(job_id: str) -> str:
         base_url = DATABRICKS_HOSTNAME.rstrip("/")
         return f"{base_url}/#job/{job_id}"
     else:
-        # Fallback to generic URL if hostname not configured
-        return f"https://databricks.com/#job/{job_id}"
+        # Try alternative environment variable names or debug
+        alt_hostname = os.environ.get("DATABRICKS_HOST")
+        if alt_hostname:
+            base_url = alt_hostname.rstrip("/")
+            return f"{base_url}/#job/{job_id}"
+        else:
+            # Log for debugging
+            print("⚠️  [DEBUG] DATABRICKS_HOSTNAME not found, using fallback URL")
+            # Fallback to generic URL if hostname not configured
+            return f"https://databricks.com/#job/{job_id}"
 
 
 __all__ = [
