@@ -695,6 +695,7 @@ def orchestrate_chunked_nifi_migration(
         # Step 2: Process each chunk individually
         chunk_results = []
         all_step_files = []
+        task_counter = 0  # Global task counter for consistent file naming
 
         print(
             f"📋 [MIGRATION] Processing {len(chunks)} chunks with {summary['total_processors']} total processors"
@@ -731,9 +732,10 @@ def orchestrate_chunked_nifi_migration(
                 code = task["code"]
                 # Unescape the code to convert \n to actual newlines, etc.
                 unescaped_code = _unescape_code(code)
-                step_path = out / f"src/steps/{i:02d}_{task_name}.py"
+                step_path = out / f"src/steps/{task_counter:02d}_{task_name}.py"
                 _write_text(step_path, unescaped_code)
                 all_step_files.append(str(step_path))
+                task_counter += 1  # Increment for next task
 
             # Save chunk processing result
             _write_text(
