@@ -22,6 +22,9 @@ dev = [
     "flake8>=7.0.0",
     "mypy>=1.8.0",
     "types-requests>=2.31.0",
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.1",
 ]
 
 [tool.mypy]
@@ -73,3 +76,29 @@ ignore_errors = true  # TODO: Fix dbutils import (Databricks-specific)
 [[tool.mypy.overrides]]
 module = "utils.xml_utils"
 ignore_errors = true  # TODO: Fix Collection indexing issue
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output options
+addopts = [
+    "-v",                    # verbose output
+    "--tb=short",           # shorter traceback format
+    "--strict-markers",     # treat unregistered markers as errors
+    "--disable-warnings",   # reduce noise in test output
+    "--color=yes",          # colored output
+]
+
+# Test markers
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# Minimum version
+minversion = "7.0"
