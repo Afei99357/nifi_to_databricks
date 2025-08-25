@@ -61,6 +61,61 @@ def _get_builtin_pattern(
             ],
             "code_template": "df.write.format('delta').mode('{mode}').save('{path}')",
         }
+    elif "routeonattribute" in lc:
+        pattern = {
+            "databricks_equivalent": "DataFrame Filter/When",
+            "description": "Route data based on conditions using DataFrame filters and when/otherwise clauses.",
+            "best_practices": [
+                "Use when().otherwise() for multiple routing conditions",
+                "Create separate outputs using filter() operations",
+                "Cache DataFrame if filtering multiple times for different routes",
+                "Use col() function for column references in conditions",
+            ],
+            "code_template": (
+                "from pyspark.sql.functions import col, when, otherwise\n\n"
+                "# Route data based on attribute conditions\n"
+                "# Example: Route based on status attribute\n"
+                "df_success = df.filter(col('status') == 'success')\n"
+                "df_failed = df.filter(col('status') == 'failed')\n"
+                "df_pending = df.filter(col('status') == 'pending')\n\n"
+                "# Or use when/otherwise for single column routing\n"
+                "df_routed = df.withColumn('route', \n"
+                "    when(col('status') == 'success', 'success_route')\n"
+                "    .when(col('status') == 'failed', 'failed_route')\n"
+                "    .otherwise('default_route')\n"
+                ")"
+            ),
+        }
+    elif "evaluatejsonpath" in lc:
+        pattern = {
+            "databricks_equivalent": "JSON Functions",
+            "description": "Extract values from JSON using get_json_object, json_tuple, or from_json functions.",
+            "best_practices": [
+                "Use get_json_object() for extracting single values",
+                "Use json_tuple() for extracting multiple values efficiently",
+                "Use from_json() with schema for complex JSON parsing",
+                "Handle null/missing paths gracefully with coalesce()",
+            ],
+            "code_template": (
+                "from pyspark.sql.functions import get_json_object, json_tuple, coalesce, lit, from_json\n"
+                "from pyspark.sql.types import StructType, StructField, StringType\n\n"
+                "# Extract single JSON value\n"
+                "df_with_host = df.withColumn('host', get_json_object(col('json_content'), '$.host'))\n\n"
+                "# Extract multiple JSON values efficiently\n"
+                "df_extracted = df.select('*', \n"
+                "    json_tuple(col('json_content'), 'host', 'level', 'message')\n"
+                "    .alias('host', 'level', 'message')\n"
+                ")\n\n"
+                "# For complex JSON with known schema\n"
+                "json_schema = StructType([\n"
+                "    StructField('host', StringType(), True),\n"
+                "    StructField('level', StringType(), True),\n"
+                "    StructField('message', StringType(), True)\n"
+                "])\n"
+                "df_parsed = df.withColumn('parsed_json', from_json(col('json_content'), json_schema))\n"
+                "df_final = df_parsed.select('*', 'parsed_json.*').drop('parsed_json')"
+            ),
+        }
     else:
         # No builtin pattern - return empty to trigger LLM generation
         return {
