@@ -306,6 +306,13 @@ try:
 except Exception:
     pass
 
+# Don't use bare except: pass - this is especially problematic
+try:
+    with open(file_path, 'r') as f:
+        content = f.read()
+except:
+    pass  # ❌ NEVER DO THIS - hides all errors including syntax errors
+
 # Don't wrap simple operations unnecessarily
 try:
     value = int(os.environ.get("VAR", "10"))
@@ -339,6 +346,14 @@ except ImportError:
 # Simple operations often don't need try-except
 value = int(os.environ.get("VAR", "10"))  # os.environ.get() already handles missing keys
 
+# Use specific exception types with meaningful handling
+try:
+    with open(file_path, 'r') as f:
+        content = f.read()
+except (IOError, OSError, UnicodeDecodeError):
+    # Skip files that can't be read, but don't fail the operation
+    continue
+
 # Use single-level exception handling with specific recovery
 try:
     result = complex_operation()
@@ -350,7 +365,9 @@ except (SpecificError, AnotherError) as e:
 **Guidelines:**
 - Only use try-except when you can meaningfully handle the exception
 - Use specific exception types rather than broad `Exception` catching
+- **NEVER use bare `except:` or `except: pass`** - this hides all errors including syntax errors
 - Log warnings/errors instead of silently ignoring with `pass`
 - Avoid deep nesting of try-except blocks
 - Simple operations like `os.environ.get()` or basic arithmetic rarely need exception handling
 - If you must catch `Exception`, log it and provide meaningful fallback behavior
+- When catching multiple exception types, group them: `except (IOError, OSError):`

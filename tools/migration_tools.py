@@ -993,8 +993,9 @@ def orchestrate_chunked_nifi_migration(
                     if "TODO: UPDATE TABLE REFERENCE" in content:
                         legacy_paths_found = True
                         break
-            except:
-                pass
+            except (IOError, OSError, UnicodeDecodeError):
+                # Skip files that can't be read, but don't fail the migration
+                continue
 
         if legacy_paths_found:
             print("⚠️  [MIGRATION WARNING] Legacy HDFS paths detected and converted!")
