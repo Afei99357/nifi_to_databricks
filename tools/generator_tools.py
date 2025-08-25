@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from datetime import datetime
 from typing import Any, Dict
 
 from databricks_langchain import ChatDatabricks
@@ -574,7 +575,7 @@ def get_migration_pattern(nifi_component: str, properties: str = "{}") -> str:
         except Exception:
             properties = {}
 
-    rendered = _render_pattern(nifi_component, properties)
+    rendered = _get_builtin_pattern(nifi_component, properties)
     if rendered["equivalent"] != "Unknown":
         out = [
             f"**Migration Pattern: {nifi_component} → {rendered['equivalent']}**",

@@ -314,8 +314,6 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
         # Build tasks from the batch response
         generated_tasks = []
-        # Collect patterns for bulk save
-        bulk_patterns: Dict[str, dict] = {}
         for spec in processor_specs:
             idx = spec["index"]
             code = generated_code_map.get(
@@ -340,8 +338,6 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                 "generated_from_properties": spec["properties"],
                 "generation_source": "llm_hybrid_approach",
             }
-            bulk_patterns[processor_class] = pattern_obj
-
             # Registry removed - no pattern buffering
 
             task = {
