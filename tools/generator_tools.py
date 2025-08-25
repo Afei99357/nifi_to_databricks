@@ -21,8 +21,64 @@ __all__ = [
 ]
 
 
+def _get_context_aware_input_dataframe(
+    processor_class: str, context: Dict[str, Any]
+) -> str:
+    """
+    Generate context-aware input DataFrame name based on previous processors in workflow.
+    """
+    previous_processors = context.get("previous_processors", [])
+    processor_index = context.get("processor_index", 0)
+
+    if not previous_processors:
+        # No previous processors, this is a source processor
+        return "df"
+
+    # Find the most recent previous processor that would output data
+    for prev_proc in reversed(previous_processors):
+        prev_type = prev_proc.get("type", "").lower()
+        prev_name = prev_proc.get("name", "").lower()
+
+        # Source processors create DataFrames
+        if any(
+            src in prev_type
+            for src in ["getfile", "listfile", "consumekafka", "executesql"]
+        ):
+            safe_name = prev_name.replace(" ", "_").replace("-", "_")[:20]
+            return f"df_{safe_name}"
+
+    # Fallback: use generic df name
+    return "df"
+
+
+def _get_context_aware_output_dataframe(
+    processor_class: str, context: Dict[str, Any]
+) -> str:
+    """
+    Generate context-aware output DataFrame name for this processor.
+    """
+    processor_name = context.get("processor_name", processor_class).lower()
+    processor_index = context.get("processor_index", 0)
+
+    # Clean the processor name
+    safe_name = processor_name.replace(" ", "_").replace("-", "_")[:20]
+
+    # For source processors, use descriptive names
+    if any(src in processor_class.lower() for src in ["getfile", "listfile"]):
+        return f"df_{safe_name}"
+    elif "consumekafka" in processor_class.lower():
+        return f"df_kafka_{safe_name}"
+    elif "executesql" in processor_class.lower():
+        return f"df_sql_{safe_name}"
+    else:
+        # For processing processors, use the processor type
+        return f"df_{processor_class.lower()[:10]}"
+
+
 def _get_builtin_pattern(
-    processor_class: str, properties: Dict[str, Any]
+    processor_class: str,
+    properties: Dict[str, Any],
+    workflow_context: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """
     Get hardcoded migration patterns for common NiFi processors.
@@ -30,6 +86,11 @@ def _get_builtin_pattern(
     """
     pattern = {}
     lc = processor_class.lower()
+
+    # Extract context-aware DataFrame names
+    context = workflow_context or {}
+    input_df = _get_context_aware_input_dataframe(processor_class, context)
+    output_df = _get_context_aware_output_dataframe(processor_class, context)
 
     if "getfile" in lc or "listfile" in lc:
         pattern = {
@@ -41,8 +102,8 @@ def _get_builtin_pattern(
                 "Use cleanSource after successful processing",
             ],
             "code_template": (
-                "from pyspark.sql.functions import *\n"
-                "df = (spark.readStream\n"
+                "from pyspark.sql.functions import *\n\n"
+                "{output_dataframe} = (spark.readStream\n"
                 "      .format('cloudFiles')\n"
                 "      .option('cloudFiles.format', '{format}')\n"
                 "      .option('cloudFiles.inferColumnTypes', 'true')\n"
@@ -77,9 +138,9 @@ def _get_builtin_pattern(
                     "# MANUAL REVIEW REQUIRED: Update the table name below\n"
                     "target_table = 'main.default.sensor_data'  # TODO: Replace with your actual catalog.schema.table\n\n"
                     "# Write to Unity Catalog Delta table\n"
-                    "df.write.format('delta').mode('append').saveAsTable(target_table)\n\n"
+                    "{input_dataframe}.write.format('delta').mode('append').saveAsTable(target_table)\n\n"
                     "# Alternative: Write to specific location\n"
-                    "# df.write.format('delta').mode('append').option('path', '/Volumes/catalog/schema/table/data').saveAsTable(target_table)"
+                    "# {input_dataframe}.write.format('delta').mode('append').option('path', '/Volumes/catalog/schema/table/data').saveAsTable(target_table)"
                 ),
             }
         else:
@@ -92,7 +153,7 @@ def _get_builtin_pattern(
                     "Compact small files (OPTIMIZE / auto-opt)",
                     "Consider Z-ORDER for skewed query patterns",
                 ],
-                "code_template": "df.write.format('delta').mode('{mode}').save('{Directory}')",
+                "code_template": "{input_dataframe}.write.format('delta').mode('{mode}').save('{Directory}')",
             }
     elif "routeonattribute" in lc:
         pattern = {
@@ -108,11 +169,11 @@ def _get_builtin_pattern(
                 "from pyspark.sql.functions import col, when, otherwise\n\n"
                 "# Route data based on attribute conditions\n"
                 "# Example: Route based on status attribute\n"
-                "df_success = df.filter(col('status') == 'success')\n"
-                "df_failed = df.filter(col('status') == 'failed')\n"
-                "df_pending = df.filter(col('status') == 'pending')\n\n"
+                "{output_dataframe}_success = {input_dataframe}.filter(col('status') == 'success')\n"
+                "{output_dataframe}_failed = {input_dataframe}.filter(col('status') == 'failed')\n"
+                "{output_dataframe}_pending = {input_dataframe}.filter(col('status') == 'pending')\n\n"
                 "# Or use when/otherwise for single column routing\n"
-                "df_routed = df.withColumn('route', \n"
+                "{output_dataframe} = {input_dataframe}.withColumn('route', \n"
                 "    when(col('status') == 'success', 'success_route')\n"
                 "    .when(col('status') == 'failed', 'failed_route')\n"
                 "    .otherwise('default_route')\n"
@@ -133,9 +194,9 @@ def _get_builtin_pattern(
                 "from pyspark.sql.functions import get_json_object, json_tuple, coalesce, lit, from_json\n"
                 "from pyspark.sql.types import StructType, StructField, StringType\n\n"
                 "# Extract single JSON value\n"
-                "df_with_host = df.withColumn('host', get_json_object(col('json_content'), '$.host'))\n\n"
+                "df_with_host = {input_dataframe}.withColumn('host', get_json_object(col('json_content'), '$.host'))\n\n"
                 "# Extract multiple JSON values efficiently\n"
-                "df_extracted = df.select('*', \n"
+                "{output_dataframe}_extracted = {input_dataframe}.select('*', \n"
                 "    json_tuple(col('json_content'), 'host', 'level', 'message')\n"
                 "    .alias('host', 'level', 'message')\n"
                 ")\n\n"
@@ -145,8 +206,8 @@ def _get_builtin_pattern(
                 "    StructField('level', StringType(), True),\n"
                 "    StructField('message', StringType(), True)\n"
                 "])\n"
-                "df_parsed = df.withColumn('parsed_json', from_json(col('json_content'), json_schema))\n"
-                "df_final = df_parsed.select('*', 'parsed_json.*').drop('parsed_json')"
+                "df_parsed = {input_dataframe}.withColumn('parsed_json', from_json(col('json_content'), json_schema))\n"
+                "{output_dataframe} = df_parsed.select('*', 'parsed_json.*').drop('parsed_json')"
             ),
         }
     else:
@@ -165,6 +226,8 @@ def _get_builtin_pattern(
         injections = {
             "processor_class": processor_class,
             "properties": _format_properties_as_comments(properties or {}),
+            "input_dataframe": input_df,
+            "output_dataframe": output_df,
             **{k: v for k, v in (properties or {}).items()},
         }
         for k, v in injections.items():
@@ -180,7 +243,10 @@ def _get_builtin_pattern(
 
 @tool
 def generate_databricks_code(
-    processor_type: str, properties: str = "{}", force_regenerate: bool = False
+    processor_type: str,
+    properties: str = "{}",
+    force_regenerate: bool = False,
+    workflow_context: str = "{}",
 ) -> str:
     """
     Generate equivalent Databricks/PySpark code for a NiFi processor type.
@@ -190,12 +256,21 @@ def generate_databricks_code(
         processor_type: NiFi processor class name
         properties: JSON string of processor properties
         force_regenerate: If True, skip builtin patterns and force LLM generation
+        workflow_context: JSON string containing workflow context (previous processors, data flow)
     """
     if isinstance(properties, str):
         try:
             properties = json.loads(properties)
         except Exception:
             properties = {}
+
+    # Parse workflow context
+    context = {}
+    if isinstance(workflow_context, str):
+        try:
+            context = json.loads(workflow_context)
+        except Exception:
+            context = {}
 
     processor_class = (
         processor_type.split(".")[-1] if "." in processor_type else processor_type
@@ -205,8 +280,8 @@ def generate_databricks_code(
     if force_regenerate:
         return _generate_with_llm(processor_class, properties)
 
-    # Check for builtin patterns first
-    rendered = _get_builtin_pattern(processor_class, properties)
+    # Check for builtin patterns first with workflow context
+    rendered = _get_builtin_pattern(processor_class, properties, context)
 
     if rendered["code"]:
         code = f"# {processor_class} → {rendered['equivalent']}\n"

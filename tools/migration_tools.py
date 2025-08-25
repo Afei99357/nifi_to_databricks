@@ -80,8 +80,19 @@ def _generate_batch_processor_code(
             proc_name = processor.get("name", f"processor_{idx}")
             props = processor.get("properties", {})
 
+            # Build workflow context for this processor
+            workflow_context = {
+                "processor_index": idx,
+                "processor_name": proc_name,
+                "previous_processors": processors[
+                    :idx
+                ],  # All processors before this one
+                "chunk_id": chunk_id,
+                "project": project,
+            }
+
             # Check if there's a built-in pattern for this processor
-            pattern = _get_builtin_pattern(proc_type, props)
+            pattern = _get_builtin_pattern(proc_type, props, workflow_context)
 
             if pattern["code"]:  # Built-in pattern available
                 # Use built-in pattern with Unity Catalog conversion
@@ -110,6 +121,7 @@ def _generate_batch_processor_code(
                         "name": proc_name,
                         "properties": props,
                         "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                        "workflow_context": workflow_context,
                     }
                 )
 
@@ -151,6 +163,10 @@ REQUIREMENTS:
 7. For PutFile/PutHDFS: use Delta Lake writes
 8. For ConsumeKafka: use Structured Streaming
 9. For JSON processors: use PySpark JSON functions
+10. CONTEXT-AWARE DATAFRAMES: Use the workflow_context to determine proper DataFrame variable names:
+    - For source processors (GetFile, ListFile, ConsumeKafka): Create df_[processor_name] as output
+    - For processing processors: Read from previous processor's output DataFrame
+    - Never use undefined 'df' variable - always reference the actual DataFrame from previous steps
 
 CRITICAL JSON FORMATTING RULES:
 - Return ONLY the JSON object, no markdown, no explanations
@@ -186,6 +202,11 @@ REQUIREMENTS:
 5. For PutFile/PutHDFS: use Delta Lake writes
 6. For ConsumeKafka: use Structured Streaming
 7. For JSON processors: use PySpark JSON functions
+8. CRITICAL - CONTEXT-AWARE DATAFRAMES:
+   - Check workflow_context.previous_processors to understand data flow
+   - For source processors: Create df_[clean_processor_name] as output
+   - For processing processors: Use previous processor's DataFrame as input
+   - NEVER use undefined 'df' - always create or reference specific DataFrame variables
 
 CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
 
