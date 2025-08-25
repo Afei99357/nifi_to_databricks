@@ -763,9 +763,8 @@ def _generate_multi_task_job_config(
 
         databricks_task = {
             "task_key": task_name,
-            "notebook_task": {
-                "notebook_path": notebook_path,
-                "source": "WORKSPACE",
+            "spark_python_task": {
+                "python_file": f"{notebook_path}.py",
             },
             "depends_on": (
                 [{"task_key": dep} for dep in dependencies] if dependencies else []
@@ -773,7 +772,9 @@ def _generate_multi_task_job_config(
         }
 
         # Add cluster configuration if specified in task
-        if task.get("cluster_config"):
+        if task.get("existing_cluster_id"):
+            databricks_task["existing_cluster_id"] = task["existing_cluster_id"]
+        elif task.get("cluster_config"):
             databricks_task["new_cluster"] = task["cluster_config"]
 
         tasks.append(databricks_task)
