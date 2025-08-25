@@ -51,16 +51,49 @@ def _get_builtin_pattern(
             ),
         }
     elif "puthdfs" in lc or "putfile" in lc:
-        pattern = {
-            "databricks_equivalent": "Delta Lake",
-            "description": "Transactional storage in Delta.",
-            "best_practices": [
-                "Partition by frequently filtered columns when useful",
-                "Compact small files (OPTIMIZE / auto-opt)",
-                "Consider Z-ORDER for skewed query patterns",
-            ],
-            "code_template": "df.write.format('delta').mode('{mode}').save('{path}')",
-        }
+        # Check if path looks like legacy HDFS path
+        directory_path = properties.get("Directory", "")
+        is_legacy_path = any(
+            directory_path.startswith(prefix)
+            for prefix in ["/user/", "/hdfs/", "/tmp/", "/data/", "/var/"]
+        )
+
+        if is_legacy_path:
+            # Generate Unity Catalog format with TODO comments for legacy paths
+            pattern = {
+                "databricks_equivalent": "Unity Catalog Delta Table",
+                "description": "Transactional storage in Unity Catalog Delta Table (converted from legacy HDFS path).",
+                "best_practices": [
+                    "Use Unity Catalog three-part naming: catalog.schema.table",
+                    "Review and update table location to match your catalog structure",
+                    "Consider partitioning strategy for large tables",
+                    "Set up proper permissions and governance",
+                ],
+                "code_template": (
+                    "# TODO: UPDATE TABLE REFERENCE - Converted from legacy HDFS path: {Directory}\n"
+                    "# Original NiFi path: {Directory}\n"
+                    "# Please update with your actual Unity Catalog table reference\n"
+                    "# Example: 'catalog_name.schema_name.table_name'\n\n"
+                    "# MANUAL REVIEW REQUIRED: Update the table name below\n"
+                    "target_table = 'main.default.sensor_data'  # TODO: Replace with your actual catalog.schema.table\n\n"
+                    "# Write to Unity Catalog Delta table\n"
+                    "df.write.format('delta').mode('append').saveAsTable(target_table)\n\n"
+                    "# Alternative: Write to specific location\n"
+                    "# df.write.format('delta').mode('append').option('path', '/Volumes/catalog/schema/table/data').saveAsTable(target_table)"
+                ),
+            }
+        else:
+            # Use original template for non-legacy paths
+            pattern = {
+                "databricks_equivalent": "Delta Lake",
+                "description": "Transactional storage in Delta.",
+                "best_practices": [
+                    "Partition by frequently filtered columns when useful",
+                    "Compact small files (OPTIMIZE / auto-opt)",
+                    "Consider Z-ORDER for skewed query patterns",
+                ],
+                "code_template": "df.write.format('delta').mode('{mode}').save('{Directory}')",
+            }
     elif "routeonattribute" in lc:
         pattern = {
             "databricks_equivalent": "DataFrame Filter/When",

@@ -760,11 +760,20 @@ def orchestrate_chunked_nifi_migration(
             "- `jobs/job.chunked.json` final multi-task job configuration",
             "- `databricks.yml` Databricks Asset Bundle",
             "",
+            "## ⚠️  Important Migration Notes",
+            "**MANUAL REVIEW REQUIRED**: Legacy HDFS paths have been converted to Unity Catalog format.",
+            "- Check all `src/steps/*.py` files for TODO comments",
+            "- Update table references from legacy paths to `catalog.schema.table` format",
+            "- Verify your Unity Catalog permissions and table locations",
+            "- Example: `/user/nifi/data` → `main.default.your_table_name`",
+            "",
             "## Next steps",
-            "1. Review the chunked migration results in `conf/`",
-            "2. Test individual chunks if needed using files in `chunks/`",
-            "3. Deploy the final job using `jobs/job.chunked.json`",
-            "4. Monitor cross-chunk dependencies for correct execution order",
+            "1. **CRITICAL**: Review TODO comments in generated Python files",
+            "2. Update Unity Catalog table references in `src/steps/*.py`",
+            "3. Review the chunked migration results in `conf/`",
+            "4. Test individual chunks if needed using files in `chunks/`",
+            "5. Deploy the final job using `jobs/job.chunked.json`",
+            "6. Monitor cross-chunk dependencies for correct execution order",
         ]
         _write_text(out / "README.md", "\n".join(readme))
 
@@ -918,6 +927,28 @@ def orchestrate_chunked_nifi_migration(
         )
         print(f"📊 [SUMMARY] Generated {len(all_step_files)} step files")
         print(f"📊 [SUMMARY] Output directory: {out}")
+
+        # Check for legacy HDFS path conversions and warn user
+        legacy_paths_found = False
+        for step_file in all_step_files:
+            try:
+                with open(step_file, "r") as f:
+                    content = f.read()
+                    if "TODO: UPDATE TABLE REFERENCE" in content:
+                        legacy_paths_found = True
+                        break
+            except:
+                pass
+
+        if legacy_paths_found:
+            print("⚠️  [MIGRATION WARNING] Legacy HDFS paths detected and converted!")
+            print(
+                "⚠️  [ACTION REQUIRED] Review generated Python files for TODO comments"
+            )
+            print(
+                "⚠️  [ACTION REQUIRED] Update table references to Unity Catalog format"
+            )
+            print("⚠️  [EXAMPLE] /user/nifi/data → main.default.your_table_name")
 
         if deployment_error:
             print(f"❌ [DEPLOY ERROR] {deployment_error}")
