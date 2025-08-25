@@ -751,10 +751,11 @@ def _generate_multi_task_job_config(
 
         # Compute correct notebook path based on file naming pattern: src/steps/{idx:02d}_{task_name}
         if base_notebook_path:
-            # Remove .py extension and build correct path
-            notebook_path = (
-                f"{base_notebook_path.rstrip('/')}/src/steps/{i:02d}_{task_name}"
-            )
+            # Remove trailing slash and /main suffix to get project directory
+            project_path = base_notebook_path.rstrip("/")
+            if project_path.endswith("/main"):
+                project_path = project_path[:-5]  # Remove '/main' suffix
+            notebook_path = f"{project_path}/src/steps/{i:02d}_{task_name}"
         else:
             # Fallback to task-provided path or default
             notebook_path = task.get(
