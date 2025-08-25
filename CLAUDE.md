@@ -363,11 +363,13 @@ except (SpecificError, AnotherError) as e:
 ```
 
 **Guidelines:**
-- Only use try-except when you can meaningfully handle the exception
+- **Only use try-except when you can meaningfully handle the exception**
+- **Avoid unnecessary try-except blocks** - if you control the inputs and expect success, don't wrap it
 - Use specific exception types rather than broad `Exception` catching
 - **NEVER use bare `except:` or `except: pass`** - this hides all errors including syntax errors
 - Log warnings/errors instead of silently ignoring with `pass`
 - Avoid deep nesting of try-except blocks
 - Simple operations like `os.environ.get()` or basic arithmetic rarely need exception handling
+- File operations on files you just created rarely need exception handling
 - If you must catch `Exception`, log it and provide meaningful fallback behavior
 - When catching multiple exception types, group them: `except (IOError, OSError):`
