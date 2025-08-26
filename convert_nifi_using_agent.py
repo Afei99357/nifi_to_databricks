@@ -49,7 +49,7 @@ print("✅ Simple workflow analysis complete!")
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Use utility functions to handle the response
+# Import utility functions once at the top
 from utils.response_utils import display_agent_response, save_agent_response_to_json
 
 # Save response to JSON file
@@ -66,8 +66,6 @@ print("=" * 60)
 # MAGIC ### 🚀 Step 2: Intelligent Migration of Simple Workflow
 
 # COMMAND ----------
-
-from datetime import datetime
 
 from mlflow.types.responses import ResponsesAgentRequest
 
@@ -102,8 +100,7 @@ print("✅ Intelligent migration complete!")
 print("\n📋 SIMPLE MIGRATION RESULTS:")
 print("=" * 60)
 
-# Use utility functions to handle the response
-from utils.response_utils import display_agent_response, save_agent_response_to_json
+# Use utility functions (already imported above)
 
 # Save migration response to JSON
 # json_file = save_agent_response_to_json(resp, "simple_workflow_migration.json")
@@ -146,8 +143,7 @@ print("✅ Complex workflow analysis complete!")
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Use utility functions to handle the response
-from utils.response_utils import display_agent_response, save_agent_response_to_json
+# Use utility functions (already imported above)
 
 # Save complex workflow analysis to JSON
 json_file = save_agent_response_to_json(
@@ -155,7 +151,7 @@ json_file = save_agent_response_to_json(
 )
 
 # Display in clean format
-# display_agent_response(complex_analysis_resp)
+display_agent_response(complex_analysis_resp)
 
 print("=" * 60)
 
@@ -196,8 +192,7 @@ print("✅ Intelligent migration complete!")
 print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
 
-# Use utility functions to handle the response
-from utils.response_utils import display_agent_response, save_agent_response_to_json
+# Use utility functions (already imported above)
 
 # # Save complex migration response to JSON
 # json_file = save_agent_response_to_json(resp, "complex_workflow_migration.json")
