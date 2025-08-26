@@ -29,7 +29,7 @@ from mlflow.types.responses import ResponsesAgentRequest
 
 from agents import AGENT
 
-print("🧠 INTELLIGENT NIFI ANALYSIS - Simple Workflow")
+print("🧠 INTELLIGENT NIFI ANALYSIS")
 print("=" * 60)
 
 # Ask the agent to analyze workflow using the XML file path
@@ -67,9 +67,15 @@ print("=" * 60)
 
 # COMMAND ----------
 
+from datetime import datetime
+
+from mlflow.types.responses import ResponsesAgentRequest
+
+from agents import AGENT
+
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
-print("🚀 INTELLIGENT MIGRATION - Simple Workflow")
+print("🚀 INTELLIGENT MIGRATION")
 print("=" * 60)
 
 req = ResponsesAgentRequest(
@@ -114,7 +120,13 @@ print("=" * 60)
 
 # COMMAND ----------
 
-print("🧠 INTELLIGENT NIFI ANALYSIS - Complex Workflow")
+from datetime import datetime
+
+from mlflow.types.responses import ResponsesAgentRequest
+
+from agents import AGENT
+
+print("🧠 INTELLIGENT NIFI ANALYSIS")
 print("=" * 60)
 
 # Analyze the complex ICN8_BRS_Feedback workflow using file path
