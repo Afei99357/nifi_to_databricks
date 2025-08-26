@@ -6,6 +6,43 @@ from collections import Counter
 from typing import Any, Dict, List
 
 
+def _deduplicate_processor_list(
+    processors: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Deduplicate processors with identical names for cleaner display.
+    Shows count when multiple instances exist.
+    """
+    from collections import Counter
+
+    # Count occurrences of each processor name
+    name_counts = Counter(p.get("name", "") for p in processors)
+
+    # Create deduplicated list with instance counts
+    seen_names = set()
+    deduplicated = []
+
+    for proc in processors:
+        name = proc.get("name", "")
+        if name not in seen_names:
+            seen_names.add(name)
+
+            # Create processor entry with instance count if > 1
+            proc_entry = {
+                "name": (
+                    name
+                    if name_counts[name] == 1
+                    else f"{name} ({name_counts[name]} instances)"
+                ),
+                "type": proc.get("processor_type", "").split(".")[-1],
+                "business_purpose": proc.get("business_purpose", ""),
+                "instance_count": name_counts[name],
+            }
+            deduplicated.append(proc_entry)
+
+    return deduplicated
+
+
 def summarize_workflow_analysis_from_data(
     analysis_data: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -82,48 +119,20 @@ def summarize_workflow_analysis_from_data(
         "data_manipulation_breakdown": {
             "data_transformers": {
                 "count": len(data_transformers),
-                "processors": [
-                    {
-                        "name": p.get("name", ""),
-                        "type": p.get("processor_type", "").split(".")[-1],
-                        "business_purpose": p.get("business_purpose", ""),
-                    }
-                    for p in data_transformers
-                ],
+                "processors": _deduplicate_processor_list(data_transformers),
             },
             "external_processors": {
                 "count": len(external_processors),
-                "processors": [
-                    {
-                        "name": p.get("name", ""),
-                        "type": p.get("processor_type", "").split(".")[-1],
-                        "business_purpose": p.get("business_purpose", ""),
-                    }
-                    for p in external_processors
-                ],
+                "processors": _deduplicate_processor_list(external_processors),
             },
             "data_movers": {
                 "count": len(data_movers),
-                "processors": [
-                    {
-                        "name": p.get("name", ""),
-                        "type": p.get("processor_type", "").split(".")[-1],
-                        "business_purpose": p.get("business_purpose", ""),
-                    }
-                    for p in data_movers
-                ],
+                "processors": _deduplicate_processor_list(data_movers),
             },
         },
         "infrastructure_breakdown": {
             "count": len(infrastructure),
-            "processors": [
-                {
-                    "name": p.get("name", ""),
-                    "type": p.get("processor_type", "").split(".")[-1],
-                    "business_purpose": p.get("business_purpose", ""),
-                }
-                for p in infrastructure
-            ],
+            "processors": _deduplicate_processor_list(infrastructure),
         },
         "processor_type_distribution": dict(processor_types.most_common(10)),
         "key_business_operations": dict(key_operations_count.most_common(10)),
@@ -132,14 +141,7 @@ def summarize_workflow_analysis_from_data(
             "medium_impact_processors": len(medium_impact),
             "low_impact_processors": len(low_impact),
             "no_impact_processors": len(no_impact),
-            "critical_processors": [
-                {
-                    "name": p.get("name", ""),
-                    "type": p.get("processor_type", "").split(".")[-1],
-                    "business_purpose": p.get("business_purpose", ""),
-                }
-                for p in high_impact
-            ],
+            "critical_processors": _deduplicate_processor_list(high_impact),
         },
         "business_insights": {
             "primary_data_operations": list(key_operations_count.most_common(3)),

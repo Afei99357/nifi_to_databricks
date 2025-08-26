@@ -86,50 +86,91 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
     """
     Check if UpdateAttribute generates SQL or processing logic (rare case).
     Most UpdateAttribute just sets metadata, but some generate SQL for downstream use.
-    More strict criteria to avoid false positives.
+    Very strict criteria to avoid false positives like filename/variable generation.
     """
-    # Primary SQL keywords that indicate actual query generation
-    primary_sql_keywords = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER"]
+    # Exclude common non-SQL patterns first
+    name_upper = name.upper() if name else ""
 
-    # Secondary SQL keywords (must appear with primary or have substantial content)
-    secondary_sql_keywords = ["FROM", "WHERE", "JOIN", "REFRESH", "TABLE"]
+    # Common infrastructure patterns that should NOT be classified as SQL generation
+    infrastructure_patterns = [
+        "FILENAME",
+        "FILE NAME",
+        "PATH",
+        "DIRECTORY",
+        "FOLDER",
+        "PARAMETER",
+        "VARIABLE",
+        "ATTRIBUTE",
+        "PROPERTY",
+        "CONFIG",
+        "COUNTER",
+        "COUNT",
+        "INDEX",
+        "ID",
+        "TIMESTAMP",
+        "DATE",
+        "STATUS",
+        "FLAG",
+        "MARKER",
+        "TAG",
+        "LABEL",
+    ]
 
-    sql_keyword_found = False
-    substantial_sql_content = False
+    # If name contains infrastructure patterns, likely not SQL generation
+    if any(pattern in name_upper for pattern in infrastructure_patterns):
+        # Only proceed if there's very clear SQL construction evidence
+        pass
 
+    # Primary SQL keywords that indicate actual query construction (not just variables)
+    primary_sql_keywords = [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "CREATE",
+        "ALTER",
+        "DROP",
+    ]
+
+    # Look for actual SQL construction, not just query parameters
     for key, value in properties.items():
-        if (
-            isinstance(value, str) and len(value) > 10
-        ):  # Must be substantial content, not just metadata
+        if isinstance(value, str) and len(value) > 30:  # Increased from 20 to 30
             value_upper = value.upper()
 
-            # Check for primary SQL keywords
+            # Check for primary SQL keywords with substantial query structure
             if any(keyword in value_upper for keyword in primary_sql_keywords):
-                sql_keyword_found = True
+                # Additional validation: must contain SQL structure indicators
+                sql_structure_indicators = [
+                    "FROM",
+                    "WHERE",
+                    "JOIN",
+                    "GROUP BY",
+                    "ORDER BY",
+                    "HAVING",
+                ]
+                if any(
+                    indicator in value_upper for indicator in sql_structure_indicators
+                ):
+                    # Further check: not just variable substitution
+                    # Look for actual query construction vs just parameter setting
+                    if len(value) > 50 and value.count(" ") > 5:  # Multi-word SQL query
+                        return True
 
-            # Check for secondary keywords with substantial content
-            if (
-                any(keyword in value_upper for keyword in secondary_sql_keywords)
-                and len(value) > 20
-            ):
-                substantial_sql_content = True
+    # Check processor name for explicit SQL construction (very strict)
+    explicit_sql_construction = [
+        "BUILD SQL",
+        "CONSTRUCT SQL",
+        "GENERATE SQL",
+        "CREATE QUERY",
+        "SQL BUILDER",
+        "QUERY BUILDER",
+        "DYNAMIC SQL",
+    ]
 
-    # Must have either primary SQL keyword OR secondary with substantial content
-    if sql_keyword_found or substantial_sql_content:
+    if any(pattern in name_upper for pattern in explicit_sql_construction):
         return True
 
-    # Check processor name for clear SQL generation indicators (stricter)
-    name_upper = name.upper() if name else ""
-    clear_sql_indicators = ["DERIVE", "GENERATE", "BUILD", "CONSTRUCT", "CREATE"]
-    sql_terms = ["SQL", "QUERY", "STATEMENT"]
-
-    # Must have both a generation verb AND SQL term in name
-    has_generation_verb = any(
-        indicator in name_upper for indicator in clear_sql_indicators
-    )
-    has_sql_term = any(term in name_upper for term in sql_terms)
-
-    return has_generation_verb and has_sql_term
+    return False
 
 
 def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) -> bool:
@@ -192,6 +233,48 @@ def _is_file_management_executecommand(properties: Dict[str, Any], name: str) ->
     return False
 
 
+def _determine_impact_level(
+    processor_type: str, manipulation_type: str, name: str, properties: Dict[str, Any]
+) -> str:
+    """
+    Determine data impact level based on processor type and characteristics.
+    More conservative approach to avoid over-classifying UpdateAttribute as high-impact.
+    """
+    short_type = (
+        processor_type.split(".")[-1] if "." in processor_type else processor_type
+    )
+
+    # HIGH IMPACT: Only true data transformation processors
+    if manipulation_type == "data_transformation":
+        # ExecuteStreamCommand with actual SQL operations
+        if short_type == "ExecuteStreamCommand":
+            return "high"
+        # Other data transformation processors that actually transform content
+        if short_type in DATA_TRANSFORMATION_PROCESSORS:
+            return "high"
+        # LLM-classified as data transformation - still high but less likely to be UpdateAttribute
+        return "high"
+
+    # MEDIUM IMPACT: External processing and significant data movement
+    if manipulation_type == "external_processing":
+        return "medium"
+
+    # UpdateAttribute should MAX OUT at medium, never high (even with SQL generation)
+    if short_type == "UpdateAttribute" and manipulation_type != "infrastructure_only":
+        return "medium"
+
+    # LOW IMPACT: Data movement
+    if manipulation_type == "data_movement":
+        return "low"
+
+    # NO IMPACT: Infrastructure only
+    if manipulation_type == "infrastructure_only":
+        return "none"
+
+    # Default for unknown
+    return "low"
+
+
 def classify_processor_hybrid(
     processor_type: str, properties: Dict[str, Any], name: str, proc_id: str
 ) -> Dict[str, Any]:
@@ -214,48 +297,57 @@ def classify_processor_hybrid(
 
     # 1. RULE-BASED: Infrastructure processors (never transform data content)
     if short_type in INFRASTRUCTURE_PROCESSORS:
+        manipulation_type = "infrastructure_only"
         return {
             "processor_type": processor_type,
             "properties": properties,
             "id": proc_id,
             "name": name,
-            "data_manipulation_type": "infrastructure_only",
+            "data_manipulation_type": manipulation_type,
             "actual_data_processing": f"Infrastructure work: {_get_infrastructure_description(short_type)}",
             "transforms_data_content": False,
             "business_purpose": f"System operation: {name}",
-            "data_impact_level": "none",
+            "data_impact_level": _determine_impact_level(
+                processor_type, manipulation_type, name, properties
+            ),
             "key_operations": [_get_key_operation(short_type)],
             "analysis_method": "rule_based_infrastructure",
         }
 
     # 2. RULE-BASED: Data movement processors (move data without transformation)
     if short_type in DATA_MOVEMENT_PROCESSORS:
+        manipulation_type = "data_movement"
         return {
             "processor_type": processor_type,
             "properties": properties,
             "id": proc_id,
             "name": name,
-            "data_manipulation_type": "data_movement",
+            "data_manipulation_type": manipulation_type,
             "actual_data_processing": f"Data movement: {_get_movement_description(short_type)}",
             "transforms_data_content": False,
             "business_purpose": f"Data transfer: {name}",
-            "data_impact_level": "low",
+            "data_impact_level": _determine_impact_level(
+                processor_type, manipulation_type, name, properties
+            ),
             "key_operations": [_get_key_operation(short_type)],
             "analysis_method": "rule_based_movement",
         }
 
     # 3. RULE-BASED: Data transformation processors (always transform content)
     if short_type in DATA_TRANSFORMATION_PROCESSORS:
+        manipulation_type = "data_transformation"
         return {
             "processor_type": processor_type,
             "properties": properties,
             "id": proc_id,
             "name": name,
-            "data_manipulation_type": "data_transformation",
+            "data_manipulation_type": manipulation_type,
             "actual_data_processing": f"Data transformation: {_get_transformation_description(short_type)}",
             "transforms_data_content": True,
             "business_purpose": f"Data processing: {name}",
-            "data_impact_level": "high",
+            "data_impact_level": _determine_impact_level(
+                processor_type, manipulation_type, name, properties
+            ),
             "key_operations": [_get_key_operation(short_type)],
             "analysis_method": "rule_based_transformation",
         }
@@ -454,7 +546,9 @@ Return ONLY a JSON object:
                     "All JSON recovery attempts failed for enhanced LLM analysis"
                 )
 
-        # Add processor metadata
+        # Add processor metadata and override impact level with conservative rules
+        manipulation_type = analysis_result.get("data_manipulation_type", "unknown")
+
         analysis_result.update(
             {
                 "processor_type": processor_type,
@@ -463,6 +557,11 @@ Return ONLY a JSON object:
                 "name": name,
                 "analysis_method": "enhanced_llm_hybrid",
             }
+        )
+
+        # Override LLM's impact level with conservative rules
+        analysis_result["data_impact_level"] = _determine_impact_level(
+            processor_type, manipulation_type, name, properties
         )
 
         print(
@@ -775,11 +874,13 @@ Be specific about what happens to the actual data content, not just metadata or 
             if batch_results is None:
                 raise ValueError("All JSON recovery attempts failed")
 
-        # Combine results with processor metadata
+        # Combine results with processor metadata and conservative impact levels
         results = []
         for i, proc in enumerate(processors):
             if i < len(batch_results):
                 analysis = batch_results[i]
+                manipulation_type = analysis.get("data_manipulation_type", "unknown")
+
                 analysis.update(
                     {
                         "processor_type": proc.get("processor_type", ""),
@@ -789,6 +890,15 @@ Be specific about what happens to the actual data content, not just metadata or 
                         "analysis_method": "llm_batch_intelligent",
                     }
                 )
+
+                # Override LLM's impact level with conservative rules
+                analysis["data_impact_level"] = _determine_impact_level(
+                    proc.get("processor_type", ""),
+                    manipulation_type,
+                    proc.get("name", ""),
+                    proc.get("properties", {}),
+                )
+
                 results.append(analysis)
             else:
                 # Fallback if batch didn't return enough results
