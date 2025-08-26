@@ -184,16 +184,14 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
 
     if transformers["count"] > 0:
         print(f"   📈 Data Transformers ({transformers['count']}):")
-        for proc in transformers["processors"][:5]:  # Show top 5
+        for proc in transformers["processors"]:  # Show ALL transformers
             print(
                 f"      - {proc['name']} ({proc['type']}): {proc['business_purpose']}"
             )
-        if transformers["count"] > 5:
-            print(f"      ... and {transformers['count'] - 5} more")
 
     if external["count"] > 0:
         print(f"   🔌 External Processors ({external['count']}):")
-        for proc in external["processors"][:5]:  # Show top 5
+        for proc in external["processors"]:  # Show ALL external processors
             print(
                 f"      - {proc['name']} ({proc['type']}): {proc['business_purpose']}"
             )
@@ -201,16 +199,29 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
     print(
         f"\n📦 DATA MOVEMENT PROCESSORS ({summary['data_manipulation_breakdown']['data_movers']['count']}):"
     )
-    movers = summary["data_manipulation_breakdown"]["data_movers"]["processors"][:3]
+    movers = summary["data_manipulation_breakdown"]["data_movers"]["processors"][
+        :10
+    ]  # Show more data movers
     for proc in movers:
         print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
+    if len(summary["data_manipulation_breakdown"]["data_movers"]["processors"]) > 10:
+        remaining = (
+            len(summary["data_manipulation_breakdown"]["data_movers"]["processors"])
+            - 10
+        )
+        print(f"   ... and {remaining} more data movement processors")
 
     print(
         f"\n🔗 INFRASTRUCTURE PROCESSORS ({summary['infrastructure_breakdown']['count']}):"
     )
-    infra = summary["infrastructure_breakdown"]["processors"][:3]
+    infra = summary["infrastructure_breakdown"]["processors"][
+        :8
+    ]  # Show more infrastructure processors
     for proc in infra:
         print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
+    if len(summary["infrastructure_breakdown"]["processors"]) > 8:
+        remaining = len(summary["infrastructure_breakdown"]["processors"]) - 8
+        print(f"   ... and {remaining} more infrastructure processors")
 
     print(f"\n⭐ KEY BUSINESS OPERATIONS:")
     for operation, count in summary["key_business_operations"].items():
@@ -227,7 +238,7 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
 
     if impact["critical_processors"]:
         print(f"\n🚨 CRITICAL PROCESSORS (High Impact):")
-        for proc in impact["critical_processors"][:3]:
+        for proc in impact["critical_processors"]:  # Show ALL critical processors
             print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
 
     insights = summary["business_insights"]
