@@ -49,27 +49,14 @@ print("✅ Simple workflow analysis complete!")
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Debug: Let's see what the agent actually returns
-print("DEBUG - Number of outputs:", len(analysis_resp.output))
-for i, output in enumerate(analysis_resp.output):
-    print(f"Output {i}: type={type(output.content)}, content={repr(output.content)}")
+# Use utility functions to handle the response
+from utils.response_utils import display_agent_response, save_agent_response_to_json
 
-    # If it's a list, check the structure
-    if isinstance(output.content, list):
-        for j, item in enumerate(output.content):
-            print(f"  Item {j}: {type(item)} = {item}")
+# Save response to JSON file
+json_file = save_agent_response_to_json(analysis_resp, "simple_workflow_analysis.json")
 
-    # Try to parse as JSON if it looks like JSON
-    elif isinstance(output.content, str):
-        try:
-            import json
-
-            parsed = json.loads(output.content)
-            print(f"  Parsed JSON: {json.dumps(parsed, indent=2)}")
-        except:
-            print(f"  Raw string: {output.content}")
-    else:
-        print(f"  Other type: {output.content}")
+# Display in clean format
+display_agent_response(analysis_resp)
 
 print("=" * 60)
 
@@ -105,12 +92,15 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# Display the migration results - simple approach
+# Display the migration results using utilities
 print("\n📋 SIMPLE MIGRATION RESULTS:")
 print("=" * 60)
 
-for output in resp.output:
-    print(output.content)
+# Save migration response to JSON
+json_file = save_agent_response_to_json(resp, "simple_workflow_migration.json")
+
+# Display in clean format
+display_agent_response(resp)
 
 print("=" * 60)
 
@@ -137,13 +127,17 @@ req = ResponsesAgentRequest(
 complex_analysis_resp = AGENT.predict(req)
 print("✅ Complex workflow analysis complete!")
 
-# Display the complex analysis results - simple approach
+# Display the complex analysis results using utilities
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Standard way to display MLflow agent responses
-for output in complex_analysis_resp.output:
-    print(output.content)
+# Save complex workflow analysis to JSON
+json_file = save_agent_response_to_json(
+    complex_analysis_resp, "complex_workflow_analysis.json"
+)
+
+# Display in clean format
+display_agent_response(complex_analysis_resp)
 
 print("=" * 60)
 
@@ -180,12 +174,15 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# Display the complex migration results - simple approach
+# Display the complex migration results using utilities
 print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
 
-for output in resp.output:
-    print(output.content)
+# Save complex migration response to JSON
+json_file = save_agent_response_to_json(resp, "complex_workflow_migration.json")
+
+# Display in clean format
+display_agent_response(resp)
 
 print("=" * 60)
 
