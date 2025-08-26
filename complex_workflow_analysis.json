@@ -1,0 +1,1671 @@
+{
+  "timestamp": "2025-08-26T19:52:19.352994",
+  "response_summary": {
+    "total_outputs": 3,
+    "output_types": [
+      "function_call",
+      "function_call_output",
+      "message"
+    ]
+  },
+  "outputs": [
+    {
+      "index": 0,
+      "type": "function_call",
+      "function_name": "analyze_nifi_workflow_intelligence",
+      "arguments": {
+        "xml_content": "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml"
+      }
+    },
+    {
+      "index": 1,
+      "type": "function_call_output",
+      "tool_result": {
+        "processors_analysis": [
+          {
+            "processor_index": 0,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Delays the flow of data for 5 minutes",
+            "transforms_data_content": false,
+            "business_purpose": "Rate limiting to prevent overwhelming downstream systems",
+            "data_impact_level": "none",
+            "key_operations": [
+              "delay"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ControlRate",
+            "properties": {
+              "Rate Control Criteria": "flowfile count",
+              "Time Duration": "300 sec",
+              "Maximum Rate": "1"
+            },
+            "id": "0f6ba0ba-3fde-38a5-0000-000000000000",
+            "name": "5 minute delay",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 1,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when a Kerberos ticket expires",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for authentication issues",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Kerberos ticket was expired when gathering stats for period ${start_ts} - ${end_ts}."
+            },
+            "id": "13f37849-7201-38c2-0000-000000000000",
+            "name": "Log Kerberos Ticket Expired",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 2,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes an Impala shell command to run a refresh statement",
+            "transforms_data_content": true,
+            "business_purpose": "Refreshing data in a database",
+            "data_impact_level": "high",
+            "key_operations": [
+              "impala shell command",
+              "refresh statement"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/bin/impala-shell",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "-B;-k;-i;nardc02prod-impala.na-rdc02.nxp.com;-q;\"${refresh_statement}\"",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "377c81ac-e43d-32a7-0000-000000000000",
+            "name": "Run refresh statement",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 3,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Increases the memory limit by adding an increment to the current limit",
+            "transforms_data_content": false,
+            "business_purpose": "Dynamic memory allocation for data processing",
+            "data_impact_level": "low",
+            "key_operations": [
+              "attribute update",
+              "memory limit increase"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "impala_mem_limit": "${impala_mem_limit:plus(${impala_mem_limit_increment})}"
+            },
+            "id": "56d1e04a-ea6f-3ec0-0000-000000000000",
+            "name": "Increase mem_limit",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 4,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Delays the flow of data for 60 seconds",
+            "transforms_data_content": false,
+            "business_purpose": "Rate limiting to prevent overwhelming downstream systems",
+            "data_impact_level": "none",
+            "key_operations": [
+              "delay"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ControlRate",
+            "properties": {
+              "Rate Control Criteria": "flowfile count",
+              "Time Duration": "60 sec",
+              "Maximum Rate": "1"
+            },
+            "id": "58733d1e-7da0-3469-0000-000000000000",
+            "name": "60 second delay",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 5,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Refreshes a Kerberos ticket using the kinit command",
+            "transforms_data_content": false,
+            "business_purpose": "Authentication and authorization for data access",
+            "data_impact_level": "none",
+            "key_operations": [
+              "kinit command",
+              "kerberos ticket refresh"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/bin/kinit",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "-kt;/etc/security/keytab/hadoop_nifi_svc.keytab;hadoop_nifi_svc",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "58dbff24-a47c-30de-0000-000000000000",
+            "name": "Refresh Kerberos ticket (kinit)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 6,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when executing a refresh statement",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and logging for data refresh operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Executing ${refresh_statement} for stats period ${start_ts} - ${end_ts}.\n"
+            },
+            "id": "7134dd4d-0b9e-3c89-0000-000000000000",
+            "name": "Log refresh statement",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 7,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when a query admission timeout occurs",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for query performance issues",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Stats query for period ${start_ts} - ${end_ts} was timed out before it could execute."
+            },
+            "id": "8e90ac48-a57b-3599-0000-000000000000",
+            "name": "Log Query Admission Timeout",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 8,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when an unidentified error occurs",
+            "transforms_data_content": false,
+            "business_purpose": "Error handling and logging for data processing",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "add_partition_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"                )\n  :replaceFirst    (\"/\"                         , \".\"               )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"                )\n  :replaceFirst    (\"/\"                         , \" add partition (\")\n  :replaceAll      (\"/\"                         , \"', \"             )\n  :replaceAll      (\"=\"                         , \"='\"              )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                )\n  :replaceAll      (\"%3A\"                       , \":\"               )\n  :prepend         (\"alter table \")\n  :append          (\"');\")\n }",
+              "drop_partition_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"                           )\n  :replaceFirst    (\"/\"                         , \".\"                          )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"                           )\n  :replaceFirst    (\"/\"                         , \" drop if exists partition (\")\n  :replaceAll      (\"/\"                         , \"', \"                        )\n  :replaceAll      (\"=\"                         , \"='\"                         )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                           )\n  :replaceAll      (\"%3A\"                       , \":\"                          )\n  :prepend         (\"alter table \")\n  :append          (\"');\")\n }",
+              "refresh_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"            )\n  :replaceFirst    (\"/\"                         , \".\"           )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"            )\n  :replaceFirst    (\"/\"                         , \" partition (\")\n  :replaceAll      (\"/\"                         , \"', \"         )\n  :replaceAll      (\"=\"                         , \"='\"          )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"            )\n  :replaceAll      (\"%3A\"                       , \":\"           )\n  :prepend         (\"refresh \")\n  :append          (\"');\")\n }"
+            },
+            "id": "90d36089-fde9-36c9-0000-000000000000",
+            "name": "Derive refresh statement",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 9,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Derives a refresh statement by manipulating the execution error attribute",
+            "transforms_data_content": false,
+            "business_purpose": "Dynamic query generation for data refresh operations",
+            "data_impact_level": "low",
+            "key_operations": [
+              "attribute manipulation",
+              "query generation"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Unidentified error while gathering stats for period ${start_ts} - ${end_ts}. Please investigate!"
+            },
+            "id": "9263a1b6-f200-3f5e-0000-000000000000",
+            "name": "Log Unidentified Error",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 10,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs an error message when an error occurs during ingest staging",
+            "transforms_data_content": false,
+            "business_purpose": "Error handling and logging for data ingest operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "error",
+              "log-prefix": "icn8: ",
+              "log-message": "Unable to execute statistics query for stats period ${start_ts} - ${end_ts}."
+            },
+            "id": "9e574967-10e3-3af0-0000-000000000000",
+            "name": "Log error on Ingest Staging",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 11,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when an error occurs during stats query execution",
+            "transforms_data_content": false,
+            "business_purpose": "Error handling and logging for data query operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Failed attempt ${attempts} executing statistics query for period ${start_ts} - ${end_ts}.\nError details:\n${execution.error}"
+            },
+            "id": "ad33bfa5-6aa4-317d-0000-000000000000",
+            "name": "Log error on stats query",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 12,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when a memory limit is exceeded",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for memory usage issues",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Impala memory limit exceeded while gathering stats for period ${start_ts} - ${end_ts}."
+            },
+            "id": "ae90fb8a-1a25-31fa-0000-000000000000",
+            "name": "Log Memory Limit Exceeded",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 13,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when memory is oversubscribed",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for memory usage issues",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "properties": {
+              "Routing Strategy": "Route to Property name",
+              "toomanytries": "${stats_retry_counter:gt(10)}"
+            },
+            "id": "b0ed174d-763b-341e-0000-000000000000",
+            "name": "Continue until max tries",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 14,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Routes data based on the number of retry attempts",
+            "transforms_data_content": false,
+            "business_purpose": "Retry mechanism for data processing operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "routing",
+              "retry mechanism"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "stats_retry_counter": "${stats_retry_counter:isNull():ifElse(1, ${stats_retry_counter:plus(1)})}"
+            },
+            "id": "c3c66220-b878-3307-0000-000000000000",
+            "name": "Increase retry counter",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 15,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Increments the retry counter attribute",
+            "transforms_data_content": false,
+            "business_purpose": "Retry mechanism for data processing operations",
+            "data_impact_level": "low",
+            "key_operations": [
+              "attribute update",
+              "retry counter increment"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: HDFS read fail while gathering stats for period ${start_ts} - ${end_ts}."
+            },
+            "id": "dc075b22-c96e-3dd6-0000-000000000000",
+            "name": "Log HDFS read fail",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 16,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when an HDFS read fails",
+            "transforms_data_content": false,
+            "business_purpose": "Error handling and logging for data read operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Stats query for period ${start_ts} - ${end_ts} was killed because memory was oversubscribed (too many queries running at once)."
+            },
+            "id": "e7ae702c-3ef8-337f-0000-000000000000",
+            "name": "Log Memory Oversubscribed",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 17,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when memory is oversubscribed",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for memory usage issues",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "properties": {
+              "Routing Strategy": "Route to Property name",
+              "hdfs_read_fail": "${execution.error:toLower():contains('failed to open hdfs file')}",
+              "kerberos_ticket_expired": "${execution.error:toLower():contains('-k requires a valid kerberos ticket but no valid kerberos ticket found')}",
+              "memory_limit_exceeded": "${execution.error:toLower():contains('memory limit exceeded')}",
+              "memory_oversubscribed": "${execution.error:toLower():contains('memory is likely oversubscribed.')}",
+              "query_admission_timeout": "${execution.error:toLower():contains('admission for query exceeded timeout')}",
+              "unreachable_impala_deamon": "${execution.error:toLower():contains('cancelled due to unreachable impalad(s)')}"
+            },
+            "id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "name": "Route on error type",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 18,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Routes data based on error type",
+            "transforms_data_content": false,
+            "business_purpose": "Error handling and routing for data processing operations",
+            "data_impact_level": "none",
+            "key_operations": [
+              "routing",
+              "error handling"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "warn",
+              "log-prefix": "icn8: ",
+              "log-message": "Cause: Stats query for period ${start_ts} - ${end_ts} was cancelled because an Impala Deamon was unreachable."
+            },
+            "id": "fb9c6072-317d-31de-0000-000000000000",
+            "name": "Log Unreachable Impala Deamon",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 19,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a warning message when an Impala daemon is unreachable",
+            "transforms_data_content": false,
+            "business_purpose": "Monitoring and alerting for Impala daemon availability",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ControlRate",
+            "properties": {
+              "Rate Control Criteria": "flowfile count",
+              "Time Duration": "10 sec",
+              "Maximum Rate": "1"
+            },
+            "id": "ff19be10-cfdc-3fd9-0000-000000000000",
+            "name": "10 second delay",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 0,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Routes flowfile based on attribute 'use_hive_yn' to determine if Hive should be used for query",
+            "transforms_data_content": false,
+            "business_purpose": "Determines whether to use Hive for querying based on attribute value",
+            "data_impact_level": "none",
+            "key_operations": [
+              "routing",
+              "attribute evaluation"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "properties": {
+              "Routing Strategy": "Route to Property name",
+              "yes": "${use_hive_yn:startsWith('Y')}"
+            },
+            "id": "00c0ff74-1db3-3b7b-0000-000000000000",
+            "name": "Use Hive for query?",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 1,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Updates flowfile priority attribute based on end timestamp",
+            "transforms_data_content": true,
+            "business_purpose": "Prioritizes flowfiles based on end timestamp",
+            "data_impact_level": "low",
+            "key_operations": [
+              "attribute update",
+              "priority calculation"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "priority": "${literal(99999999999999)\n  :minus(${end_ts\n           :replaceAll(\"-\", \"\")\n           :replaceAll(\" \", \"\")\n           :replaceAll(\":\", \"\")\n          }\n        )\n }"
+            },
+            "id": "0978fb2d-40ba-3201-0000-000000000000",
+            "name": "Set flowfile priority",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 2,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Extracts start and end timestamps from filename and updates flowfile attributes",
+            "transforms_data_content": true,
+            "business_purpose": "Extracts time frame from filename for further processing",
+            "data_impact_level": "medium",
+            "key_operations": [
+              "filename parsing",
+              "attribute extraction"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "end_ts": "${filename:replaceAll('^.*[0-9]{14}_([0-9]{14})_[0-9]{14}.*$','$1'):toDate ('yyyyMMddHHmmss'):format(\"yyyy-MM-dd HH:mm:ss\")}",
+              "start_ts": "${filename:replaceAll('^.*([0-9]{14})_[0-9]{14}_[0-9]{14}.*$','$1'):toDate ('yyyyMMddHHmmss'):format(\"yyyy-MM-dd HH:mm:ss\")}"
+            },
+            "id": "191672e6-b29a-3ff7-0000-000000000000",
+            "name": "Determine time frame of cross check request",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 3,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flowfile with predefined attributes for a 10x24 hour time frame",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a new data processing flow for a specific time frame",
+            "data_impact_level": "low",
+            "key_operations": [
+              "flowfile generation",
+              "attribute initialization"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "include_e3_bq_yn": "N",
+              "include_temptation_bq_yn": "N",
+              "start_ts": "${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}"
+            },
+            "id": "1f2c1fa9-52be-3265-0000-000000000000",
+            "name": "Determine time frame (10 x 24 hours)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 4,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Executes a script to clear the 'not_in_stats' folder",
+            "transforms_data_content": false,
+            "business_purpose": "Maintains the 'not_in_stats' folder by clearing its contents",
+            "data_impact_level": "none",
+            "key_operations": [
+              "script execution",
+              "folder maintenance"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Working Directory": "/users/hadoop_nifi_svc/scripts/icn8/",
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "true",
+              "Max Attribute Length": "256"
+            },
+            "id": "26cfd505-ae8b-3593-0000-000000000000",
+            "name": "Clear not_in_stats folder",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 5,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flowfile to initiate the Impala check query process",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates the Impala check query process",
+            "data_impact_level": "low",
+            "key_operations": [
+              "flowfile generation",
+              "process initiation"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8"
+            },
+            "id": "27752e84-0109-35ed-0000-000000000000",
+            "name": "Start Impala check query - PMI DQ",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 6,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes an Impala check query using the 'Impala_Check.sh' script",
+            "transforms_data_content": true,
+            "business_purpose": "Runs an Impala check query to validate data",
+            "data_impact_level": "high",
+            "key_operations": [
+              "script execution",
+              "Impala query execution"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "PMI_View",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "293a0339-81a5-3b4c-0000-000000000000",
+            "name": "Run Impala check query - PMI-View",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 7,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Lists files in the '/etl/dropzone/icn8/incoming' directory based on a file filter",
+            "transforms_data_content": false,
+            "business_purpose": "Identifies cross-check request files for further processing",
+            "data_impact_level": "low",
+            "key_operations": [
+              "file listing",
+              "file filtering"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ListFile",
+            "properties": {
+              "Input Directory": "/etl/dropzone/icn8/incoming",
+              "listing-strategy": "entities",
+              "Recurse Subdirectories": "false",
+              "Input Directory Location": "Remote",
+              "File Filter": "^HDP_.*[0-9]{14}_[0-9]{14}_([0-9]{14})\\.*(ccr)$",
+              "Include File Attributes": "false",
+              "Minimum File Age": "0 sec",
+              "Minimum File Size": "0 B",
+              "Ignore Hidden Files": "true",
+              "target-system-timestamp-precision": "auto-detect",
+              "et-state-cache": "9cd607eb-3e75-32ee-0000-000000000000",
+              "et-time-window": "3 hours",
+              "et-initial-listing-target": "all",
+              "et-node-identifier": "same",
+              "track-performance": "false",
+              "max-performance-metrics": "100000",
+              "max-operation-time": "10 secs",
+              "max-listing-time": "3 mins"
+            },
+            "id": "38620939-ea78-3954-0000-000000000000",
+            "name": "Get cross check request files",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 8,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a message indicating the receipt of a cross-check request file",
+            "transforms_data_content": false,
+            "business_purpose": "Logs the receipt of a cross-check request file for auditing purposes",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging",
+              "message generation"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "info",
+              "log-prefix": "icn8: ",
+              "log-message": "Cross check request file received for period ${start_ts} - ${end_ts}."
+            },
+            "id": "3be3e6ac-4eac-3c59-0000-000000000000",
+            "name": "Log cross check request",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 9,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flowfile with predefined attributes for a custom time frame",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a new data processing flow for a custom time frame",
+            "data_impact_level": "low",
+            "key_operations": [
+              "flowfile generation",
+              "attribute initialization"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "2023-03-10 00:00:00",
+              "include_e3_bq_yn": "Y",
+              "include_temptation_bq_yn": "Y",
+              "start_ts": "2023-03-09 00:00:00"
+            },
+            "id": "3beb9a94-4a5e-3616-0000-000000000000",
+            "name": "Determine time frame (custom period)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 10,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes an Impala query using the 'run_impala_query.sh' script",
+            "transforms_data_content": true,
+            "business_purpose": "Runs an Impala query to extract data",
+            "data_impact_level": "high",
+            "key_operations": [
+              "script execution",
+              "Impala query execution"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "-i;nardc02prod-impala.na-rdc02.nxp.com;-B;--query=\"\nset request_pool=root.default;\nset mem_limit=${impala_mem_limit}G;\n${query}\n\";--print_header;--output_delimiter=,",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "4051c036-a52d-395b-0000-000000000000",
+            "name": "Execute Impala Query",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 11,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Does not perform any data processing, appears to be a placeholder or dummy processor",
+            "transforms_data_content": false,
+            "business_purpose": "No apparent business purpose, possibly a placeholder",
+            "data_impact_level": "none",
+            "key_operations": [],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "4141b91d-cd68-3e9c-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 12,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flowfile with predefined attributes for manual feedback",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a new data processing flow for manual feedback",
+            "data_impact_level": "low",
+            "key_operations": [
+              "flowfile generation",
+              "attribute initialization"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "start_ts": "${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}"
+            },
+            "id": "47959301-ecb6-3f55-0000-000000000000",
+            "name": "SWS FB - Manual feedback",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 13,
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Updates flowfile attributes, including filename and Impala query, for single wafer scrap feedback",
+            "transforms_data_content": true,
+            "business_purpose": "Prepares data for single wafer scrap feedback processing",
+            "data_impact_level": "medium",
+            "key_operations": [
+              "attribute update",
+              "filename generation",
+              "query generation"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "filename": "HDP_SINGLE_WAFER_SCRAP_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.sws",
+              "impala_mem_limit": "2",
+              "impala_mem_limit_increment": "5",
+              "query": "-- ICN8/NiFi/BRSFeedback/SWS\nselect\n  lot\n, num_wafers\n, wafers\n, component\n, regexp_replace (object, '[^\\x00-\\xFF]', '')                      object\n, object_type\n, num_wafers_step\n, num_bad\n, num_good\n, outlier\n, min_bad\n, max_bad\n, min_good\n, max_good\n, distance\n, avg_good\n, std_good\n, state\n, proc_state\n, scrap_type\n, prod_period\n, scrap_cet_ts\n, terminate_cet_ts\n, admin_scrap_cet_ts\n, product\n, process\n, esort_scrap_code\n, maverick\n, scrap_suspect_technical_stage\n, scrap_suspect_flow_stage\n, regexp_replace (scrap_suspect_process_step, '[^\\x00-\\xFF]', '')  scrap_suspect_process_step\n, cause_contained\n, incident\n, scrap_code\n, proc_key\n, rec_owner\n, cause_code\n, section_cause_code\n, ccd_description\n, replace (detailed_description, ',', '')                          detailed_description\n, loh_trackout_cet_ts\n, loh_technical_stage\n, loh_flow_stage\n, loh_step\n, loh_equipment\n, scrap_key\n, total\n, scrap_correlate_type\n, good_wafers\nfrom\n  mfg_icn8_apps.nifi_single_wafer_scrap_hits\nwhere\n   scrap_cet_ts >= '${start_ts}'  /* 2020-03-17 FvH: To save on diskspace / BRS processing time, only sent 2020 (and later) data */\n                                  /* 2022-03-16 FvH: To save on diskspace / BRS processing time, only sent 2022 (and later) data */\n                                  /* 2023-02-06 FvH: To save on diskspace / BRS processing time, only sent 2023 (and later) data */\n                                  /* 2023-09-18 FvH: Permanent beep reduction: always only extract the last n days               */\n;\n"
+            },
+            "id": "54b735bc-36af-3139-0000-000000000000",
+            "name": "SWS FB - Determine query and filename",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 14,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes a Hive query using the 'beeline' command",
+            "transforms_data_content": true,
+            "business_purpose": "Runs a Hive query to extract data",
+            "data_impact_level": "high",
+            "key_operations": [
+              "command execution",
+              "Hive query execution"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/bin/beeline",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "--outputformat=csv2;-e;\"${query}\"",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "58afa421-7abf-37cc-0000-000000000000",
+            "name": "Execute Hive Query",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 15,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Transfers files to an SFTP server",
+            "transforms_data_content": false,
+            "business_purpose": "Transfers files to an SFTP server for further processing or storage",
+            "data_impact_level": "low",
+            "key_operations": [
+              "file transfer",
+              "SFTP interaction"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.PutSFTP",
+            "properties": {
+              "Hostname": "nardc02hdpnp011.na-rdc02.nxp.com",
+              "Port": "22",
+              "Username": "hadoop_nifi_svc",
+              "Private Key Path": "/users/hadoop_nifi_svc/.ssh/id_rsa",
+              "Remote Path": "/etl/dropzone/icn8/outgoing",
+              "Create Directory": "false",
+              "Disable Directory Listing": "false",
+              "Batch Size": "500",
+              "Connection Timeout": "30 sec",
+              "Data Timeout": "30 sec",
+              "Conflict Resolution": "NONE",
+              "Reject Zero-Byte Files": "true",
+              "Dot Rename": "false",
+              "Temporary Filename": "{$filename}tmp",
+              "Strict Host Key Checking": "false",
+              "Send Keep Alive On Timeout": "true",
+              "Use Compression": "false",
+              "Proxy Type": "DIRECT"
+            },
+            "id": "6705fab8-a34e-3351-0000-000000000000",
+            "name": "PutSFTP",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 16,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flowfile with predefined attributes for a specific time frame (2017-12-30 06:30)",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a new data processing flow for a specific time frame",
+            "data_impact_level": "low",
+            "key_operations": [
+              "flowfile generation",
+              "attribute initialization"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "start_ts": "2017-12-30 06:30:00"
+            },
+            "id": "69584e65-d5a3-3c11-0000-000000000000",
+            "name": "Determine time frame (2017-12-30 06:30)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 17,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Does not perform any data processing, appears to be a placeholder or dummy processor",
+            "transforms_data_content": false,
+            "business_purpose": "No apparent business purpose, possibly a placeholder",
+            "data_impact_level": "none",
+            "key_operations": [],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "6be76809-509d-3c6f-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 18,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes an Impala check query using the 'Impala_Check.sh' script for PMI DQ",
+            "transforms_data_content": true,
+            "business_purpose": "Runs an Impala check query to validate data for PMI DQ",
+            "data_impact_level": "high",
+            "key_operations": [
+              "script execution",
+              "Impala query execution"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "PMI_View_interactive_queue",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "6efcb6cb-f02d-39bb-0000-000000000000",
+            "name": "Run Impala check query - PMI DQ",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 19,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs a message indicating the successful send of statistics for a specific time frame",
+            "transforms_data_content": false,
+            "business_purpose": "Logs the successful send of statistics for auditing purposes",
+            "data_impact_level": "none",
+            "key_operations": [
+              "logging",
+              "message generation"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+            "properties": {
+              "log-level": "info",
+              "log-prefix": "icn8: ",
+              "log-message": "Succesfully sent statistics for period ${start_ts} - ${end_ts}."
+            },
+            "id": "8086577b-c16d-3a53-0000-000000000000",
+            "name": "Log successful send",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 0,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file with a specified time frame.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file",
+              "set start and end timestamp"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "2021-01-19 00:00:00",
+              "start_ts": "2021-01-01 00:00:00"
+            },
+            "id": "9dbd6e4a-d024-3b14-0000-000000000000",
+            "name": "PMI-View logging to table",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 1,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "a2fadb82-fad5-3941-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 2,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "a3f4b9c6-dfc9-362e-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 3,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8"
+            },
+            "id": "a6d643cd-6a39-37d8-0000-000000000000",
+            "name": "Start Impala check query - PMI-View",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 4,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Executes a command to remove a file, but does not transform any data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Removes a file from the file system.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "remove file"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/bin/rm",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "-f;/etl/dropzone/icn8/incoming/${filename}",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "true",
+              "Max Attribute Length": "256"
+            },
+            "id": "b9396a28-d5b0-3306-0000-000000000000",
+            "name": "Remove cross check request file",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 5,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file with a specified time frame.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file",
+              "set start and end timestamp"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "start_ts": "${now():toNumber():minus(8640000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}"
+            },
+            "id": "c464453c-5bd2-379b-0000-000000000000",
+            "name": "Determine time frame (100 x 24 hours)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 6,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes a shell script that runs an Impala check query, which may transform data content.",
+            "transforms_data_content": true,
+            "business_purpose": "Runs a data quality check query on Impala.",
+            "data_impact_level": "high",
+            "key_operations": [
+              "run Impala check query"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "NiFi_Loading",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "ca20b030-b677-31de-0000-000000000000",
+            "name": "Run Impala check query - NiFi Loading",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 7,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file with a specified time frame.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file",
+              "set start and end timestamp"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "start_ts": "${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}"
+            },
+            "id": "ce39589e-e6b8-3343-0000-000000000000",
+            "name": "SWS FB - Determine time frame",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 8,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "cf9b547d-92f5-3cc5-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 9,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8"
+            },
+            "id": "cfffff58-8202-308f-0000-000000000000",
+            "name": "Start Impala check query - PMI IQ",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 10,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "d41d1141-4727-3750-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 11,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "NiFi_Loading",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "d59ee20f-ce68-3500-0000-000000000000",
+            "name": "PMI-View logging to table - shell script",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 12,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes a shell script that logs data to a table, which transforms data content.",
+            "transforms_data_content": true,
+            "business_purpose": "Logs data to a table.",
+            "data_impact_level": "high",
+            "key_operations": [
+              "log data to table"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8",
+              "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+              "start_ts": "${now():toNumber():minus(259200000):format('yyyy-MM-dd HH:mm:ss', 'CET')}"
+            },
+            "id": "d61e06ea-d241-3f80-0000-000000000000",
+            "name": "Determine time frame (3 x 24 hours)",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 13,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file with a specified time frame.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file",
+              "set start and end timestamp"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+            "properties": {
+              "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+              "argumentsStrategy": "Command Arguments Property",
+              "Command Arguments": "PMI_View_default_queue",
+              "Argument Delimiter": ";",
+              "Ignore STDIN": "false",
+              "Max Attribute Length": "256"
+            },
+            "id": "dc681995-c9da-3e9d-0000-000000000000",
+            "name": "Run Impala check query - PMI DQ",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 14,
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes a shell script that runs an Impala check query, which may transform data content.",
+            "transforms_data_content": true,
+            "business_purpose": "Runs a data quality check query on Impala.",
+            "data_impact_level": "high",
+            "key_operations": [
+              "run Impala check query"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "e07e7747-0fff-3071-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 15,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100"
+            },
+            "id": "e55ecfda-9b26-31db-0000-000000000000",
+            "name": "Dummy",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 16,
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Updates attributes of the flow file, but does not transform the actual data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Updates metadata of the flow file for routing or logging purposes.",
+            "data_impact_level": "none",
+            "key_operations": [
+              "update attributes"
+            ],
+            "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Data Format": "Text",
+              "Unique FlowFiles": "false",
+              "character-set": "UTF-8"
+            },
+            "id": "f2636a48-8130-3527-0000-000000000000",
+            "name": "Start Impala check query - NiFi Loading",
+            "analysis_method": "llm_batch_intelligent"
+          },
+          {
+            "processor_index": 17,
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Generates a new flow file, but does not transform any existing data content.",
+            "transforms_data_content": false,
+            "business_purpose": "Initiates a data processing workflow by generating a new flow file.",
+            "data_impact_level": "low",
+            "key_operations": [
+              "generate flow file"
+            ],
+            "processor_type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Store State": "Do not store state",
+              "canonical-value-lookup-cache-size": "100",
+              "filename": "HDP_LOAD_STATS_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.hls",
+              "impala_mem_limit": "5",
+              "impala_mem_limit_increment": "5",
+              "query": "/* ICN8/NiFi/BRSFeedback/CrossCheck */\n  select\n    'nifi_diamond_raw'                        table_name\n  , substr (ndr.run_trackout_cet_ts, 1, 19)   trackout_cet_ts\n  , nvl (ndr.run_loh_key, 0)                  loh_key\n  , count (*)                                 num_records\n  from\n    mfg_icn8_data.nifi_diamond_raw  ndr\n  where\n        ndr.p_from_trackout_cet_ts  < '${end_ts}'\n    and ndr.p_to_trackout_cet_ts    > '${start_ts}'\n    and ndr.run_trackout_cet_ts    >= '${start_ts}'\n    and ndr.run_trackout_cet_ts     < '${end_ts}'\n    and ndr.run_trackout_cet_ts     > '2020-04-01'\n  group by\n    ndr.run_loh_key\n  , ndr.run_trackout_cet_ts\nunion all\n  select\n    'nifi_production_steps'  table_name\n  , nps.trackout_cet_ts\n  , nps.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_production_steps  nps\n  where\n        nps.p_from_trackout_cet_ts  < '${end_ts}'\n    and nps.p_to_trackout_cet_ts    > '${start_ts}'\n    and nps.trackout_cet_ts        >= '${start_ts}'\n    and nps.trackout_cet_ts         < '${end_ts}'\n  group by\n    nps.loh_key\n  , nps.trackout_cet_ts\nunion all\n  select\n    'nifi_metrology_raw'          table_name\n  , nmr.meas_loh_trackout_cet_ts  trackout_cet_ts\n  , nmr.meas_loh_key              loh_key\n  , count (*)                     num_records\n  from\n    mfg_icn8_data.nifi_metrology_raw  nmr\n  where\n        nmr.p_from_trackout_cet_ts    < '${end_ts}'\n    and nmr.p_to_trackout_cet_ts      > '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts >= '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts  < '${end_ts}'\n  group by\n    nmr.meas_loh_key\n  , nmr.meas_loh_trackout_cet_ts\nunion all\n  select\n    'nifi_pcm_raw'           table_name\n  , npr.loh_trackout_cet_ts  trackout_cet_ts\n  , npr.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_pcm_raw  npr\n  where\n        npr.p_from_trackout_cet_ts  < '${end_ts}'\n    and npr.p_to_trackout_cet_ts    > '${start_ts}'\n    and npr.loh_trackout_cet_ts    >= '${start_ts}'\n    and npr.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    npr.loh_trackout_cet_ts\n  , npr.loh_key\nunion all\n  select\n    'nifi_temptation_sum'    table_name\n  , nts.loh_trackout_cet_ts  trackout_cet_ts\n  , nts.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_temptation_sum  nts\n  where\n        nts.p_from_trackout_cet_ts  < '${end_ts}'\n    and nts.p_to_trackout_cet_ts    > '${start_ts}'\n    and nts.loh_trackout_cet_ts    >= '${start_ts}'\n    and nts.loh_trackout_cet_ts     < '${end_ts}'\n    and nts.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nts.loh_trackout_cet_ts\n  , nts.loh_key\nunion all\n  select\n    'nifi_e3_sum'            table_name\n  , nes.loh_trackout_cet_ts  trackout_cet_ts\n  , nes.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_sum  nes\n  where\n        nes.p_from_trackout_cet_ts  < '${end_ts}'\n    and nes.p_to_trackout_cet_ts    > '${start_ts}'\n    and nes.loh_trackout_cet_ts    >= '${start_ts}'\n    and nes.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nes.loh_trackout_cet_ts\n  , nes.loh_key\nunion all\n  select\n    'nifi_e3_uva'            table_name\n  , neu.loh_trackout_cet_ts  trackout_cet_ts\n  , neu.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_uva  neu\n  where\n        neu.p_from_trackout_cet_ts  < '${end_ts}'\n    and neu.p_to_trackout_cet_ts    > '${start_ts}'\n    and neu.loh_trackout_cet_ts    >= '${start_ts}'\n    and neu.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    neu.loh_trackout_cet_ts\n  , neu.loh_key\nunion all\n  select\n    'nifi_experiments'       table_name\n  , ne.exp_cet_ts            trackout_cet_ts\n  , ne.experiment_key        loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_experiments  ne\n  where\n        ne.exp_cet_ts >= '${start_ts}'\n    and ne.exp_cet_ts  < '${end_ts}'\n  group by\n    ne.exp_cet_ts\n  , ne.experiment_key\nunion all\n  select\n    'nifi_tool_overlay_raw'  table_name\n  , nor.trackout_cet_ts\n  , nor.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_tool_overlay_raw  nor\n  where\n        nor.p_from_trackout_cet_ts  < '${end_ts}'\n    and nor.p_to_trackout_cet_ts    > '${start_ts}'\n    and nor.trackout_cet_ts        >= '${start_ts}'\n    and nor.trackout_cet_ts         < '${end_ts}'\n  group by\n    nor.loh_key\n  , nor.trackout_cet_ts\nunion all\n  select\n    'nifi_diamond_components'  table_name\n  , '1900-01-01 00:00:00'      trackout_cet_ts\n  , -1                         loh_key\n  , count (*)                  num_records\n  from\n    mfg_icn8_data.nifi_diamond_components  ndc\nunion all\n  select\n    'nifi_process_runcards'  table_name\n  , '1900-01-01 00:00:00'    trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_process_runcards  npr\nunion all\n  select\n    'nifi_lotstatus'         table_name\n  , nls.lot_creation_cet_ts  trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_lot_status  nls\n  where\n        nls.lot_creation_cet_ts >= '${start_ts}'\n    and nls.lot_creation_cet_ts  < '${end_ts}'\n  group by\n    nls.lot_creation_cet_ts\nunion all\n  select\n    'nifi_scrap'      table_name\n  , nsc.scrap_cet_ts  trackout_cet_ts\n  , nsc.scrap_key     loh_key\n  , count (*)         num_records\n  from\n    mfg_icn8_data.nifi_scrap  nsc\n  where\n        nsc.scrap_cet_ts >= '${start_ts}'\n    and nsc.scrap_cet_ts  < '${end_ts}'\n    and nsc.scrap_key     > 0\n  group by\n    nsc.scrap_cet_ts\n  , nsc.scrap_key\nunion all\n  select \n    'nifi_xsite_states_raw'                 table_name\n  , substr (ndr.from_cet_ts, 1, 19)         trackout_cet_ts\n  , 1                                       loh_key\n  , count (*)                               num_records\n  from\n    mfg_icn8_data.nifi_xsite_states_raw  ndr\n  where\n        ndr.p_from_start_cet_ts  < '${end_ts}'\n    and ndr.p_to_start_cet_ts    > '${start_ts}'\n    and ndr.from_cet_ts          >= '${start_ts}'\n    and ndr.from_cet_ts          < '${end_ts}'\n  group by\n    substr (ndr.from_cet_ts, 1, 19) \nunion all\n  select\n    'nifi_base_wafer_production_steps'  table_name\n  , nbw.trackout_cet_ts                 trackout_cet_ts\n  , nbw.loh_key                         loh_key\n  , count (*)                           num_records\n  from\n    mfg_icn8_apps.nifi_base_wafer_production_steps  nbw\n  where\n        nbw.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbw.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbw.trackout_cet_ts        >= '${start_ts}'\n    and nbw.trackout_cet_ts         < '${end_ts}'\n  group by\n    nbw.trackout_cet_ts\n  , nbw.loh_key\nunion all\n  select\n    'nifi_base_qualifications (TEMPTATION)'        table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_temptation_bq_yn}' in ('', 'Y')\n    and nbq.p_parameter_type        = 'TEMPTATION'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n    and nbq.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that Temptation BQ data was sent (in case BQ happens to contain 0 Temptation records) */\n    'nifi_base_qualifications (TEMPTATION)'  table_name\n  , ''                                       trackout_cet_ts\n  , -1                                       loh_key\n  , -1                                       num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_temptation_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3)'                table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          ,      nbq.measured_value\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_e3_bq_yn}'      in ('', 'Y')\n    and nbq.p_parameter_type        = 'E3'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that E3 BQ data was sent (in case BQ happens to contain 0 E3 records) */\n    'nifi_base_qualifications (E3)'  table_name\n  , ''                               trackout_cet_ts\n  , -1                               loh_key\n  , -1                               num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_e3_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3_UVA)'  table_name\n  , nbq.loh_trackout_cet_ts              trackout_cet_ts\n  , nbq.loh_key                          loh_key\n  , count ( distinct\n            nvl (nbq.lot        , '')\n          , nvl (nbq.meas_cet_ts, '')\n          , nvl (nbq.program    , '')\n          , nvl (nbq.parameter  , '')\n          , nvl (nbq.event      , '')\n          )                              num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        nbq.p_parameter_type        = 'E3_UVA'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select\n    concat ('nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )                              table_name\n  , nbq.loh_trackout_cet_ts               trackout_cet_ts\n  , nbq.loh_key                           loh_key\n  , count (*)                             num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n            (     nbq.p_parameter_type         in ('EDC', 'Overlay', 'PCM', 'TRACING_EQP', 'TRACING_COMP', 'DIAMOND_TIMES')\n              or  nbq.p_parameter_type       like 'OQ%'\n            )\n    and           nbq.p_aggregation_type       in ('lot', 'waf', 'site')\n    and           nbq.p_from_trackout_cet_ts    < '${end_ts}'\n    and           nbq.p_to_trackout_cet_ts      > '${start_ts}'\n    and           nbq.loh_trackout_cet_ts      >= '${start_ts}'\n    and           nbq.loh_trackout_cet_ts       < '${end_ts}'\n    and not (     p_parameter_type             in ('TRACING_COMP', 'DIAMOND_TIMES')\n              and nbq.loh_trackout_cet_ts       < '2020-04-01'\n            )\n    and not (     p_parameter_type              = 'TRACING_COMP'\n              and program                       = 'TRACING_COMP_TTN'\n            )  /* 2022-08-01 FvH: Don't count the component tracing records from Temptation, otherwise we cannot compare to BRS */\n  group by\n    concat ( 'nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )\n  , nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\norder by\n  table_name\n, trackout_cet_ts\n, loh_key\n;",
+              "use_hive_yn": "Y"
+            },
+            "id": "fdb5ef40-29a3-335d-0000-000000000000",
+            "name": "Determine query and filename",
+            "analysis_method": "llm_batch_intelligent"
+          }
+        ],
+        "connections_analysis": [
+          {
+            "source_id": "00c0ff74-1db3-3b7b-0000-000000000000",
+            "destination_id": "4051c036-a52d-395b-0000-000000000000",
+            "relationship": "unmatched"
+          },
+          {
+            "source_id": "b9396a28-d5b0-3306-0000-000000000000",
+            "destination_id": "191672e6-b29a-3ff7-0000-000000000000",
+            "relationship": "output stream"
+          },
+          {
+            "source_id": "6a2193fc-1bb2-3dd9-0000-000000000000",
+            "destination_id": "fdb5ef40-29a3-335d-0000-000000000000",
+            "relationship": ""
+          },
+          {
+            "source_id": "f2636a48-8130-3527-0000-000000000000",
+            "destination_id": "ca20b030-b677-31de-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "4051c036-a52d-395b-0000-000000000000",
+            "destination_id": "6705fab8-a34e-3351-0000-000000000000",
+            "relationship": "output stream"
+          },
+          {
+            "source_id": "c464453c-5bd2-379b-0000-000000000000",
+            "destination_id": "6a2193fc-1bb2-3dd9-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "244432ad-4f62-393f-0000-000000000000",
+            "destination_id": "6be76809-509d-3c6f-0000-000000000000",
+            "relationship": ""
+          },
+          {
+            "source_id": "54b735bc-36af-3139-0000-000000000000",
+            "destination_id": "0978fb2d-40ba-3201-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ce39589e-e6b8-3343-0000-000000000000",
+            "destination_id": "54b735bc-36af-3139-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "4051c036-a52d-395b-0000-000000000000",
+            "destination_id": "fd00da84-16bd-308f-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "26cfd505-ae8b-3593-0000-000000000000",
+            "destination_id": "6a2193fc-1bb2-3dd9-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "6705fab8-a34e-3351-0000-000000000000",
+            "destination_id": "8086577b-c16d-3a53-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "6efcb6cb-f02d-39bb-0000-000000000000",
+            "destination_id": "a3f4b9c6-dfc9-362e-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "fdb5ef40-29a3-335d-0000-000000000000",
+            "destination_id": "0978fb2d-40ba-3201-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "a6d643cd-6a39-37d8-0000-000000000000",
+            "destination_id": "293a0339-81a5-3b4c-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "d61e06ea-d241-3f80-0000-000000000000",
+            "destination_id": "26cfd505-ae8b-3593-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "dc681995-c9da-3e9d-0000-000000000000",
+            "destination_id": "e07e7747-0fff-3071-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "6705fab8-a34e-3351-0000-000000000000",
+            "destination_id": "a2fadb82-fad5-3941-0000-000000000000",
+            "relationship": "failure"
+          },
+          {
+            "source_id": "00c0ff74-1db3-3b7b-0000-000000000000",
+            "destination_id": "58afa421-7abf-37cc-0000-000000000000",
+            "relationship": "yes"
+          },
+          {
+            "source_id": "cfffff58-8202-308f-0000-000000000000",
+            "destination_id": "6efcb6cb-f02d-39bb-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "58afa421-7abf-37cc-0000-000000000000",
+            "destination_id": "6705fab8-a34e-3351-0000-000000000000",
+            "relationship": "output stream"
+          },
+          {
+            "source_id": "47959301-ecb6-3f55-0000-000000000000",
+            "destination_id": "54b735bc-36af-3139-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "58afa421-7abf-37cc-0000-000000000000",
+            "destination_id": "fd00da84-16bd-308f-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "d59ee20f-ce68-3500-0000-000000000000",
+            "destination_id": "cf9b547d-92f5-3cc5-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "3beb9a94-4a5e-3616-0000-000000000000",
+            "destination_id": "fdb5ef40-29a3-335d-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "27752e84-0109-35ed-0000-000000000000",
+            "destination_id": "dc681995-c9da-3e9d-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "1f2c1fa9-52be-3265-0000-000000000000",
+            "destination_id": "26cfd505-ae8b-3593-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "191672e6-b29a-3ff7-0000-000000000000",
+            "destination_id": "3be3e6ac-4eac-3c59-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "0978fb2d-40ba-3201-0000-000000000000",
+            "destination_id": "00c0ff74-1db3-3b7b-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "293a0339-81a5-3b4c-0000-000000000000",
+            "destination_id": "e55ecfda-9b26-31db-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "69584e65-d5a3-3c11-0000-000000000000",
+            "destination_id": "6a2193fc-1bb2-3dd9-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "3be3e6ac-4eac-3c59-0000-000000000000",
+            "destination_id": "fdb5ef40-29a3-335d-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "38620939-ea78-3954-0000-000000000000",
+            "destination_id": "b9396a28-d5b0-3306-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "9dbd6e4a-d024-3b14-0000-000000000000",
+            "destination_id": "d59ee20f-ce68-3500-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "bbde53a7-967c-3b89-0000-000000000000",
+            "destination_id": "00c0ff74-1db3-3b7b-0000-000000000000",
+            "relationship": ""
+          },
+          {
+            "source_id": "26cfd505-ae8b-3593-0000-000000000000",
+            "destination_id": "d41d1141-4727-3750-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "ca20b030-b677-31de-0000-000000000000",
+            "destination_id": "4141b91d-cd68-3e9c-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "b0ed174d-763b-341e-0000-000000000000",
+            "destination_id": "bbde53a7-967c-3b89-0000-000000000000",
+            "relationship": "unmatched"
+          },
+          {
+            "source_id": "8e90ac48-a57b-3599-0000-000000000000",
+            "destination_id": "0f6ba0ba-3fde-38a5-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "e7ae702c-3ef8-337f-0000-000000000000",
+            "relationship": "memory_oversubscribed"
+          },
+          {
+            "source_id": "58733d1e-7da0-3469-0000-000000000000",
+            "destination_id": "b0ed174d-763b-341e-0000-000000000000",
+            "relationship": "failure"
+          },
+          {
+            "source_id": "9e574967-10e3-3af0-0000-000000000000",
+            "destination_id": "244432ad-4f62-393f-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "dc075b22-c96e-3dd6-0000-000000000000",
+            "relationship": "hdfs_read_fail"
+          },
+          {
+            "source_id": "ce009049-666f-39c2-0000-000000000000",
+            "destination_id": "bbde53a7-967c-3b89-0000-000000000000",
+            "relationship": ""
+          },
+          {
+            "source_id": "dc075b22-c96e-3dd6-0000-000000000000",
+            "destination_id": "90d36089-fde9-36c9-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "fd00da84-16bd-308f-0000-000000000000",
+            "destination_id": "ad33bfa5-6aa4-317d-0000-000000000000",
+            "relationship": ""
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "9263a1b6-f200-3f5e-0000-000000000000",
+            "relationship": "unmatched"
+          },
+          {
+            "source_id": "b0ed174d-763b-341e-0000-000000000000",
+            "destination_id": "9e574967-10e3-3af0-0000-000000000000",
+            "relationship": "toomanytries"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "ae90fb8a-1a25-31fa-0000-000000000000",
+            "relationship": "memory_limit_exceeded"
+          },
+          {
+            "source_id": "58dbff24-a47c-30de-0000-000000000000",
+            "destination_id": "58733d1e-7da0-3469-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "e7ae702c-3ef8-337f-0000-000000000000",
+            "destination_id": "0f6ba0ba-3fde-38a5-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "8e90ac48-a57b-3599-0000-000000000000",
+            "relationship": "query_admission_timeout"
+          },
+          {
+            "source_id": "377c81ac-e43d-32a7-0000-000000000000",
+            "destination_id": "c3c66220-b878-3307-0000-000000000000",
+            "relationship": "nonzero status"
+          },
+          {
+            "source_id": "9263a1b6-f200-3f5e-0000-000000000000",
+            "destination_id": "ff19be10-cfdc-3fd9-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "fb9c6072-317d-31de-0000-000000000000",
+            "destination_id": "0f6ba0ba-3fde-38a5-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "c3c66220-b878-3307-0000-000000000000",
+            "destination_id": "b0ed174d-763b-341e-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "13f37849-7201-38c2-0000-000000000000",
+            "destination_id": "58dbff24-a47c-30de-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ad33bfa5-6aa4-317d-0000-000000000000",
+            "destination_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "ff19be10-cfdc-3fd9-0000-000000000000",
+            "destination_id": "c3c66220-b878-3307-0000-000000000000",
+            "relationship": "failure"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "13f37849-7201-38c2-0000-000000000000",
+            "relationship": "kerberos_ticket_expired"
+          },
+          {
+            "source_id": "ed570e48-44ca-3cf2-0000-000000000000",
+            "destination_id": "fb9c6072-317d-31de-0000-000000000000",
+            "relationship": "unreachable_impala_deamon"
+          },
+          {
+            "source_id": "90d36089-fde9-36c9-0000-000000000000",
+            "destination_id": "7134dd4d-0b9e-3c89-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "56d1e04a-ea6f-3ec0-0000-000000000000",
+            "destination_id": "c3c66220-b878-3307-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "7134dd4d-0b9e-3c89-0000-000000000000",
+            "destination_id": "377c81ac-e43d-32a7-0000-000000000000",
+            "relationship": "success"
+          },
+          {
+            "source_id": "0f6ba0ba-3fde-38a5-0000-000000000000",
+            "destination_id": "ce009049-666f-39c2-0000-000000000000",
+            "relationship": "failure"
+          },
+          {
+            "source_id": "ae90fb8a-1a25-31fa-0000-000000000000",
+            "destination_id": "56d1e04a-ea6f-3ec0-0000-000000000000",
+            "relationship": "success"
+          }
+        ],
+        "total_processors": 58,
+        "analysis_timestamp": "generated_by_nifi_intelligence_engine"
+      },
+      "raw_output": "{\n  \"processors_analysis\": [\n    {\n      \"processor_index\": 0,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Delays the flow of data for 5 minutes\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Rate limiting to prevent overwhelming downstream systems\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"delay\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ControlRate\",\n      \"properties\": {\n        \"Rate Control Criteria\": \"flowfile count\",\n        \"Time Duration\": \"300 sec\",\n        \"Maximum Rate\": \"1\"\n      },\n      \"id\": \"0f6ba0ba-3fde-38a5-0000-000000000000\",\n      \"name\": \"5 minute delay\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 1,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when a Kerberos ticket expires\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for authentication issues\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Kerberos ticket was expired when gathering stats for period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"13f37849-7201-38c2-0000-000000000000\",\n      \"name\": \"Log Kerberos Ticket Expired\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 2,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes an Impala shell command to run a refresh statement\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Refreshing data in a database\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"impala shell command\",\n        \"refresh statement\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/bin/impala-shell\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"-B;-k;-i;nardc02prod-impala.na-rdc02.nxp.com;-q;\\\"${refresh_statement}\\\"\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"377c81ac-e43d-32a7-0000-000000000000\",\n      \"name\": \"Run refresh statement\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 3,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Increases the memory limit by adding an increment to the current limit\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Dynamic memory allocation for data processing\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"attribute update\",\n        \"memory limit increase\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"impala_mem_limit\": \"${impala_mem_limit:plus(${impala_mem_limit_increment})}\"\n      },\n      \"id\": \"56d1e04a-ea6f-3ec0-0000-000000000000\",\n      \"name\": \"Increase mem_limit\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 4,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Delays the flow of data for 60 seconds\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Rate limiting to prevent overwhelming downstream systems\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"delay\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ControlRate\",\n      \"properties\": {\n        \"Rate Control Criteria\": \"flowfile count\",\n        \"Time Duration\": \"60 sec\",\n        \"Maximum Rate\": \"1\"\n      },\n      \"id\": \"58733d1e-7da0-3469-0000-000000000000\",\n      \"name\": \"60 second delay\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 5,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Refreshes a Kerberos ticket using the kinit command\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Authentication and authorization for data access\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"kinit command\",\n        \"kerberos ticket refresh\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/bin/kinit\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"-kt;/etc/security/keytab/hadoop_nifi_svc.keytab;hadoop_nifi_svc\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"58dbff24-a47c-30de-0000-000000000000\",\n      \"name\": \"Refresh Kerberos ticket (kinit)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 6,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when executing a refresh statement\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and logging for data refresh operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Executing ${refresh_statement} for stats period ${start_ts} - ${end_ts}.\\n\"\n      },\n      \"id\": \"7134dd4d-0b9e-3c89-0000-000000000000\",\n      \"name\": \"Log refresh statement\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 7,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when a query admission timeout occurs\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for query performance issues\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Stats query for period ${start_ts} - ${end_ts} was timed out before it could execute.\"\n      },\n      \"id\": \"8e90ac48-a57b-3599-0000-000000000000\",\n      \"name\": \"Log Query Admission Timeout\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 8,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when an unidentified error occurs\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Error handling and logging for data processing\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"add_partition_statement\": \"${execution.error\\n  :substringAfter  (\\\"/user/hive/warehouse/mfg_icn8/\\\")\\n  :substringBefore (\\\".parq\\\"                         )\\n  :replaceAll      (\\\"\\\\R\\\"                        , \\\"\\\"                )\\n  :replaceFirst    (\\\"/\\\"                         , \\\".\\\"               )\\n  :replaceFirst    (\\\"/[^/]*$\\\"                   , \\\"\\\"                )\\n  :replaceFirst    (\\\"/\\\"                         , \\\" add partition (\\\")\\n  :replaceAll      (\\\"/\\\"                         , \\\"', \\\"             )\\n  :replaceAll      (\\\"=\\\"                         , \\\"='\\\"              )\\n  :replaceAll      (\\\"__HIVE_DEFAULT_PARTITION__\\\", \\\"\\\"                )\\n  :replaceAll      (\\\"%3A\\\"                       , \\\":\\\"               )\\n  :prepend         (\\\"alter table \\\")\\n  :append          (\\\"');\\\")\\n }\",\n        \"drop_partition_statement\": \"${execution.error\\n  :substringAfter  (\\\"/user/hive/warehouse/mfg_icn8/\\\")\\n  :substringBefore (\\\".parq\\\"                         )\\n  :replaceAll      (\\\"\\\\R\\\"                        , \\\"\\\"                           )\\n  :replaceFirst    (\\\"/\\\"                         , \\\".\\\"                          )\\n  :replaceFirst    (\\\"/[^/]*$\\\"                   , \\\"\\\"                           )\\n  :replaceFirst    (\\\"/\\\"                         , \\\" drop if exists partition (\\\")\\n  :replaceAll      (\\\"/\\\"                         , \\\"', \\\"                        )\\n  :replaceAll      (\\\"=\\\"                         , \\\"='\\\"                         )\\n  :replaceAll      (\\\"__HIVE_DEFAULT_PARTITION__\\\", \\\"\\\"                           )\\n  :replaceAll      (\\\"%3A\\\"                       , \\\":\\\"                          )\\n  :prepend         (\\\"alter table \\\")\\n  :append          (\\\"');\\\")\\n }\",\n        \"refresh_statement\": \"${execution.error\\n  :substringAfter  (\\\"/user/hive/warehouse/mfg_icn8/\\\")\\n  :substringBefore (\\\".parq\\\"                         )\\n  :replaceAll      (\\\"\\\\R\\\"                        , \\\"\\\"            )\\n  :replaceFirst    (\\\"/\\\"                         , \\\".\\\"           )\\n  :replaceFirst    (\\\"/[^/]*$\\\"                   , \\\"\\\"            )\\n  :replaceFirst    (\\\"/\\\"                         , \\\" partition (\\\")\\n  :replaceAll      (\\\"/\\\"                         , \\\"', \\\"         )\\n  :replaceAll      (\\\"=\\\"                         , \\\"='\\\"          )\\n  :replaceAll      (\\\"__HIVE_DEFAULT_PARTITION__\\\", \\\"\\\"            )\\n  :replaceAll      (\\\"%3A\\\"                       , \\\":\\\"           )\\n  :prepend         (\\\"refresh \\\")\\n  :append          (\\\"');\\\")\\n }\"\n      },\n      \"id\": \"90d36089-fde9-36c9-0000-000000000000\",\n      \"name\": \"Derive refresh statement\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 9,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Derives a refresh statement by manipulating the execution error attribute\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Dynamic query generation for data refresh operations\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"attribute manipulation\",\n        \"query generation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Unidentified error while gathering stats for period ${start_ts} - ${end_ts}. Please investigate!\"\n      },\n      \"id\": \"9263a1b6-f200-3f5e-0000-000000000000\",\n      \"name\": \"Log Unidentified Error\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 10,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs an error message when an error occurs during ingest staging\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Error handling and logging for data ingest operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"error\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Unable to execute statistics query for stats period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"9e574967-10e3-3af0-0000-000000000000\",\n      \"name\": \"Log error on Ingest Staging\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 11,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when an error occurs during stats query execution\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Error handling and logging for data query operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Failed attempt ${attempts} executing statistics query for period ${start_ts} - ${end_ts}.\\nError details:\\n${execution.error}\"\n      },\n      \"id\": \"ad33bfa5-6aa4-317d-0000-000000000000\",\n      \"name\": \"Log error on stats query\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 12,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when a memory limit is exceeded\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for memory usage issues\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Impala memory limit exceeded while gathering stats for period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"ae90fb8a-1a25-31fa-0000-000000000000\",\n      \"name\": \"Log Memory Limit Exceeded\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 13,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when memory is oversubscribed\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for memory usage issues\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.RouteOnAttribute\",\n      \"properties\": {\n        \"Routing Strategy\": \"Route to Property name\",\n        \"toomanytries\": \"${stats_retry_counter:gt(10)}\"\n      },\n      \"id\": \"b0ed174d-763b-341e-0000-000000000000\",\n      \"name\": \"Continue until max tries\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 14,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Routes data based on the number of retry attempts\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Retry mechanism for data processing operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"routing\",\n        \"retry mechanism\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"stats_retry_counter\": \"${stats_retry_counter:isNull():ifElse(1, ${stats_retry_counter:plus(1)})}\"\n      },\n      \"id\": \"c3c66220-b878-3307-0000-000000000000\",\n      \"name\": \"Increase retry counter\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 15,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Increments the retry counter attribute\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Retry mechanism for data processing operations\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"attribute update\",\n        \"retry counter increment\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: HDFS read fail while gathering stats for period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"dc075b22-c96e-3dd6-0000-000000000000\",\n      \"name\": \"Log HDFS read fail\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 16,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when an HDFS read fails\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Error handling and logging for data read operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Stats query for period ${start_ts} - ${end_ts} was killed because memory was oversubscribed (too many queries running at once).\"\n      },\n      \"id\": \"e7ae702c-3ef8-337f-0000-000000000000\",\n      \"name\": \"Log Memory Oversubscribed\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 17,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when memory is oversubscribed\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for memory usage issues\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.RouteOnAttribute\",\n      \"properties\": {\n        \"Routing Strategy\": \"Route to Property name\",\n        \"hdfs_read_fail\": \"${execution.error:toLower():contains('failed to open hdfs file')}\",\n        \"kerberos_ticket_expired\": \"${execution.error:toLower():contains('-k requires a valid kerberos ticket but no valid kerberos ticket found')}\",\n        \"memory_limit_exceeded\": \"${execution.error:toLower():contains('memory limit exceeded')}\",\n        \"memory_oversubscribed\": \"${execution.error:toLower():contains('memory is likely oversubscribed.')}\",\n        \"query_admission_timeout\": \"${execution.error:toLower():contains('admission for query exceeded timeout')}\",\n        \"unreachable_impala_deamon\": \"${execution.error:toLower():contains('cancelled due to unreachable impalad(s)')}\"\n      },\n      \"id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"name\": \"Route on error type\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 18,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Routes data based on error type\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Error handling and routing for data processing operations\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"routing\",\n        \"error handling\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"warn\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cause: Stats query for period ${start_ts} - ${end_ts} was cancelled because an Impala Deamon was unreachable.\"\n      },\n      \"id\": \"fb9c6072-317d-31de-0000-000000000000\",\n      \"name\": \"Log Unreachable Impala Deamon\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 19,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a warning message when an Impala daemon is unreachable\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Monitoring and alerting for Impala daemon availability\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ControlRate\",\n      \"properties\": {\n        \"Rate Control Criteria\": \"flowfile count\",\n        \"Time Duration\": \"10 sec\",\n        \"Maximum Rate\": \"1\"\n      },\n      \"id\": \"ff19be10-cfdc-3fd9-0000-000000000000\",\n      \"name\": \"10 second delay\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 0,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Routes flowfile based on attribute 'use_hive_yn' to determine if Hive should be used for query\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Determines whether to use Hive for querying based on attribute value\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"routing\",\n        \"attribute evaluation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.RouteOnAttribute\",\n      \"properties\": {\n        \"Routing Strategy\": \"Route to Property name\",\n        \"yes\": \"${use_hive_yn:startsWith('Y')}\"\n      },\n      \"id\": \"00c0ff74-1db3-3b7b-0000-000000000000\",\n      \"name\": \"Use Hive for query?\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 1,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Updates flowfile priority attribute based on end timestamp\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Prioritizes flowfiles based on end timestamp\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"attribute update\",\n        \"priority calculation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"priority\": \"${literal(99999999999999)\\n  :minus(${end_ts\\n           :replaceAll(\\\"-\\\", \\\"\\\")\\n           :replaceAll(\\\" \\\", \\\"\\\")\\n           :replaceAll(\\\":\\\", \\\"\\\")\\n          }\\n        )\\n }\"\n      },\n      \"id\": \"0978fb2d-40ba-3201-0000-000000000000\",\n      \"name\": \"Set flowfile priority\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 2,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Extracts start and end timestamps from filename and updates flowfile attributes\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Extracts time frame from filename for further processing\",\n      \"data_impact_level\": \"medium\",\n      \"key_operations\": [\n        \"filename parsing\",\n        \"attribute extraction\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"end_ts\": \"${filename:replaceAll('^.*[0-9]{14}_([0-9]{14})_[0-9]{14}.*$','$1'):toDate ('yyyyMMddHHmmss'):format(\\\"yyyy-MM-dd HH:mm:ss\\\")}\",\n        \"start_ts\": \"${filename:replaceAll('^.*([0-9]{14})_[0-9]{14}_[0-9]{14}.*$','$1'):toDate ('yyyyMMddHHmmss'):format(\\\"yyyy-MM-dd HH:mm:ss\\\")}\"\n      },\n      \"id\": \"191672e6-b29a-3ff7-0000-000000000000\",\n      \"name\": \"Determine time frame of cross check request\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 3,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flowfile with predefined attributes for a 10x24 hour time frame\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a new data processing flow for a specific time frame\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"flowfile generation\",\n        \"attribute initialization\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"include_e3_bq_yn\": \"N\",\n        \"include_temptation_bq_yn\": \"N\",\n        \"start_ts\": \"${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}\"\n      },\n      \"id\": \"1f2c1fa9-52be-3265-0000-000000000000\",\n      \"name\": \"Determine time frame (10 x 24 hours)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 4,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Executes a script to clear the 'not_in_stats' folder\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Maintains the 'not_in_stats' folder by clearing its contents\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"script execution\",\n        \"folder maintenance\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Working Directory\": \"/users/hadoop_nifi_svc/scripts/icn8/\",\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"true\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"26cfd505-ae8b-3593-0000-000000000000\",\n      \"name\": \"Clear not_in_stats folder\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 5,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flowfile to initiate the Impala check query process\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates the Impala check query process\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"flowfile generation\",\n        \"process initiation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\"\n      },\n      \"id\": \"27752e84-0109-35ed-0000-000000000000\",\n      \"name\": \"Start Impala check query - PMI DQ\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 6,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes an Impala check query using the 'Impala_Check.sh' script\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs an Impala check query to validate data\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"script execution\",\n        \"Impala query execution\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"PMI_View\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"293a0339-81a5-3b4c-0000-000000000000\",\n      \"name\": \"Run Impala check query - PMI-View\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 7,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Lists files in the '/etl/dropzone/icn8/incoming' directory based on a file filter\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Identifies cross-check request files for further processing\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"file listing\",\n        \"file filtering\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ListFile\",\n      \"properties\": {\n        \"Input Directory\": \"/etl/dropzone/icn8/incoming\",\n        \"listing-strategy\": \"entities\",\n        \"Recurse Subdirectories\": \"false\",\n        \"Input Directory Location\": \"Remote\",\n        \"File Filter\": \"^HDP_.*[0-9]{14}_[0-9]{14}_([0-9]{14})\\\\.*(ccr)$\",\n        \"Include File Attributes\": \"false\",\n        \"Minimum File Age\": \"0 sec\",\n        \"Minimum File Size\": \"0 B\",\n        \"Ignore Hidden Files\": \"true\",\n        \"target-system-timestamp-precision\": \"auto-detect\",\n        \"et-state-cache\": \"9cd607eb-3e75-32ee-0000-000000000000\",\n        \"et-time-window\": \"3 hours\",\n        \"et-initial-listing-target\": \"all\",\n        \"et-node-identifier\": \"same\",\n        \"track-performance\": \"false\",\n        \"max-performance-metrics\": \"100000\",\n        \"max-operation-time\": \"10 secs\",\n        \"max-listing-time\": \"3 mins\"\n      },\n      \"id\": \"38620939-ea78-3954-0000-000000000000\",\n      \"name\": \"Get cross check request files\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 8,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a message indicating the receipt of a cross-check request file\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Logs the receipt of a cross-check request file for auditing purposes\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\",\n        \"message generation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"info\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Cross check request file received for period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"3be3e6ac-4eac-3c59-0000-000000000000\",\n      \"name\": \"Log cross check request\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 9,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flowfile with predefined attributes for a custom time frame\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a new data processing flow for a custom time frame\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"flowfile generation\",\n        \"attribute initialization\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"2023-03-10 00:00:00\",\n        \"include_e3_bq_yn\": \"Y\",\n        \"include_temptation_bq_yn\": \"Y\",\n        \"start_ts\": \"2023-03-09 00:00:00\"\n      },\n      \"id\": \"3beb9a94-4a5e-3616-0000-000000000000\",\n      \"name\": \"Determine time frame (custom period)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 10,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes an Impala query using the 'run_impala_query.sh' script\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs an Impala query to extract data\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"script execution\",\n        \"Impala query execution\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"-i;nardc02prod-impala.na-rdc02.nxp.com;-B;--query=\\\"\\nset request_pool=root.default;\\nset mem_limit=${impala_mem_limit}G;\\n${query}\\n\\\";--print_header;--output_delimiter=,\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"4051c036-a52d-395b-0000-000000000000\",\n      \"name\": \"Execute Impala Query\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 11,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Does not perform any data processing, appears to be a placeholder or dummy processor\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"No apparent business purpose, possibly a placeholder\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"4141b91d-cd68-3e9c-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 12,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flowfile with predefined attributes for manual feedback\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a new data processing flow for manual feedback\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"flowfile generation\",\n        \"attribute initialization\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"start_ts\": \"${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}\"\n      },\n      \"id\": \"47959301-ecb6-3f55-0000-000000000000\",\n      \"name\": \"SWS FB - Manual feedback\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 13,\n      \"data_manipulation_type\": \"data_transformation\",\n      \"actual_data_processing\": \"Updates flowfile attributes, including filename and Impala query, for single wafer scrap feedback\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Prepares data for single wafer scrap feedback processing\",\n      \"data_impact_level\": \"medium\",\n      \"key_operations\": [\n        \"attribute update\",\n        \"filename generation\",\n        \"query generation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"filename\": \"HDP_SINGLE_WAFER_SCRAP_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.sws\",\n        \"impala_mem_limit\": \"2\",\n        \"impala_mem_limit_increment\": \"5\",\n        \"query\": \"-- ICN8/NiFi/BRSFeedback/SWS\\nselect\\n  lot\\n, num_wafers\\n, wafers\\n, component\\n, regexp_replace (object, '[^\\\\x00-\\\\xFF]', '')                      object\\n, object_type\\n, num_wafers_step\\n, num_bad\\n, num_good\\n, outlier\\n, min_bad\\n, max_bad\\n, min_good\\n, max_good\\n, distance\\n, avg_good\\n, std_good\\n, state\\n, proc_state\\n, scrap_type\\n, prod_period\\n, scrap_cet_ts\\n, terminate_cet_ts\\n, admin_scrap_cet_ts\\n, product\\n, process\\n, esort_scrap_code\\n, maverick\\n, scrap_suspect_technical_stage\\n, scrap_suspect_flow_stage\\n, regexp_replace (scrap_suspect_process_step, '[^\\\\x00-\\\\xFF]', '')  scrap_suspect_process_step\\n, cause_contained\\n, incident\\n, scrap_code\\n, proc_key\\n, rec_owner\\n, cause_code\\n, section_cause_code\\n, ccd_description\\n, replace (detailed_description, ',', '')                          detailed_description\\n, loh_trackout_cet_ts\\n, loh_technical_stage\\n, loh_flow_stage\\n, loh_step\\n, loh_equipment\\n, scrap_key\\n, total\\n, scrap_correlate_type\\n, good_wafers\\nfrom\\n  mfg_icn8_apps.nifi_single_wafer_scrap_hits\\nwhere\\n   scrap_cet_ts >= '${start_ts}'  /* 2020-03-17 FvH: To save on diskspace / BRS processing time, only sent 2020 (and later) data */\\n                                  /* 2022-03-16 FvH: To save on diskspace / BRS processing time, only sent 2022 (and later) data */\\n                                  /* 2023-02-06 FvH: To save on diskspace / BRS processing time, only sent 2023 (and later) data */\\n                                  /* 2023-09-18 FvH: Permanent beep reduction: always only extract the last n days               */\\n;\\n\"\n      },\n      \"id\": \"54b735bc-36af-3139-0000-000000000000\",\n      \"name\": \"SWS FB - Determine query and filename\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 14,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes a Hive query using the 'beeline' command\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs a Hive query to extract data\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"command execution\",\n        \"Hive query execution\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/bin/beeline\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"--outputformat=csv2;-e;\\\"${query}\\\"\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"58afa421-7abf-37cc-0000-000000000000\",\n      \"name\": \"Execute Hive Query\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 15,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Transfers files to an SFTP server\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Transfers files to an SFTP server for further processing or storage\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"file transfer\",\n        \"SFTP interaction\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.PutSFTP\",\n      \"properties\": {\n        \"Hostname\": \"nardc02hdpnp011.na-rdc02.nxp.com\",\n        \"Port\": \"22\",\n        \"Username\": \"hadoop_nifi_svc\",\n        \"Private Key Path\": \"/users/hadoop_nifi_svc/.ssh/id_rsa\",\n        \"Remote Path\": \"/etl/dropzone/icn8/outgoing\",\n        \"Create Directory\": \"false\",\n        \"Disable Directory Listing\": \"false\",\n        \"Batch Size\": \"500\",\n        \"Connection Timeout\": \"30 sec\",\n        \"Data Timeout\": \"30 sec\",\n        \"Conflict Resolution\": \"NONE\",\n        \"Reject Zero-Byte Files\": \"true\",\n        \"Dot Rename\": \"false\",\n        \"Temporary Filename\": \"{$filename}tmp\",\n        \"Strict Host Key Checking\": \"false\",\n        \"Send Keep Alive On Timeout\": \"true\",\n        \"Use Compression\": \"false\",\n        \"Proxy Type\": \"DIRECT\"\n      },\n      \"id\": \"6705fab8-a34e-3351-0000-000000000000\",\n      \"name\": \"PutSFTP\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 16,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flowfile with predefined attributes for a specific time frame (2017-12-30 06:30)\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a new data processing flow for a specific time frame\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"flowfile generation\",\n        \"attribute initialization\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"start_ts\": \"2017-12-30 06:30:00\"\n      },\n      \"id\": \"69584e65-d5a3-3c11-0000-000000000000\",\n      \"name\": \"Determine time frame (2017-12-30 06:30)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 17,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Does not perform any data processing, appears to be a placeholder or dummy processor\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"No apparent business purpose, possibly a placeholder\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"6be76809-509d-3c6f-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 18,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes an Impala check query using the 'Impala_Check.sh' script for PMI DQ\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs an Impala check query to validate data for PMI DQ\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"script execution\",\n        \"Impala query execution\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"PMI_View_interactive_queue\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"6efcb6cb-f02d-39bb-0000-000000000000\",\n      \"name\": \"Run Impala check query - PMI DQ\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 19,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Logs a message indicating the successful send of statistics for a specific time frame\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Logs the successful send of statistics for auditing purposes\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"logging\",\n        \"message generation\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.LogMessage\",\n      \"properties\": {\n        \"log-level\": \"info\",\n        \"log-prefix\": \"icn8: \",\n        \"log-message\": \"Succesfully sent statistics for period ${start_ts} - ${end_ts}.\"\n      },\n      \"id\": \"8086577b-c16d-3a53-0000-000000000000\",\n      \"name\": \"Log successful send\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 0,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file with a specified time frame.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\",\n        \"set start and end timestamp\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"2021-01-19 00:00:00\",\n        \"start_ts\": \"2021-01-01 00:00:00\"\n      },\n      \"id\": \"9dbd6e4a-d024-3b14-0000-000000000000\",\n      \"name\": \"PMI-View logging to table\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 1,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"a2fadb82-fad5-3941-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 2,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"a3f4b9c6-dfc9-362e-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 3,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\"\n      },\n      \"id\": \"a6d643cd-6a39-37d8-0000-000000000000\",\n      \"name\": \"Start Impala check query - PMI-View\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 4,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Executes a command to remove a file, but does not transform any data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Removes a file from the file system.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"remove file\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/bin/rm\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"-f;/etl/dropzone/icn8/incoming/${filename}\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"true\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"b9396a28-d5b0-3306-0000-000000000000\",\n      \"name\": \"Remove cross check request file\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 5,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file with a specified time frame.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\",\n        \"set start and end timestamp\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"start_ts\": \"${now():toNumber():minus(8640000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}\"\n      },\n      \"id\": \"c464453c-5bd2-379b-0000-000000000000\",\n      \"name\": \"Determine time frame (100 x 24 hours)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 6,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes a shell script that runs an Impala check query, which may transform data content.\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs a data quality check query on Impala.\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"run Impala check query\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"NiFi_Loading\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"ca20b030-b677-31de-0000-000000000000\",\n      \"name\": \"Run Impala check query - NiFi Loading\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 7,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file with a specified time frame.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\",\n        \"set start and end timestamp\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"start_ts\": \"${now():toNumber():minus(864000000):format('yyyy-MM-dd HH:mm:ss', 'CET')}\"\n      },\n      \"id\": \"ce39589e-e6b8-3343-0000-000000000000\",\n      \"name\": \"SWS FB - Determine time frame\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 8,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"cf9b547d-92f5-3cc5-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 9,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\"\n      },\n      \"id\": \"cfffff58-8202-308f-0000-000000000000\",\n      \"name\": \"Start Impala check query - PMI IQ\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 10,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"d41d1141-4727-3750-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 11,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"NiFi_Loading\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"d59ee20f-ce68-3500-0000-000000000000\",\n      \"name\": \"PMI-View logging to table - shell script\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 12,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes a shell script that logs data to a table, which transforms data content.\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Logs data to a table.\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"log data to table\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\",\n        \"end_ts\": \"${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}\",\n        \"start_ts\": \"${now():toNumber():minus(259200000):format('yyyy-MM-dd HH:mm:ss', 'CET')}\"\n      },\n      \"id\": \"d61e06ea-d241-3f80-0000-000000000000\",\n      \"name\": \"Determine time frame (3 x 24 hours)\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 13,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file with a specified start and end timestamp, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file with a specified time frame.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\",\n        \"set start and end timestamp\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.ExecuteStreamCommand\",\n      \"properties\": {\n        \"Command Path\": \"/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh\",\n        \"argumentsStrategy\": \"Command Arguments Property\",\n        \"Command Arguments\": \"PMI_View_default_queue\",\n        \"Argument Delimiter\": \";\",\n        \"Ignore STDIN\": \"false\",\n        \"Max Attribute Length\": \"256\"\n      },\n      \"id\": \"dc681995-c9da-3e9d-0000-000000000000\",\n      \"name\": \"Run Impala check query - PMI DQ\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 14,\n      \"data_manipulation_type\": \"external_processing\",\n      \"actual_data_processing\": \"Executes a shell script that runs an Impala check query, which may transform data content.\",\n      \"transforms_data_content\": true,\n      \"business_purpose\": \"Runs a data quality check query on Impala.\",\n      \"data_impact_level\": \"high\",\n      \"key_operations\": [\n        \"run Impala check query\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"e07e7747-0fff-3071-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 15,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\"\n      },\n      \"id\": \"e55ecfda-9b26-31db-0000-000000000000\",\n      \"name\": \"Dummy\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 16,\n      \"data_manipulation_type\": \"infrastructure_only\",\n      \"actual_data_processing\": \"Updates attributes of the flow file, but does not transform the actual data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Updates metadata of the flow file for routing or logging purposes.\",\n      \"data_impact_level\": \"none\",\n      \"key_operations\": [\n        \"update attributes\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.standard.GenerateFlowFile\",\n      \"properties\": {\n        \"File Size\": \"0B\",\n        \"Batch Size\": \"1\",\n        \"Data Format\": \"Text\",\n        \"Unique FlowFiles\": \"false\",\n        \"character-set\": \"UTF-8\"\n      },\n      \"id\": \"f2636a48-8130-3527-0000-000000000000\",\n      \"name\": \"Start Impala check query - NiFi Loading\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    },\n    {\n      \"processor_index\": 17,\n      \"data_manipulation_type\": \"data_movement\",\n      \"actual_data_processing\": \"Generates a new flow file, but does not transform any existing data content.\",\n      \"transforms_data_content\": false,\n      \"business_purpose\": \"Initiates a data processing workflow by generating a new flow file.\",\n      \"data_impact_level\": \"low\",\n      \"key_operations\": [\n        \"generate flow file\"\n      ],\n      \"processor_type\": \"org.apache.nifi.processors.attributes.UpdateAttribute\",\n      \"properties\": {\n        \"Store State\": \"Do not store state\",\n        \"canonical-value-lookup-cache-size\": \"100\",\n        \"filename\": \"HDP_LOAD_STATS_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.hls\",\n        \"impala_mem_limit\": \"5\",\n        \"impala_mem_limit_increment\": \"5\",\n        \"query\": \"/* ICN8/NiFi/BRSFeedback/CrossCheck */\\n  select\\n    'nifi_diamond_raw'                        table_name\\n  , substr (ndr.run_trackout_cet_ts, 1, 19)   trackout_cet_ts\\n  , nvl (ndr.run_loh_key, 0)                  loh_key\\n  , count (*)                                 num_records\\n  from\\n    mfg_icn8_data.nifi_diamond_raw  ndr\\n  where\\n        ndr.p_from_trackout_cet_ts  < '${end_ts}'\\n    and ndr.p_to_trackout_cet_ts    > '${start_ts}'\\n    and ndr.run_trackout_cet_ts    >= '${start_ts}'\\n    and ndr.run_trackout_cet_ts     < '${end_ts}'\\n    and ndr.run_trackout_cet_ts     > '2020-04-01'\\n  group by\\n    ndr.run_loh_key\\n  , ndr.run_trackout_cet_ts\\nunion all\\n  select\\n    'nifi_production_steps'  table_name\\n  , nps.trackout_cet_ts\\n  , nps.loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_production_steps  nps\\n  where\\n        nps.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nps.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nps.trackout_cet_ts        >= '${start_ts}'\\n    and nps.trackout_cet_ts         < '${end_ts}'\\n  group by\\n    nps.loh_key\\n  , nps.trackout_cet_ts\\nunion all\\n  select\\n    'nifi_metrology_raw'          table_name\\n  , nmr.meas_loh_trackout_cet_ts  trackout_cet_ts\\n  , nmr.meas_loh_key              loh_key\\n  , count (*)                     num_records\\n  from\\n    mfg_icn8_data.nifi_metrology_raw  nmr\\n  where\\n        nmr.p_from_trackout_cet_ts    < '${end_ts}'\\n    and nmr.p_to_trackout_cet_ts      > '${start_ts}'\\n    and nmr.meas_loh_trackout_cet_ts >= '${start_ts}'\\n    and nmr.meas_loh_trackout_cet_ts  < '${end_ts}'\\n  group by\\n    nmr.meas_loh_key\\n  , nmr.meas_loh_trackout_cet_ts\\nunion all\\n  select\\n    'nifi_pcm_raw'           table_name\\n  , npr.loh_trackout_cet_ts  trackout_cet_ts\\n  , npr.loh_key              loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_pcm_raw  npr\\n  where\\n        npr.p_from_trackout_cet_ts  < '${end_ts}'\\n    and npr.p_to_trackout_cet_ts    > '${start_ts}'\\n    and npr.loh_trackout_cet_ts    >= '${start_ts}'\\n    and npr.loh_trackout_cet_ts     < '${end_ts}'\\n  group by\\n    npr.loh_trackout_cet_ts\\n  , npr.loh_key\\nunion all\\n  select\\n    'nifi_temptation_sum'    table_name\\n  , nts.loh_trackout_cet_ts  trackout_cet_ts\\n  , nts.loh_key              loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_temptation_sum  nts\\n  where\\n        nts.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nts.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nts.loh_trackout_cet_ts    >= '${start_ts}'\\n    and nts.loh_trackout_cet_ts     < '${end_ts}'\\n    and nts.loh_trackout_cet_ts    >= '2020-07-21'\\n  group by\\n    nts.loh_trackout_cet_ts\\n  , nts.loh_key\\nunion all\\n  select\\n    'nifi_e3_sum'            table_name\\n  , nes.loh_trackout_cet_ts  trackout_cet_ts\\n  , nes.loh_key              loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_e3_sum  nes\\n  where\\n        nes.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nes.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nes.loh_trackout_cet_ts    >= '${start_ts}'\\n    and nes.loh_trackout_cet_ts     < '${end_ts}'\\n  group by\\n    nes.loh_trackout_cet_ts\\n  , nes.loh_key\\nunion all\\n  select\\n    'nifi_e3_uva'            table_name\\n  , neu.loh_trackout_cet_ts  trackout_cet_ts\\n  , neu.loh_key              loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_e3_uva  neu\\n  where\\n        neu.p_from_trackout_cet_ts  < '${end_ts}'\\n    and neu.p_to_trackout_cet_ts    > '${start_ts}'\\n    and neu.loh_trackout_cet_ts    >= '${start_ts}'\\n    and neu.loh_trackout_cet_ts     < '${end_ts}'\\n  group by\\n    neu.loh_trackout_cet_ts\\n  , neu.loh_key\\nunion all\\n  select\\n    'nifi_experiments'       table_name\\n  , ne.exp_cet_ts            trackout_cet_ts\\n  , ne.experiment_key        loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_experiments  ne\\n  where\\n        ne.exp_cet_ts >= '${start_ts}'\\n    and ne.exp_cet_ts  < '${end_ts}'\\n  group by\\n    ne.exp_cet_ts\\n  , ne.experiment_key\\nunion all\\n  select\\n    'nifi_tool_overlay_raw'  table_name\\n  , nor.trackout_cet_ts\\n  , nor.loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_tool_overlay_raw  nor\\n  where\\n        nor.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nor.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nor.trackout_cet_ts        >= '${start_ts}'\\n    and nor.trackout_cet_ts         < '${end_ts}'\\n  group by\\n    nor.loh_key\\n  , nor.trackout_cet_ts\\nunion all\\n  select\\n    'nifi_diamond_components'  table_name\\n  , '1900-01-01 00:00:00'      trackout_cet_ts\\n  , -1                         loh_key\\n  , count (*)                  num_records\\n  from\\n    mfg_icn8_data.nifi_diamond_components  ndc\\nunion all\\n  select\\n    'nifi_process_runcards'  table_name\\n  , '1900-01-01 00:00:00'    trackout_cet_ts\\n  , -1                       loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_process_runcards  npr\\nunion all\\n  select\\n    'nifi_lotstatus'         table_name\\n  , nls.lot_creation_cet_ts  trackout_cet_ts\\n  , -1                       loh_key\\n  , count (*)                num_records\\n  from\\n    mfg_icn8_data.nifi_lot_status  nls\\n  where\\n        nls.lot_creation_cet_ts >= '${start_ts}'\\n    and nls.lot_creation_cet_ts  < '${end_ts}'\\n  group by\\n    nls.lot_creation_cet_ts\\nunion all\\n  select\\n    'nifi_scrap'      table_name\\n  , nsc.scrap_cet_ts  trackout_cet_ts\\n  , nsc.scrap_key     loh_key\\n  , count (*)         num_records\\n  from\\n    mfg_icn8_data.nifi_scrap  nsc\\n  where\\n        nsc.scrap_cet_ts >= '${start_ts}'\\n    and nsc.scrap_cet_ts  < '${end_ts}'\\n    and nsc.scrap_key     > 0\\n  group by\\n    nsc.scrap_cet_ts\\n  , nsc.scrap_key\\nunion all\\n  select \\n    'nifi_xsite_states_raw'                 table_name\\n  , substr (ndr.from_cet_ts, 1, 19)         trackout_cet_ts\\n  , 1                                       loh_key\\n  , count (*)                               num_records\\n  from\\n    mfg_icn8_data.nifi_xsite_states_raw  ndr\\n  where\\n        ndr.p_from_start_cet_ts  < '${end_ts}'\\n    and ndr.p_to_start_cet_ts    > '${start_ts}'\\n    and ndr.from_cet_ts          >= '${start_ts}'\\n    and ndr.from_cet_ts          < '${end_ts}'\\n  group by\\n    substr (ndr.from_cet_ts, 1, 19) \\nunion all\\n  select\\n    'nifi_base_wafer_production_steps'  table_name\\n  , nbw.trackout_cet_ts                 trackout_cet_ts\\n  , nbw.loh_key                         loh_key\\n  , count (*)                           num_records\\n  from\\n    mfg_icn8_apps.nifi_base_wafer_production_steps  nbw\\n  where\\n        nbw.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nbw.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nbw.trackout_cet_ts        >= '${start_ts}'\\n    and nbw.trackout_cet_ts         < '${end_ts}'\\n  group by\\n    nbw.trackout_cet_ts\\n  , nbw.loh_key\\nunion all\\n  select\\n    'nifi_base_qualifications (TEMPTATION)'        table_name\\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\\n  , nbq.loh_key                                    loh_key\\n  , count ( distinct\\n            nvl (nbq.lot                    , '')\\n          , nvl (nbq.meas_cet_ts            , '')\\n          , nvl (nbq.program                , '')\\n          , nvl (nbq.parameter              , '')\\n          , nvl (nbq.component              , '')\\n          , nvl (nbq.ttn_sub_recipe         , '')\\n          , nvl (nbq.ttn_recipe_process_step, '')\\n          , nvl (nbq.event                  , '')\\n          )                                        num_records\\n  from\\n    mfg_icn8_apps.nifi_base_qualifications  nbq\\n  where\\n        '${include_temptation_bq_yn}' in ('', 'Y')\\n    and nbq.p_parameter_type        = 'TEMPTATION'\\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\\n    and nbq.loh_trackout_cet_ts    >= '2020-07-21'\\n  group by\\n    nbq.loh_trackout_cet_ts\\n  , nbq.loh_key\\n  , nbq.p_parameter_type\\nunion all\\n  select  /* Add a record to indicate that Temptation BQ data was sent (in case BQ happens to contain 0 Temptation records) */\\n    'nifi_base_qualifications (TEMPTATION)'  table_name\\n  , ''                                       trackout_cet_ts\\n  , -1                                       loh_key\\n  , -1                                       num_records\\n  from\\n    mfg_icn8_data.dual\\n  where\\n    '${include_temptation_bq_yn}' in ('', 'Y')\\nunion all\\n  select\\n    'nifi_base_qualifications (E3)'                table_name\\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\\n  , nbq.loh_key                                    loh_key\\n  , count ( distinct\\n            nvl (nbq.lot                    , '')\\n          , nvl (nbq.meas_cet_ts            , '')\\n          , nvl (nbq.program                , '')\\n          , nvl (nbq.parameter              , '')\\n          , nvl (nbq.component              , '')\\n          , nvl (nbq.ttn_sub_recipe         , '')\\n          , nvl (nbq.ttn_recipe_process_step, '')\\n          , nvl (nbq.event                  , '')\\n          ,      nbq.measured_value\\n          )                                        num_records\\n  from\\n    mfg_icn8_apps.nifi_base_qualifications  nbq\\n  where\\n        '${include_e3_bq_yn}'      in ('', 'Y')\\n    and nbq.p_parameter_type        = 'E3'\\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\\n  group by\\n    nbq.loh_trackout_cet_ts\\n  , nbq.loh_key\\n  , nbq.p_parameter_type\\nunion all\\n  select  /* Add a record to indicate that E3 BQ data was sent (in case BQ happens to contain 0 E3 records) */\\n    'nifi_base_qualifications (E3)'  table_name\\n  , ''                               trackout_cet_ts\\n  , -1                               loh_key\\n  , -1                               num_records\\n  from\\n    mfg_icn8_data.dual\\n  where\\n    '${include_e3_bq_yn}' in ('', 'Y')\\nunion all\\n  select\\n    'nifi_base_qualifications (E3_UVA)'  table_name\\n  , nbq.loh_trackout_cet_ts              trackout_cet_ts\\n  , nbq.loh_key                          loh_key\\n  , count ( distinct\\n            nvl (nbq.lot        , '')\\n          , nvl (nbq.meas_cet_ts, '')\\n          , nvl (nbq.program    , '')\\n          , nvl (nbq.parameter  , '')\\n          , nvl (nbq.event      , '')\\n          )                              num_records\\n  from\\n    mfg_icn8_apps.nifi_base_qualifications  nbq\\n  where\\n        nbq.p_parameter_type        = 'E3_UVA'\\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\\n  group by\\n    nbq.loh_trackout_cet_ts\\n  , nbq.loh_key\\n  , nbq.p_parameter_type\\nunion all\\n  select\\n    concat ('nifi_base_qualifications ('\\n           , p_parameter_type\\n           , ')'\\n           )                              table_name\\n  , nbq.loh_trackout_cet_ts               trackout_cet_ts\\n  , nbq.loh_key                           loh_key\\n  , count (*)                             num_records\\n  from\\n    mfg_icn8_apps.nifi_base_qualifications  nbq\\n  where\\n            (     nbq.p_parameter_type         in ('EDC', 'Overlay', 'PCM', 'TRACING_EQP', 'TRACING_COMP', 'DIAMOND_TIMES')\\n              or  nbq.p_parameter_type       like 'OQ%'\\n            )\\n    and           nbq.p_aggregation_type       in ('lot', 'waf', 'site')\\n    and           nbq.p_from_trackout_cet_ts    < '${end_ts}'\\n    and           nbq.p_to_trackout_cet_ts      > '${start_ts}'\\n    and           nbq.loh_trackout_cet_ts      >= '${start_ts}'\\n    and           nbq.loh_trackout_cet_ts       < '${end_ts}'\\n    and not (     p_parameter_type             in ('TRACING_COMP', 'DIAMOND_TIMES')\\n              and nbq.loh_trackout_cet_ts       < '2020-04-01'\\n            )\\n    and not (     p_parameter_type              = 'TRACING_COMP'\\n              and program                       = 'TRACING_COMP_TTN'\\n            )  /* 2022-08-01 FvH: Don't count the component tracing records from Temptation, otherwise we cannot compare to BRS */\\n  group by\\n    concat ( 'nifi_base_qualifications ('\\n           , p_parameter_type\\n           , ')'\\n           )\\n  , nbq.loh_trackout_cet_ts\\n  , nbq.loh_key\\n  , nbq.p_parameter_type\\norder by\\n  table_name\\n, trackout_cet_ts\\n, loh_key\\n;\",\n        \"use_hive_yn\": \"Y\"\n      },\n      \"id\": \"fdb5ef40-29a3-335d-0000-000000000000\",\n      \"name\": \"Determine query and filename\",\n      \"analysis_method\": \"llm_batch_intelligent\"\n    }\n  ],\n  \"connections_analysis\": [\n    {\n      \"source_id\": \"00c0ff74-1db3-3b7b-0000-000000000000\",\n      \"destination_id\": \"4051c036-a52d-395b-0000-000000000000\",\n      \"relationship\": \"unmatched\"\n    },\n    {\n      \"source_id\": \"b9396a28-d5b0-3306-0000-000000000000\",\n      \"destination_id\": \"191672e6-b29a-3ff7-0000-000000000000\",\n      \"relationship\": \"output stream\"\n    },\n    {\n      \"source_id\": \"6a2193fc-1bb2-3dd9-0000-000000000000\",\n      \"destination_id\": \"fdb5ef40-29a3-335d-0000-000000000000\",\n      \"relationship\": \"\"\n    },\n    {\n      \"source_id\": \"f2636a48-8130-3527-0000-000000000000\",\n      \"destination_id\": \"ca20b030-b677-31de-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"4051c036-a52d-395b-0000-000000000000\",\n      \"destination_id\": \"6705fab8-a34e-3351-0000-000000000000\",\n      \"relationship\": \"output stream\"\n    },\n    {\n      \"source_id\": \"c464453c-5bd2-379b-0000-000000000000\",\n      \"destination_id\": \"6a2193fc-1bb2-3dd9-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"244432ad-4f62-393f-0000-000000000000\",\n      \"destination_id\": \"6be76809-509d-3c6f-0000-000000000000\",\n      \"relationship\": \"\"\n    },\n    {\n      \"source_id\": \"54b735bc-36af-3139-0000-000000000000\",\n      \"destination_id\": \"0978fb2d-40ba-3201-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ce39589e-e6b8-3343-0000-000000000000\",\n      \"destination_id\": \"54b735bc-36af-3139-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"4051c036-a52d-395b-0000-000000000000\",\n      \"destination_id\": \"fd00da84-16bd-308f-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"26cfd505-ae8b-3593-0000-000000000000\",\n      \"destination_id\": \"6a2193fc-1bb2-3dd9-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"6705fab8-a34e-3351-0000-000000000000\",\n      \"destination_id\": \"8086577b-c16d-3a53-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"6efcb6cb-f02d-39bb-0000-000000000000\",\n      \"destination_id\": \"a3f4b9c6-dfc9-362e-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"fdb5ef40-29a3-335d-0000-000000000000\",\n      \"destination_id\": \"0978fb2d-40ba-3201-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"a6d643cd-6a39-37d8-0000-000000000000\",\n      \"destination_id\": \"293a0339-81a5-3b4c-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"d61e06ea-d241-3f80-0000-000000000000\",\n      \"destination_id\": \"26cfd505-ae8b-3593-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"dc681995-c9da-3e9d-0000-000000000000\",\n      \"destination_id\": \"e07e7747-0fff-3071-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"6705fab8-a34e-3351-0000-000000000000\",\n      \"destination_id\": \"a2fadb82-fad5-3941-0000-000000000000\",\n      \"relationship\": \"failure\"\n    },\n    {\n      \"source_id\": \"00c0ff74-1db3-3b7b-0000-000000000000\",\n      \"destination_id\": \"58afa421-7abf-37cc-0000-000000000000\",\n      \"relationship\": \"yes\"\n    },\n    {\n      \"source_id\": \"cfffff58-8202-308f-0000-000000000000\",\n      \"destination_id\": \"6efcb6cb-f02d-39bb-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"58afa421-7abf-37cc-0000-000000000000\",\n      \"destination_id\": \"6705fab8-a34e-3351-0000-000000000000\",\n      \"relationship\": \"output stream\"\n    },\n    {\n      \"source_id\": \"47959301-ecb6-3f55-0000-000000000000\",\n      \"destination_id\": \"54b735bc-36af-3139-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"58afa421-7abf-37cc-0000-000000000000\",\n      \"destination_id\": \"fd00da84-16bd-308f-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"d59ee20f-ce68-3500-0000-000000000000\",\n      \"destination_id\": \"cf9b547d-92f5-3cc5-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"3beb9a94-4a5e-3616-0000-000000000000\",\n      \"destination_id\": \"fdb5ef40-29a3-335d-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"27752e84-0109-35ed-0000-000000000000\",\n      \"destination_id\": \"dc681995-c9da-3e9d-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"1f2c1fa9-52be-3265-0000-000000000000\",\n      \"destination_id\": \"26cfd505-ae8b-3593-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"191672e6-b29a-3ff7-0000-000000000000\",\n      \"destination_id\": \"3be3e6ac-4eac-3c59-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"0978fb2d-40ba-3201-0000-000000000000\",\n      \"destination_id\": \"00c0ff74-1db3-3b7b-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"293a0339-81a5-3b4c-0000-000000000000\",\n      \"destination_id\": \"e55ecfda-9b26-31db-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"69584e65-d5a3-3c11-0000-000000000000\",\n      \"destination_id\": \"6a2193fc-1bb2-3dd9-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"3be3e6ac-4eac-3c59-0000-000000000000\",\n      \"destination_id\": \"fdb5ef40-29a3-335d-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"38620939-ea78-3954-0000-000000000000\",\n      \"destination_id\": \"b9396a28-d5b0-3306-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"9dbd6e4a-d024-3b14-0000-000000000000\",\n      \"destination_id\": \"d59ee20f-ce68-3500-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"bbde53a7-967c-3b89-0000-000000000000\",\n      \"destination_id\": \"00c0ff74-1db3-3b7b-0000-000000000000\",\n      \"relationship\": \"\"\n    },\n    {\n      \"source_id\": \"26cfd505-ae8b-3593-0000-000000000000\",\n      \"destination_id\": \"d41d1141-4727-3750-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"ca20b030-b677-31de-0000-000000000000\",\n      \"destination_id\": \"4141b91d-cd68-3e9c-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"b0ed174d-763b-341e-0000-000000000000\",\n      \"destination_id\": \"bbde53a7-967c-3b89-0000-000000000000\",\n      \"relationship\": \"unmatched\"\n    },\n    {\n      \"source_id\": \"8e90ac48-a57b-3599-0000-000000000000\",\n      \"destination_id\": \"0f6ba0ba-3fde-38a5-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"e7ae702c-3ef8-337f-0000-000000000000\",\n      \"relationship\": \"memory_oversubscribed\"\n    },\n    {\n      \"source_id\": \"58733d1e-7da0-3469-0000-000000000000\",\n      \"destination_id\": \"b0ed174d-763b-341e-0000-000000000000\",\n      \"relationship\": \"failure\"\n    },\n    {\n      \"source_id\": \"9e574967-10e3-3af0-0000-000000000000\",\n      \"destination_id\": \"244432ad-4f62-393f-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"dc075b22-c96e-3dd6-0000-000000000000\",\n      \"relationship\": \"hdfs_read_fail\"\n    },\n    {\n      \"source_id\": \"ce009049-666f-39c2-0000-000000000000\",\n      \"destination_id\": \"bbde53a7-967c-3b89-0000-000000000000\",\n      \"relationship\": \"\"\n    },\n    {\n      \"source_id\": \"dc075b22-c96e-3dd6-0000-000000000000\",\n      \"destination_id\": \"90d36089-fde9-36c9-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"fd00da84-16bd-308f-0000-000000000000\",\n      \"destination_id\": \"ad33bfa5-6aa4-317d-0000-000000000000\",\n      \"relationship\": \"\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"9263a1b6-f200-3f5e-0000-000000000000\",\n      \"relationship\": \"unmatched\"\n    },\n    {\n      \"source_id\": \"b0ed174d-763b-341e-0000-000000000000\",\n      \"destination_id\": \"9e574967-10e3-3af0-0000-000000000000\",\n      \"relationship\": \"toomanytries\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"ae90fb8a-1a25-31fa-0000-000000000000\",\n      \"relationship\": \"memory_limit_exceeded\"\n    },\n    {\n      \"source_id\": \"58dbff24-a47c-30de-0000-000000000000\",\n      \"destination_id\": \"58733d1e-7da0-3469-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"e7ae702c-3ef8-337f-0000-000000000000\",\n      \"destination_id\": \"0f6ba0ba-3fde-38a5-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"8e90ac48-a57b-3599-0000-000000000000\",\n      \"relationship\": \"query_admission_timeout\"\n    },\n    {\n      \"source_id\": \"377c81ac-e43d-32a7-0000-000000000000\",\n      \"destination_id\": \"c3c66220-b878-3307-0000-000000000000\",\n      \"relationship\": \"nonzero status\"\n    },\n    {\n      \"source_id\": \"9263a1b6-f200-3f5e-0000-000000000000\",\n      \"destination_id\": \"ff19be10-cfdc-3fd9-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"fb9c6072-317d-31de-0000-000000000000\",\n      \"destination_id\": \"0f6ba0ba-3fde-38a5-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"c3c66220-b878-3307-0000-000000000000\",\n      \"destination_id\": \"b0ed174d-763b-341e-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"13f37849-7201-38c2-0000-000000000000\",\n      \"destination_id\": \"58dbff24-a47c-30de-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ad33bfa5-6aa4-317d-0000-000000000000\",\n      \"destination_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"ff19be10-cfdc-3fd9-0000-000000000000\",\n      \"destination_id\": \"c3c66220-b878-3307-0000-000000000000\",\n      \"relationship\": \"failure\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"13f37849-7201-38c2-0000-000000000000\",\n      \"relationship\": \"kerberos_ticket_expired\"\n    },\n    {\n      \"source_id\": \"ed570e48-44ca-3cf2-0000-000000000000\",\n      \"destination_id\": \"fb9c6072-317d-31de-0000-000000000000\",\n      \"relationship\": \"unreachable_impala_deamon\"\n    },\n    {\n      \"source_id\": \"90d36089-fde9-36c9-0000-000000000000\",\n      \"destination_id\": \"7134dd4d-0b9e-3c89-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"56d1e04a-ea6f-3ec0-0000-000000000000\",\n      \"destination_id\": \"c3c66220-b878-3307-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"7134dd4d-0b9e-3c89-0000-000000000000\",\n      \"destination_id\": \"377c81ac-e43d-32a7-0000-000000000000\",\n      \"relationship\": \"success\"\n    },\n    {\n      \"source_id\": \"0f6ba0ba-3fde-38a5-0000-000000000000\",\n      \"destination_id\": \"ce009049-666f-39c2-0000-000000000000\",\n      \"relationship\": \"failure\"\n    },\n    {\n      \"source_id\": \"ae90fb8a-1a25-31fa-0000-000000000000\",\n      \"destination_id\": \"56d1e04a-ea6f-3ec0-0000-000000000000\",\n      \"relationship\": \"success\"\n    }\n  ],\n  \"total_processors\": 58,\n  \"analysis_timestamp\": \"generated_by_nifi_intelligence_engine\"\n}"
+    },
+    {
+      "index": 2,
+      "type": "message",
+      "content": [
+        {
+          "type": "text",
+          "text": "The provided NiFi workflow, located at /Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml, is a complex data processing pipeline with 58 processors. The workflow is designed to gather statistics from various tables, perform data quality checks, and log data to tables.\n\nHere's a high-level overview of the workflow's functionality:\n\n1. **Data Ingestion**: The workflow starts by listing files in a directory, filtering them based on a specific pattern, and then generating new flow files with predefined attributes.\n2. **Data Processing**: The workflow performs various data processing tasks, including:\n\t* Executing Impala queries to extract data from tables.\n\t* Updating attributes of flow files, such as filename, Impala query, and other metadata.\n\t* Routing flow files based on attributes, such as the presence of specific parameters or the success/failure of previous operations.\n3. **Data Quality Checks**: The workflow performs data quality checks, including:\n\t* Checking for the presence of specific records in tables.\n\t* Verifying the correctness of data in tables.\n4. **Logging**: The workflow logs data to tables, including:\n\t* Logging statistics gathered from tables.\n\t* Logging data quality check results.\n5. **Error Handling**: The workflow handles errors and exceptions, including:\n\t* Logging error messages when specific conditions are met.\n\t* Routing flow files to error handling paths when errors occur.\n\nSome of the key processors in the workflow include:\n\n* **GenerateFlowFile**: Generates new flow files with predefined attributes.\n* **ExecuteStreamCommand**: Executes Impala queries to extract data from tables.\n* **UpdateAttribute**: Updates attributes of flow files, such as filename, Impala query, and other metadata.\n* **RouteOnAttribute**: Routes flow files based on attributes, such as the presence of specific parameters or the success/failure of previous operations.\n* **LogMessage**: Logs error messages when specific conditions are met.\n\nThe workflow appears to be designed to automate the process of gathering statistics, performing data quality checks, and logging data to tables. However, without more context or information about the specific use case, it's difficult to provide a more detailed analysis.\n\nIn terms of migrating this workflow to Databricks, it's likely that the workflow would need to be re-designed to take advantage of Databricks' capabilities, such as using Apache Spark for data processing and Delta Lake for data storage. The workflow's reliance on Impala queries and logging to tables may need to be adapted to use Databricks' native features, such as Spark SQL and Delta Lake. Additionally, the workflow's error handling and routing logic may need to be re-designed to take advantage of Databricks' built-in features, such as job orchestration and monitoring."
+        }
+      ]
+    }
+  ]
+}
