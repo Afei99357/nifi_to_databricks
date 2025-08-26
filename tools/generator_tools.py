@@ -178,6 +178,61 @@ Generate the optimal data passing strategy:"""
         }
 
 
+def _get_template_property_mappings(
+    processor_class: str, properties: Dict[str, Any]
+) -> Dict[str, str]:
+    """
+    Map NiFi processor properties to template placeholder names.
+    This ensures templates like '{path}' get replaced with actual property values.
+    """
+    mappings = {}
+    lc = processor_class.lower()
+
+    if "getfile" in lc or "listfile" in lc:
+        # Map GetFile properties to template placeholders
+        input_directory = properties.get("Input Directory", "/path/to/input")
+        file_filter = properties.get("File Filter", ".*")
+
+        # Determine format from file filter
+        format_type = "json"  # default
+        if "csv" in file_filter.lower():
+            format_type = "csv"
+        elif "parquet" in file_filter.lower():
+            format_type = "parquet"
+        elif "avro" in file_filter.lower():
+            format_type = "avro"
+
+        mappings.update(
+            {
+                "path": input_directory,
+                "format": format_type,
+            }
+        )
+
+    elif "puthdfs" in lc or "putfile" in lc:
+        # Map PutHDFS properties
+        directory = properties.get("Directory", "/path/to/output")
+        mappings.update(
+            {
+                "Directory": directory,
+                "mode": "append",  # default mode
+            }
+        )
+
+    elif "consumekafka" in lc:
+        # Map ConsumeKafka properties
+        topics = properties.get("Topic Name(s)", "topic")
+        bootstrap_servers = properties.get("Kafka Brokers", "localhost:9092")
+        mappings.update(
+            {
+                "topics": topics,
+                "bootstrap_servers": bootstrap_servers,
+            }
+        )
+
+    return mappings
+
+
 def _get_previous_processor_table(context: Dict[str, Any]) -> str:
     """
     Get the intermediate table name from the previous processor in the workflow.
@@ -402,6 +457,11 @@ def _get_builtin_pattern(
             [f"# TODO: {comment}" for comment in data_strategy.get("todo_comments", [])]
         )
 
+        # Map NiFi properties to template placeholders
+        template_mappings = _get_template_property_mappings(
+            processor_class, properties or {}
+        )
+
         injections = {
             "processor_class": processor_class,
             "properties": _format_properties_as_comments(properties or {}),
@@ -417,7 +477,9 @@ def _get_builtin_pattern(
             "data_output_code": data_strategy.get("output_code")
             or "# No output code needed (sink processor)",
             "data_todo_comments": todo_comments,
+            # Add both raw properties and mapped template placeholders
             **{k: v for k, v in (properties or {}).items()},
+            **template_mappings,
         }
         for k, v in injections.items():
             code = code.replace(f"{{{k}}}", str(v))
