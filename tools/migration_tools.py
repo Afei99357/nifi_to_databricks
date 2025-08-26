@@ -194,19 +194,22 @@ You are a NiFi to Databricks migration expert. Generate PySpark code for the pro
 PROCESSORS TO CONVERT:
 {json.dumps(processor_specs, indent=2)}
 
+IMPORTANT: This is a BATCH ETL workflow (not streaming). Generate batch processing code.
+
 REQUIREMENTS:
 1. Return processor index as string key, PySpark code as string value
-2. Use Databricks patterns (Delta Lake, Auto Loader, Structured Streaming)
+2. Use Databricks BATCH patterns (Delta Lake, regular DataFrame operations)
 3. Include comments in the code explaining the logic
-4. For GetFile/ListFile: use Auto Loader with cloudFiles format
-5. For PutFile/PutHDFS: use Delta Lake writes
-6. For ConsumeKafka: use Structured Streaming
+4. For GetFile/ListFile: use spark.read (NOT streaming/Auto Loader) for one-time file processing
+5. For PutFile/PutHDFS: use Delta Lake batch writes
+6. For ExecuteStreamCommand: use subprocess or shell commands
 7. For JSON processors: use PySpark JSON functions
 8. CRITICAL - CONTEXT-AWARE DATAFRAMES:
    - Check workflow_context.previous_processors to understand data flow
    - For source processors: Create df_[clean_processor_name] as output
    - For processing processors: Use previous processor's DataFrame as input
    - NEVER use undefined 'df' - always create or reference specific DataFrame variables
+9. DATA PASSING: Save results to intermediate Delta tables for next job task to read
 
 CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
 

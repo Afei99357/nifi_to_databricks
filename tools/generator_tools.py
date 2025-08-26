@@ -106,14 +106,20 @@ WORKFLOW CONTEXT:
 
 CHALLENGE: Each processor runs as a separate Databricks job task (separate Python process), so variables can't be passed directly.
 
+MIGRATION CONTEXT: This is a BATCH ETL workflow (not streaming). NiFi processors typically:
+- Process files once, then move/delete them
+- Execute commands and process results
+- Handle discrete data batches, not continuous streams
+- Use GetFile/ListFile for one-time file processing (not continuous monitoring)
+
 TASK: Generate specific data passing strategy for processor "{processor_class}" at index {processor_index}.
 
 Consider these approaches:
-1. **Intermediate Delta Tables**: Save/read via temp tables (good for most cases)
+1. **Intermediate Delta Tables**: Save/read via temp tables (RECOMMENDED for batch ETL)
 2. **Unity Catalog Tables**: Use persistent catalog tables
 3. **Cloud Storage**: Save/read via Delta Lake files
 4. **Job Parameters**: Pass metadata/paths as job parameters
-5. **Streaming**: Use Delta Live Tables or Structured Streaming
+5. **Batch DataFrames**: Use regular spark.read (NOT spark.readStream) for file ingestion
 
 REQUIREMENTS:
 1. Analyze the specific processor types in this workflow
@@ -284,211 +290,16 @@ def _get_builtin_pattern(
     workflow_context: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """
-    Get hardcoded migration patterns for common NiFi processors.
-    Returns a rendered dictionary with code template and metadata.
+    LLM-driven pattern generation - no hardcoded templates.
+    Returns indication to use LLM for all processors.
     """
-    pattern = {}
-    lc = processor_class.lower()
-
-    # Extract context-aware DataFrame names and LLM-generated data passing strategy
-    context = workflow_context or {}
-    input_df = _get_context_aware_input_dataframe(processor_class, context)
-    output_df = _get_context_aware_output_dataframe(processor_class, context)
-
-    # Get LLM-driven data passing strategy for this specific workflow
-    data_strategy = _generate_data_passing_strategy(processor_class, context)
-
-    if "getfile" in lc or "listfile" in lc:
-        pattern = {
-            "databricks_equivalent": "Auto Loader",
-            "description": "File ingestion via Auto Loader.",
-            "best_practices": [
-                "Use schemaLocation for schema tracking",
-                "Enable includeExistingFiles for initial backfill",
-                "Use cleanSource after successful processing",
-            ],
-            "code_template": (
-                "from pyspark.sql.functions import *\n\n"
-                "# Read streaming data with Auto Loader\n"
-                "{output_dataframe} = (spark.readStream\n"
-                "      .format('cloudFiles')\n"
-                "      .option('cloudFiles.format', '{format}')\n"
-                "      .option('cloudFiles.inferColumnTypes', 'true')\n"
-                "      .option('cloudFiles.schemaEvolutionMode', 'addNewColumns')\n"
-                "      .load('{path}'))\n\n"
-                "# ===========================================\n"
-                "# LLM-GENERATED DATA PASSING STRATEGY: {data_strategy_name}\n"
-                "# Reasoning: {data_strategy_reasoning}\n"
-                "# ===========================================\n"
-                "{data_output_code}\n\n"
-                "# TODO: Manual Review Required\n"
-                "{data_todo_comments}"
-            ),
-        }
-    elif "puthdfs" in lc or "putfile" in lc:
-        # Check if path looks like legacy HDFS path
-        directory_path = properties.get("Directory", "")
-        is_legacy_path = any(
-            directory_path.startswith(prefix)
-            for prefix in ["/user/", "/hdfs/", "/tmp/", "/data/", "/var/"]
-        )
-
-        if is_legacy_path:
-            # Generate Unity Catalog format with TODO comments for legacy paths
-            pattern = {
-                "databricks_equivalent": "Unity Catalog Delta Table",
-                "description": "Transactional storage in Unity Catalog Delta Table (converted from legacy HDFS path).",
-                "best_practices": [
-                    "Use Unity Catalog three-part naming: catalog.schema.table",
-                    "Review and update table location to match your catalog structure",
-                    "Consider partitioning strategy for large tables",
-                    "Set up proper permissions and governance",
-                ],
-                "code_template": (
-                    "# ===========================================\n"
-                    "# LLM-GENERATED DATA PASSING STRATEGY: {data_strategy_name}\n"
-                    "# Reasoning: {data_strategy_reasoning}\n"
-                    "# ===========================================\n\n"
-                    "{data_input_code}\n\n"
-                    "# TODO: UPDATE TABLE REFERENCE - Converted from legacy HDFS path: {Directory}\n"
-                    "# Original NiFi path: {Directory}\n"
-                    "# Please update with your actual Unity Catalog table reference\n"
-                    "# Example: 'catalog_name.schema_name.table_name'\n\n"
-                    "# MANUAL REVIEW REQUIRED: Update the table name below\n"
-                    "target_table = 'main.default.sensor_data'  # TODO: Replace with your actual catalog.schema.table\n\n"
-                    "# Write to Unity Catalog Delta table\n"
-                    "{input_dataframe}.write.format('delta').mode('append').saveAsTable(target_table)\n\n"
-                    "# ===========================================\n"
-                    "# DATA PASSING - Save for next processor\n"
-                    "# ===========================================\n"
-                    "{data_output_code}\n\n"
-                    "# TODO: Manual Review Required\n"
-                    "{data_todo_comments}"
-                ),
-            }
-        else:
-            # Use original template for non-legacy paths
-            pattern = {
-                "databricks_equivalent": "Delta Lake",
-                "description": "Transactional storage in Delta.",
-                "best_practices": [
-                    "Partition by frequently filtered columns when useful",
-                    "Compact small files (OPTIMIZE / auto-opt)",
-                    "Consider Z-ORDER for skewed query patterns",
-                ],
-                "code_template": (
-                    "from pyspark.sql.functions import *\n\n"
-                    "# Read data from previous job task's intermediate table\n"
-                    "{input_dataframe} = spark.read.format('delta').table('{previous_table}')\n\n"
-                    "# Write to Delta Lake location\n"
-                    "{input_dataframe}.write.format('delta').mode('{mode}').save('{Directory}')"
-                ),
-            }
-    elif "routeonattribute" in lc:
-        pattern = {
-            "databricks_equivalent": "DataFrame Filter/When",
-            "description": "Route data based on conditions using DataFrame filters and when/otherwise clauses.",
-            "best_practices": [
-                "Use when().otherwise() for multiple routing conditions",
-                "Create separate outputs using filter() operations",
-                "Cache DataFrame if filtering multiple times for different routes",
-                "Use col() function for column references in conditions",
-            ],
-            "code_template": (
-                "from pyspark.sql.functions import col, when, otherwise\n\n"
-                "# Route data based on attribute conditions\n"
-                "# Example: Route based on status attribute\n"
-                "{output_dataframe}_success = {input_dataframe}.filter(col('status') == 'success')\n"
-                "{output_dataframe}_failed = {input_dataframe}.filter(col('status') == 'failed')\n"
-                "{output_dataframe}_pending = {input_dataframe}.filter(col('status') == 'pending')\n\n"
-                "# Or use when/otherwise for single column routing\n"
-                "{output_dataframe} = {input_dataframe}.withColumn('route', \n"
-                "    when(col('status') == 'success', 'success_route')\n"
-                "    .when(col('status') == 'failed', 'failed_route')\n"
-                "    .otherwise('default_route')\n"
-                ")"
-            ),
-        }
-    elif "evaluatejsonpath" in lc:
-        pattern = {
-            "databricks_equivalent": "JSON Functions",
-            "description": "Extract values from JSON using get_json_object, json_tuple, or from_json functions.",
-            "best_practices": [
-                "Use get_json_object() for extracting single values",
-                "Use json_tuple() for extracting multiple values efficiently",
-                "Use from_json() with schema for complex JSON parsing",
-                "Handle null/missing paths gracefully with coalesce()",
-            ],
-            "code_template": (
-                "from pyspark.sql.functions import get_json_object, json_tuple, coalesce, lit, from_json\n"
-                "from pyspark.sql.types import StructType, StructField, StringType\n\n"
-                "# Extract single JSON value\n"
-                "df_with_host = {input_dataframe}.withColumn('host', get_json_object(col('json_content'), '$.host'))\n\n"
-                "# Extract multiple JSON values efficiently\n"
-                "{output_dataframe}_extracted = {input_dataframe}.select('*', \n"
-                "    json_tuple(col('json_content'), 'host', 'level', 'message')\n"
-                "    .alias('host', 'level', 'message')\n"
-                ")\n\n"
-                "# For complex JSON with known schema\n"
-                "json_schema = StructType([\n"
-                "    StructField('host', StringType(), True),\n"
-                "    StructField('level', StringType(), True),\n"
-                "    StructField('message', StringType(), True)\n"
-                "])\n"
-                "df_parsed = {input_dataframe}.withColumn('parsed_json', from_json(col('json_content'), json_schema))\n"
-                "{output_dataframe} = df_parsed.select('*', 'parsed_json.*').drop('parsed_json')"
-            ),
-        }
-    else:
-        # No builtin pattern - return empty to trigger LLM generation
-        return {
-            "equivalent": "Unknown",
-            "description": "",
-            "best_practices": [],
-            "code": None,  # This will trigger LLM generation
-        }
-
-    # Render code with injected placeholders when present
-    code = None
-    if "code_template" in pattern:
-        code = pattern["code_template"]
-        # Format TODO comments as Python comments
-        todo_comments = "\n".join(
-            [f"# TODO: {comment}" for comment in data_strategy.get("todo_comments", [])]
-        )
-
-        # Map NiFi properties to template placeholders
-        template_mappings = _get_template_property_mappings(
-            processor_class, properties or {}
-        )
-
-        injections = {
-            "processor_class": processor_class,
-            "properties": _format_properties_as_comments(properties or {}),
-            "input_dataframe": input_df,
-            "output_dataframe": output_df,
-            # LLM-generated data passing strategy
-            "data_strategy_name": data_strategy.get("strategy", "Unknown"),
-            "data_strategy_reasoning": data_strategy.get(
-                "reasoning", "No reasoning provided"
-            ),
-            "data_input_code": data_strategy.get("input_code")
-            or "# No input code needed (source processor)",
-            "data_output_code": data_strategy.get("output_code")
-            or "# No output code needed (sink processor)",
-            "data_todo_comments": todo_comments,
-            # Add both raw properties and mapped template placeholders
-            **{k: v for k, v in (properties or {}).items()},
-            **template_mappings,
-        }
-        for k, v in injections.items():
-            code = code.replace(f"{{{k}}}", str(v))
-
+    # Let LLM handle ALL processors - no hardcoded patterns needed
+    # The LLM can analyze ANY processor type and generate appropriate code
     return {
-        "equivalent": pattern.get("databricks_equivalent", "Unknown"),
-        "description": pattern.get("description", ""),
-        "best_practices": pattern.get("best_practices", []),
-        "code": code,
+        "equivalent": "LLM-Generated",
+        "description": f"AI-generated code for {processor_class} based on workflow context",
+        "best_practices": [],
+        "code": None,  # This will trigger LLM generation
     }
 
 
