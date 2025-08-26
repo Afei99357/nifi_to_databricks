@@ -12,6 +12,160 @@ from langchain_core.tools import tool
 # Removed hardcoded knowledge base - using pure LLM intelligence instead
 
 
+def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Batch analyze multiple processors in a single LLM call for efficiency.
+    This is much more cost-effective than individual calls per processor.
+    """
+    if not processors:
+        return []
+
+    model_endpoint = os.environ.get(
+        "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
+    )
+
+    try:
+        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.1)
+
+        # Prepare batch analysis prompt
+        processors_summary = []
+        for i, proc in enumerate(processors):
+            processors_summary.append(
+                f"""
+PROCESSOR {i+1}:
+- Name: {proc.get('name', 'unnamed')}
+- Type: {proc.get('processor_type', 'unknown')}
+- Properties: {json.dumps(proc.get('properties', {}), indent=2)}
+"""
+            )
+
+        batch_prompt = f"""You are a NiFi data engineering expert. Analyze these {len(processors)} processors in batch to understand what each ACTUALLY does with data.
+
+PROCESSORS TO ANALYZE:
+{''.join(processors_summary)}
+
+For each processor, focus on DATA MANIPULATION vs INFRASTRUCTURE:
+- Does this processor TRANSFORM the actual data content? (change structure, extract fields, convert formats)
+- Does this processor just MOVE data from A to B? (file ingestion, storage, network transfer)
+- Does this processor do INFRASTRUCTURE work? (logging, routing, delays, authentication)
+
+Return ONLY a JSON array with one object per processor:
+[
+  {{
+    "processor_index": 0,
+    "data_manipulation_type": "data_transformation | data_movement | infrastructure_only | external_processing",
+    "actual_data_processing": "Detailed description of what happens to the data content",
+    "transforms_data_content": true/false,
+    "business_purpose": "What this accomplishes in business terms",
+    "data_impact_level": "high | medium | low | none",
+    "key_operations": ["list", "of", "key", "operations"]
+  }},
+  ...
+]
+
+Examples:
+- GetFile: moves files, data_movement, no content transformation
+- EvaluateJsonPath: extracts JSON fields, data_transformation, changes data structure
+- LogMessage: pure logging, infrastructure_only, no data impact
+- ExecuteStreamCommand with SQL: transforms data, external_processing, high impact
+
+Be specific about what happens to the actual data content, not just metadata or routing."""
+
+        print(
+            f"🧠 [BATCH ANALYSIS] Analyzing {len(processors)} processors in single LLM call..."
+        )
+        response = llm.invoke(batch_prompt)
+
+        # Parse LLM response
+        try:
+            batch_results = json.loads(response.content.strip())
+        except json.JSONDecodeError:
+            # Try to extract JSON from response if it's wrapped in text
+            content = response.content.strip()
+            if "[" in content and "]" in content:
+                start = content.find("[")
+                end = content.rfind("]") + 1
+                batch_results = json.loads(content[start:end])
+            else:
+                raise ValueError("Could not parse JSON from LLM batch response")
+
+        # Combine results with processor metadata
+        results = []
+        for i, proc in enumerate(processors):
+            if i < len(batch_results):
+                analysis = batch_results[i]
+                analysis.update(
+                    {
+                        "processor_type": proc.get("processor_type", ""),
+                        "properties": proc.get("properties", {}),
+                        "id": proc.get("id", ""),
+                        "name": proc.get("name", ""),
+                        "analysis_method": "llm_batch_intelligent",
+                    }
+                )
+                results.append(analysis)
+            else:
+                # Fallback if batch didn't return enough results
+                results.append(
+                    {
+                        "processor_type": proc.get("processor_type", ""),
+                        "properties": proc.get("properties", {}),
+                        "id": proc.get("id", ""),
+                        "name": proc.get("name", ""),
+                        "data_manipulation_type": "unknown",
+                        "actual_data_processing": "Batch analysis incomplete",
+                        "transforms_data_content": False,
+                        "business_purpose": "Analysis failed",
+                        "data_impact_level": "unknown",
+                        "key_operations": ["batch_analysis_failed"],
+                        "analysis_method": "fallback_batch_incomplete",
+                    }
+                )
+
+        print(f"✅ [BATCH ANALYSIS] Successfully analyzed {len(results)} processors")
+        return results
+
+    except Exception as e:
+        print(f"❌ [BATCH ANALYSIS] Batch analysis failed: {str(e)}")
+        # Fallback to individual analysis for critical failures
+        print("🔄 [FALLBACK] Using individual processor analysis...")
+        results = []
+        for proc in processors:
+            try:
+                individual_result = analyze_processor_properties(
+                    proc.get("processor_type", ""), proc.get("properties", {})
+                )
+                individual_result.update(
+                    {
+                        "id": proc.get("id", ""),
+                        "name": proc.get("name", ""),
+                    }
+                )
+                results.append(individual_result)
+            except Exception as individual_error:
+                print(
+                    f"⚠️ [FALLBACK] Individual analysis also failed for {proc.get('name', 'unnamed')}: {individual_error}"
+                )
+                results.append(
+                    {
+                        "processor_type": proc.get("processor_type", ""),
+                        "properties": proc.get("properties", {}),
+                        "id": proc.get("id", ""),
+                        "name": proc.get("name", ""),
+                        "data_manipulation_type": "unknown",
+                        "actual_data_processing": "Both batch and individual analysis failed",
+                        "transforms_data_content": False,
+                        "business_purpose": "Analysis completely failed",
+                        "data_impact_level": "unknown",
+                        "key_operations": ["analysis_failed"],
+                        "analysis_method": "fallback_failed",
+                        "error": str(individual_error),
+                    }
+                )
+
+        return results
+
+
 def analyze_processor_properties(
     processor_type: str, properties: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -139,11 +293,11 @@ def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
 
         root = ET.fromstring(xml_content)
 
-        # Extract all processors with their properties
-        processors_analysis = []
+        # Extract all processors with their properties (no individual analysis yet)
+        processors_data = []
         connections_analysis = []
 
-        # Analyze processors
+        # Extract processor data for batch analysis
         for processor in root.findall(".//processors"):
             proc_id = (processor.findtext("id") or "").strip()
             proc_name = (processor.findtext("name") or "Unknown").strip()
@@ -164,13 +318,17 @@ def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
                             if value:  # Only store non-empty values
                                 properties[key] = value
 
-            # Deep analysis of this processor
-            processor_analysis = analyze_processor_properties(proc_type, properties)
-            processor_analysis.update(
-                {"id": proc_id, "name": proc_name, "properties": properties}
+            processors_data.append(
+                {
+                    "id": proc_id,
+                    "name": proc_name,
+                    "processor_type": proc_type,
+                    "properties": properties,
+                }
             )
 
-            processors_analysis.append(processor_analysis)
+        # 🚀 BATCH ANALYSIS - Analyze ALL processors in a single LLM call!
+        processors_analysis = analyze_processors_batch(processors_data)
 
         # Analyze connections to understand data flow
         for connection in root.findall(".//connections"):
