@@ -45,50 +45,13 @@ req = ResponsesAgentRequest(
 analysis_resp = AGENT.predict(req)
 print("✅ Simple workflow analysis complete!")
 
-# Display the analysis results
+# Display the analysis results - standard MLflow approach
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Extract and display the actual analysis content
-for item in analysis_resp.output:
-    # Look for message type items with content
-    if hasattr(item, "type") and item.type == "message":
-        if hasattr(item, "content") and isinstance(item.content, list):
-            for block in item.content:
-                if isinstance(block, dict) and block.get("type") == "output_text":
-                    print(block.get("text", ""))
-
-    # Also check for function_call_output that might have analysis results
-    elif hasattr(item, "type") and item.type == "function_call_output":
-        if hasattr(item, "output"):
-            # Try to parse JSON output from the tool
-            try:
-                import json
-
-                tool_result = json.loads(item.output)
-                if "workflow_intelligence" in tool_result:
-                    intelligence = tool_result["workflow_intelligence"]
-                    print(
-                        f"🎯 Business Purpose: {intelligence.get('business_purpose', 'N/A')}"
-                    )
-                    print(
-                        f"📦 Data Processing: {intelligence.get('data_transformation_summary', 'N/A')}"
-                    )
-                    print(
-                        f"⚖️ Processing Type: {intelligence.get('infrastructure_vs_processing', 'N/A')}"
-                    )
-                    print(
-                        f"🔧 Core Data Processors: {intelligence.get('core_data_processors', [])}"
-                    )
-                    print(
-                        f"🏗️ Infrastructure Processors: {intelligence.get('infrastructure_processors', [])}"
-                    )
-                elif "error" in tool_result:
-                    print(f"❌ Analysis Error: {tool_result['error']}")
-                else:
-                    print(f"Tool Result: {item.output}")
-            except:
-                print(f"Tool Output: {item.output}")
+# Standard way to display MLflow agent responses
+for output in analysis_resp.output:
+    print(output.content)
 
 print("=" * 60)
 
@@ -124,19 +87,13 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# Display the migration results
+# Display the migration results - simple approach
 print("\n📋 SIMPLE MIGRATION RESULTS:")
 print("=" * 60)
-for item in resp.output:
-    if hasattr(item, "content"):
-        if isinstance(item.content, list):
-            for block in item.content:
-                if hasattr(block, "text"):
-                    print(block.text)
-        elif hasattr(item.content, "text"):
-            print(item.content.text)
-        elif isinstance(item.content, str):
-            print(item.content)
+
+for output in resp.output:
+    print(output.content)
+
 print("=" * 60)
 
 # COMMAND ----------
@@ -162,50 +119,13 @@ req = ResponsesAgentRequest(
 complex_analysis_resp = AGENT.predict(req)
 print("✅ Complex workflow analysis complete!")
 
-# Display the complex analysis results
+# Display the complex analysis results - simple approach
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Extract and display the complex analysis content
-for item in complex_analysis_resp.output:
-    # Look for message type items with content
-    if hasattr(item, "type") and item.type == "message":
-        if hasattr(item, "content") and isinstance(item.content, list):
-            for block in item.content:
-                if isinstance(block, dict) and block.get("type") == "output_text":
-                    print(block.get("text", ""))
-
-    # Also check for function_call_output that might have analysis results
-    elif hasattr(item, "type") and item.type == "function_call_output":
-        if hasattr(item, "output"):
-            # Try to parse JSON output from the tool
-            try:
-                import json
-
-                tool_result = json.loads(item.output)
-                if "workflow_intelligence" in tool_result:
-                    intelligence = tool_result["workflow_intelligence"]
-                    print(
-                        f"🎯 Business Purpose: {intelligence.get('business_purpose', 'N/A')}"
-                    )
-                    print(
-                        f"📦 Data Processing: {intelligence.get('data_transformation_summary', 'N/A')}"
-                    )
-                    print(
-                        f"⚖️ Processing Type: {intelligence.get('infrastructure_vs_processing', 'N/A')}"
-                    )
-                    print(
-                        f"🔧 Core Data Processors: {intelligence.get('core_data_processors', [])}"
-                    )
-                    print(
-                        f"🏗️ Infrastructure Processors: {intelligence.get('infrastructure_processors', [])}"
-                    )
-                elif "error" in tool_result:
-                    print(f"❌ Analysis Error: {tool_result['error']}")
-                else:
-                    print(f"Tool Result: {item.output}")
-            except:
-                print(f"Tool Output: {item.output}")
+# Standard way to display MLflow agent responses
+for output in complex_analysis_resp.output:
+    print(output.content)
 
 print("=" * 60)
 
@@ -242,19 +162,13 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# Display the complex migration results
+# Display the complex migration results - simple approach
 print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
-for item in resp.output:
-    if hasattr(item, "content"):
-        if isinstance(item.content, list):
-            for block in item.content:
-                if hasattr(block, "text"):
-                    print(block.text)
-        elif hasattr(item.content, "text"):
-            print(item.content.text)
-        elif isinstance(item.content, str):
-            print(item.content)
+
+for output in resp.output:
+    print(output.content)
+
 print("=" * 60)
 
 # COMMAND ----------
