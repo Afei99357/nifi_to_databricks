@@ -42,16 +42,20 @@ req = ResponsesAgentRequest(
     ]
 )
 
-# Import the display function at the top
-from utils.response_utils import display_agent_response
-
 analysis_resp = AGENT.predict(req)
 print("✅ Simple workflow analysis complete!")
 
+# Display the analysis results - standard MLflow approach
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Automatically display results
+# Use utility functions to handle the response
+from utils.response_utils import display_agent_response, save_agent_response_to_json
+
+# Save response to JSON file
+json_file = save_agent_response_to_json(analysis_resp, "simple_workflow_analysis.json")
+
+# Display in clean format
 display_agent_response(analysis_resp)
 
 print("=" * 60)
