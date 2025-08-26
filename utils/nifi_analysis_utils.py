@@ -117,9 +117,35 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
     ]
 
     # If name contains infrastructure patterns, likely not SQL generation
+    # Be extra strict - these should almost never be SQL generation
     if any(pattern in name_upper for pattern in infrastructure_patterns):
-        # Only proceed if there's very clear SQL construction evidence
-        pass
+        # For processors with infrastructure names, require VERY explicit SQL construction
+        # Most filename/parameter/config processors are just metadata operations
+        has_explicit_sql_construction = False
+
+        # Only consider it SQL generation if properties contain substantial complete SQL statements
+        for key, value in properties.items():
+            if (
+                isinstance(value, str) and len(value) > 100
+            ):  # Much higher threshold for infrastructure patterns
+                value_upper = value.upper()
+                # Must contain full SQL structure with multiple clauses
+                if (
+                    any(
+                        keyword in value_upper
+                        for keyword in ["SELECT", "INSERT", "UPDATE", "DELETE"]
+                    )
+                    and any(
+                        clause in value_upper
+                        for clause in ["FROM", "WHERE", "SET", "VALUES"]
+                    )
+                    and value.count(" ") > 10
+                ):  # Must be substantial multi-word SQL
+                    has_explicit_sql_construction = True
+                    break
+
+        if not has_explicit_sql_construction:
+            return False  # Infrastructure patterns default to NOT being SQL generation
 
     # Primary SQL keywords that indicate actual query construction (not just variables)
     primary_sql_keywords = [
