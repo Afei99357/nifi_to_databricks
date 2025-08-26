@@ -32,18 +32,12 @@ from agents import AGENT
 print("🧠 INTELLIGENT NIFI ANALYSIS - Simple Workflow")
 print("=" * 60)
 
-# Read the XML file first, then ask agent to analyze it
-with open(
-    "/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml", "r"
-) as f:
-    xml_content = f.read()
-
-# Ask the agent to analyze workflow using the actual XML content
+# Ask the agent to analyze workflow using the XML file path
 req = ResponsesAgentRequest(
     input=[
         {
             "role": "user",
-            "content": f"Analyze this NiFi workflow XML and explain what it does in business terms. What processors actually transform data vs just move files?\n\nXML Content:\n{xml_content}",
+            "content": "Use analyze_nifi_workflow_intelligence to analyze the NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml and explain what it does in business terms. What processors actually transform data vs just move files?",
         }
     ]
 )
@@ -155,18 +149,12 @@ print("=" * 60)
 print("🧠 INTELLIGENT NIFI ANALYSIS - Complex Workflow")
 print("=" * 60)
 
-# Read the complex XML file first, then ask agent to analyze it
-with open(
-    "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml", "r"
-) as f:
-    complex_xml_content = f.read()
-
-# Analyze the complex ICN8_BRS_Feedback workflow using actual XML content
+# Analyze the complex ICN8_BRS_Feedback workflow using file path
 req = ResponsesAgentRequest(
     input=[
         {
             "role": "user",
-            "content": f"Analyze this complex NiFi workflow XML with 58+ processors. Help me understand what it actually does for the business and which processors do real data processing vs infrastructure work like logging and routing.\n\nXML Content:\n{complex_xml_content}",
+            "content": "Use analyze_nifi_workflow_intelligence to analyze the complex NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml with 58+ processors. Help me understand what it actually does for the business and which processors do real data processing vs infrastructure work like logging and routing.",
         }
     ]
 )

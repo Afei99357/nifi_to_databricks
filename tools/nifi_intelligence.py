@@ -4,7 +4,7 @@
 import json
 import os
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
@@ -110,12 +110,33 @@ def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
     - Optimal Databricks migration strategy
 
     Args:
-        xml_content: NiFi XML template content
+        xml_content: NiFi XML template content OR file path to NiFi XML file
 
     Returns:
         JSON with comprehensive workflow intelligence analysis
     """
     try:
+        # Check if xml_content is a file path
+        if xml_content.startswith("/") and xml_content.endswith(".xml"):
+            try:
+                with open(xml_content, "r") as f:
+                    xml_content = f.read()
+            except Exception as e:
+                return json.dumps(
+                    {"error": f"Failed to read file {xml_content}: {str(e)}"}
+                )
+
+        # If it looks like a file path but doesn't exist, return error
+        elif xml_content.startswith("/") or xml_content.endswith(".xml"):
+            return json.dumps(
+                {
+                    "error": f"File path appears invalid or file doesn't exist: {xml_content}"
+                }
+            )
+
+        if not xml_content.strip():
+            return json.dumps({"error": "Empty XML content provided"})
+
         root = ET.fromstring(xml_content)
 
         # Extract all processors with their properties
