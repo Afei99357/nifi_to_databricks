@@ -80,7 +80,14 @@ def save_agent_response_to_json(response, output_path: str = None) -> str:
     with open(output_path, "w") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Agent response saved to: {output_path}")
+    print(f"✅ Agent response saved to: {os.path.abspath(output_path)}")
+
+    # Also print the JSON content in the logs
+    print("📄 JSON Content:")
+    print("=" * 40)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print("=" * 40)
+
     return output_path
 
 
