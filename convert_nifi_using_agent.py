@@ -53,7 +53,7 @@ print("=" * 60)
 from utils.response_utils import display_agent_response, save_agent_response_to_json
 
 # Save response to JSON file
-json_file = save_agent_response_to_json(analysis_resp, "simple_workflow_analysis.json")
+# json_file = save_agent_response_to_json(analysis_resp, "simple_workflow_analysis.json")
 
 # Display in clean format
 display_agent_response(analysis_resp)
@@ -96,8 +96,11 @@ print("✅ Intelligent migration complete!")
 print("\n📋 SIMPLE MIGRATION RESULTS:")
 print("=" * 60)
 
+# Use utility functions to handle the response
+from utils.response_utils import display_agent_response, save_agent_response_to_json
+
 # Save migration response to JSON
-json_file = save_agent_response_to_json(resp, "simple_workflow_migration.json")
+# json_file = save_agent_response_to_json(resp, "simple_workflow_migration.json")
 
 # Display in clean format
 display_agent_response(resp)
@@ -131,10 +134,13 @@ print("✅ Complex workflow analysis complete!")
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Save complex workflow analysis to JSON
-json_file = save_agent_response_to_json(
-    complex_analysis_resp, "complex_workflow_analysis.json"
-)
+# Use utility functions to handle the response
+from utils.response_utils import display_agent_response, save_agent_response_to_json
+
+# # Save complex workflow analysis to JSON
+# json_file = save_agent_response_to_json(
+#     complex_analysis_resp, "complex_workflow_analysis.json"
+# )
 
 # Display in clean format
 display_agent_response(complex_analysis_resp)
@@ -178,8 +184,11 @@ print("✅ Intelligent migration complete!")
 print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
 
-# Save complex migration response to JSON
-json_file = save_agent_response_to_json(resp, "complex_workflow_migration.json")
+# Use utility functions to handle the response
+from utils.response_utils import display_agent_response, save_agent_response_to_json
+
+# # Save complex migration response to JSON
+# json_file = save_agent_response_to_json(resp, "complex_workflow_migration.json")
 
 # Display in clean format
 display_agent_response(resp)
