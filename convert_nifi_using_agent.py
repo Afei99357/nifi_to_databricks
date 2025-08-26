@@ -32,12 +32,18 @@ from agents import AGENT
 print("🧠 INTELLIGENT NIFI ANALYSIS - Simple Workflow")
 print("=" * 60)
 
-# Ask the agent to analyze workflow first
+# Read the XML file first, then ask agent to analyze it
+with open(
+    "/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml", "r"
+) as f:
+    xml_content = f.read()
+
+# Ask the agent to analyze workflow using the actual XML content
 req = ResponsesAgentRequest(
     input=[
         {
             "role": "user",
-            "content": "Analyze my NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml and explain what it does in business terms. What processors actually transform data vs just move files?",
+            "content": f"Analyze this NiFi workflow XML and explain what it does in business terms. What processors actually transform data vs just move files?\n\nXML Content:\n{xml_content}",
         }
     ]
 )
@@ -49,46 +55,46 @@ print("✅ Simple workflow analysis complete!")
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Debug: Let's see what's actually in the response
-print("DEBUG: Response structure:")
-print(f"Type: {type(analysis_resp)}")
-print(f"Has output: {hasattr(analysis_resp, 'output')}")
-if hasattr(analysis_resp, "output"):
-    print(f"Output length: {len(analysis_resp.output)}")
-    for i, item in enumerate(analysis_resp.output):
-        print(f"Item {i}: {type(item)}")
-        print(f"Item {i} attributes: {dir(item)}")
-        if hasattr(item, "content"):
-            print(f"Item {i} content: {item.content}")
-        if hasattr(item, "type"):
-            print(f"Item {i} type: {item.type}")
-
-# Try different ways to extract content
+# Extract and display the actual analysis content
 for item in analysis_resp.output:
-    print(f"\n--- Processing item of type: {type(item)} ---")
-
-    # Method 1: Direct content access
-    if hasattr(item, "content"):
-        print("Found content attribute")
-        if isinstance(item.content, list):
+    # Look for message type items with content
+    if hasattr(item, "type") and item.type == "message":
+        if hasattr(item, "content") and isinstance(item.content, list):
             for block in item.content:
-                if hasattr(block, "text"):
-                    print(f"Block text: {block.text}")
+                if isinstance(block, dict) and block.get("type") == "output_text":
+                    print(block.get("text", ""))
+
+    # Also check for function_call_output that might have analysis results
+    elif hasattr(item, "type") and item.type == "function_call_output":
+        if hasattr(item, "output"):
+            # Try to parse JSON output from the tool
+            try:
+                import json
+
+                tool_result = json.loads(item.output)
+                if "workflow_intelligence" in tool_result:
+                    intelligence = tool_result["workflow_intelligence"]
+                    print(
+                        f"🎯 Business Purpose: {intelligence.get('business_purpose', 'N/A')}"
+                    )
+                    print(
+                        f"📦 Data Processing: {intelligence.get('data_transformation_summary', 'N/A')}"
+                    )
+                    print(
+                        f"⚖️ Processing Type: {intelligence.get('infrastructure_vs_processing', 'N/A')}"
+                    )
+                    print(
+                        f"🔧 Core Data Processors: {intelligence.get('core_data_processors', [])}"
+                    )
+                    print(
+                        f"🏗️ Infrastructure Processors: {intelligence.get('infrastructure_processors', [])}"
+                    )
+                elif "error" in tool_result:
+                    print(f"❌ Analysis Error: {tool_result['error']}")
                 else:
-                    print(f"Block: {block}")
-        elif hasattr(item.content, "text"):
-            print(f"Content text: {item.content.text}")
-        elif isinstance(item.content, str):
-            print(f"Content string: {item.content}")
-        else:
-            print(f"Content (other): {item.content}")
-
-    # Method 2: Check for text attribute directly
-    if hasattr(item, "text"):
-        print(f"Direct text: {item.text}")
-
-    # Method 3: Convert to string representation
-    print(f"String representation: {str(item)}")
+                    print(f"Tool Result: {item.output}")
+            except:
+                print(f"Tool Output: {item.output}")
 
 print("=" * 60)
 
@@ -149,12 +155,18 @@ print("=" * 60)
 print("🧠 INTELLIGENT NIFI ANALYSIS - Complex Workflow")
 print("=" * 60)
 
-# Analyze the complex ICN8_BRS_Feedback workflow
+# Read the complex XML file first, then ask agent to analyze it
+with open(
+    "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml", "r"
+) as f:
+    complex_xml_content = f.read()
+
+# Analyze the complex ICN8_BRS_Feedback workflow using actual XML content
 req = ResponsesAgentRequest(
     input=[
         {
             "role": "user",
-            "content": "Analyze my complex NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml. This has 58+ processors - help me understand what it actually does for the business and which processors do real data processing vs infrastructure work like logging and routing.",
+            "content": f"Analyze this complex NiFi workflow XML with 58+ processors. Help me understand what it actually does for the business and which processors do real data processing vs infrastructure work like logging and routing.\n\nXML Content:\n{complex_xml_content}",
         }
     ]
 )
@@ -165,16 +177,48 @@ print("✅ Complex workflow analysis complete!")
 # Display the complex analysis results
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
+
+# Extract and display the complex analysis content
 for item in complex_analysis_resp.output:
-    if hasattr(item, "content"):
-        if isinstance(item.content, list):
+    # Look for message type items with content
+    if hasattr(item, "type") and item.type == "message":
+        if hasattr(item, "content") and isinstance(item.content, list):
             for block in item.content:
-                if hasattr(block, "text"):
-                    print(block.text)
-        elif hasattr(item.content, "text"):
-            print(item.content.text)
-        elif isinstance(item.content, str):
-            print(item.content)
+                if isinstance(block, dict) and block.get("type") == "output_text":
+                    print(block.get("text", ""))
+
+    # Also check for function_call_output that might have analysis results
+    elif hasattr(item, "type") and item.type == "function_call_output":
+        if hasattr(item, "output"):
+            # Try to parse JSON output from the tool
+            try:
+                import json
+
+                tool_result = json.loads(item.output)
+                if "workflow_intelligence" in tool_result:
+                    intelligence = tool_result["workflow_intelligence"]
+                    print(
+                        f"🎯 Business Purpose: {intelligence.get('business_purpose', 'N/A')}"
+                    )
+                    print(
+                        f"📦 Data Processing: {intelligence.get('data_transformation_summary', 'N/A')}"
+                    )
+                    print(
+                        f"⚖️ Processing Type: {intelligence.get('infrastructure_vs_processing', 'N/A')}"
+                    )
+                    print(
+                        f"🔧 Core Data Processors: {intelligence.get('core_data_processors', [])}"
+                    )
+                    print(
+                        f"🏗️ Infrastructure Processors: {intelligence.get('infrastructure_processors', [])}"
+                    )
+                elif "error" in tool_result:
+                    print(f"❌ Analysis Error: {tool_result['error']}")
+                else:
+                    print(f"Tool Result: {item.output}")
+            except:
+                print(f"Tool Output: {item.output}")
+
 print("=" * 60)
 
 # COMMAND ----------
