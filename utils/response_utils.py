@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
+from utils.workflow_summary import print_workflow_summary_from_data
+
 
 def save_agent_response_to_json(response, output_path: str = None) -> str:
     """
@@ -115,17 +117,16 @@ def display_agent_response(response) -> None:
             # Tool result
             try:
                 tool_result = json.loads(output.output)
-                if "workflow_intelligence" in tool_result:
-                    intelligence = tool_result["workflow_intelligence"]
+                if "processors_analysis" in tool_result:
+                    # This is a workflow intelligence result - show summary directly
+                    print("🔍 NIFI WORKFLOW INTELLIGENCE DETECTED")
                     print(
-                        f"🎯 Business Purpose: {intelligence.get('business_purpose', 'N/A')}"
+                        f"📊 Total Processors Analyzed: {tool_result.get('total_processors', 'Unknown')}"
                     )
-                    print(
-                        f"📦 Data Processing: {intelligence.get('data_transformation_summary', 'N/A')}"
-                    )
-                    print(
-                        f"⚖️ Processing Type: {intelligence.get('infrastructure_vs_processing', 'N/A')}"
-                    )
+                    print("\n")
+                    # Process the JSON data directly without temp files
+                    print_workflow_summary_from_data(tool_result)
+
                 else:
                     print(f"📊 Tool Result: {json.dumps(tool_result, indent=2)}")
             except:
