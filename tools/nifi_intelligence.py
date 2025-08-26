@@ -10,10 +10,7 @@ from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
 
 # Import utility functions
-from utils.nifi_analysis_utils import (
-    analyze_processors_batch,
-    analyze_workflow_patterns,
-)
+from utils.nifi_analysis_utils import analyze_processors_batch
 
 
 @tool
@@ -108,13 +105,7 @@ def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
                 }
             )
 
-        # Build workflow understanding
-        workflow_intelligence = analyze_workflow_patterns(
-            processors_analysis, connections_analysis
-        )
-
         result = {
-            "workflow_intelligence": workflow_intelligence,
             "processors_analysis": processors_analysis,
             "connections_analysis": connections_analysis,
             "total_processors": len(processors_analysis),

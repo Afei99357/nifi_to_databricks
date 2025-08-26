@@ -6,6 +6,7 @@ import os
 from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
+from json_repair import repair_json
 
 # Removed hardcoded knowledge base - using pure LLM intelligence instead
 
@@ -128,18 +129,47 @@ Be specific about what happens to the actual data content, not just metadata or 
         )
         response = llm.invoke(batch_prompt)
 
-        # Parse LLM response
+        # Parse LLM response with JSON recovery strategies
         try:
             batch_results = json.loads(response.content.strip())
         except json.JSONDecodeError:
-            # Try to extract JSON from response if it's wrapped in text
             content = response.content.strip()
-            if "[" in content and "]" in content:
-                start = content.find("[")
-                end = content.rfind("]") + 1
-                batch_results = json.loads(content[start:end])
-            else:
-                raise ValueError("Could not parse JSON from LLM batch response")
+            batch_results = None
+            # Try various recovery strategies in order (same as migration_tools.py)
+            recovery_strategies = [
+                ("json-repair", lambda c: json.loads(repair_json(c))),
+                (
+                    "markdown extraction",
+                    lambda c: (
+                        json.loads(
+                            repair_json(c.split("```json")[1].split("```")[0].strip())
+                        )
+                        if "```json" in c
+                        else None
+                    ),
+                ),
+                (
+                    "boundary detection",
+                    lambda c: (
+                        json.loads(repair_json(c[c.find("[") : c.rfind("]") + 1]))
+                        if c.find("[") >= 0 and c.rfind("]") > c.find("[")
+                        else None
+                    ),
+                ),
+            ]
+
+            for strategy_name, strategy_func in recovery_strategies:
+                try:
+                    repaired_content = strategy_func(content)
+                    if repaired_content:
+                        batch_results = repaired_content
+                        print(f"🔧 [LLM BATCH] Recovered JSON using {strategy_name}")
+                        break
+                except (json.JSONDecodeError, ValueError, IndexError):
+                    continue
+
+            if batch_results is None:
+                raise ValueError("All JSON recovery attempts failed")
 
         # Combine results with processor metadata
         results = []
@@ -179,126 +209,92 @@ Be specific about what happens to the actual data content, not just metadata or 
 
     except Exception as e:
         print(f"❌ [BATCH ANALYSIS] Batch analysis failed: {str(e)}")
-        # Fallback to individual analysis for critical failures
-        print("🔄 [FALLBACK] Using individual processor analysis...")
-        results = []
-        for proc in processors:
-            try:
-                individual_result = analyze_processor_properties(
-                    proc.get("processor_type", ""), proc.get("properties", {})
-                )
-                individual_result.update(
-                    {
-                        "id": proc.get("id", ""),
-                        "name": proc.get("name", ""),
-                    }
-                )
-                results.append(individual_result)
-            except Exception as individual_error:
+        # Sub-batch fallback to reduce per-processor LLM calls (same as migration_tools.py)
+        sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
+        if len(processors) > sub_batch_size:
+            print(
+                f"🔄 [SUB-BATCH FALLBACK] Trying smaller batches of {sub_batch_size} processors..."
+            )
+            results = []
+            for start in range(0, len(processors), sub_batch_size):
+                subset = processors[start : start + sub_batch_size]
+                batch_num = (start // sub_batch_size) + 1
+                total_batches = (len(processors) + sub_batch_size - 1) // sub_batch_size
                 print(
-                    f"⚠️ [FALLBACK] Individual analysis also failed for {proc.get('name', 'unnamed')}: {individual_error}"
-                )
-                results.append(
-                    {
-                        "processor_type": proc.get("processor_type", ""),
-                        "properties": proc.get("properties", {}),
-                        "id": proc.get("id", ""),
-                        "name": proc.get("name", ""),
-                        "data_manipulation_type": "unknown",
-                        "actual_data_processing": "Both batch and individual analysis failed",
-                        "transforms_data_content": False,
-                        "business_purpose": "Analysis completely failed",
-                        "data_impact_level": "unknown",
-                        "key_operations": ["analysis_failed"],
-                        "analysis_method": "fallback_failed",
-                        "error": str(individual_error),
-                    }
+                    f"🧠 [SUB-BATCH {batch_num}/{total_batches}] Analyzing {len(subset)} processors..."
                 )
 
-        return results
-
-
-def analyze_processor_properties(
-    processor_type: str, properties: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Use pure LLM intelligence to analyze what this processor actually does with data."""
-
-    model_endpoint = os.environ.get(
-        "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
-    )
-
-    try:
-        llm = ChatDatabricks(
-            endpoint=model_endpoint, temperature=0.1
-        )  # Low temp for consistent analysis
-
-        analysis_prompt = f"""You are a NiFi data engineering expert. Analyze this processor to understand what it ACTUALLY does with data.
-
-PROCESSOR TYPE: {processor_type}
-CONFIGURATION: {json.dumps(properties, indent=2)}
-
-Focus on DATA MANIPULATION vs INFRASTRUCTURE:
-- Does this processor TRANSFORM the actual data content? (change structure, extract fields, convert formats)
-- Does this processor just MOVE data from A to B? (file ingestion, storage, network transfer)
-- Does this processor do INFRASTRUCTURE work? (logging, routing, delays, authentication)
-
-Return ONLY a JSON object:
-{{
-  "data_manipulation_type": "data_transformation | data_movement | infrastructure_only | external_processing",
-  "actual_data_processing": "Detailed description of what happens to the data content",
-  "transforms_data_content": true/false,
-  "business_purpose": "What this accomplishes in business terms",
-  "data_impact_level": "high | medium | low | none",
-  "key_operations": ["list", "of", "key", "operations"]
-}}
-
-Examples:
-- GetFile: moves files, data_movement, no content transformation
-- EvaluateJsonPath: extracts JSON fields, data_transformation, changes data structure
-- LogMessage: pure logging, infrastructure_only, no data impact
-- UpdateAttribute: metadata only, infrastructure_only, doesn't change core data
-- ExecuteStreamCommand with SQL: transforms data, external_processing, high impact
-- RouteOnAttribute: routes data, infrastructure_only, no content change
-
-Be specific about what happens to the actual data content, not just metadata or routing."""
-
-        response = llm.invoke(analysis_prompt)
-
-        # Parse LLM response
-        try:
-            analysis_result = json.loads(response.content.strip())
-        except json.JSONDecodeError:
-            # Try to extract JSON from response if it's wrapped in text
-            content = response.content.strip()
-            if "{" in content and "}" in content:
-                start = content.find("{")
-                end = content.rfind("}") + 1
-                analysis_result = json.loads(content[start:end])
-            else:
-                raise ValueError("Could not parse JSON from LLM response")
-
-        # Add processor info and metadata
-        analysis_result.update(
-            {
-                "processor_type": processor_type,
-                "properties": properties,
-                "analysis_method": "llm_intelligent",
-            }
-        )
-
-        return analysis_result
-
-    except Exception as e:
-        # Fallback to basic analysis if LLM fails
-        return {
-            "processor_type": processor_type,
-            "properties": properties,
-            "data_manipulation_type": "unknown",
-            "actual_data_processing": f"LLM analysis failed: {str(e)}. Manual analysis needed.",
-            "transforms_data_content": False,
-            "business_purpose": f"Unknown processor: {processor_type}",
-            "data_impact_level": "unknown",
-            "key_operations": ["analysis_failed"],
-            "analysis_method": "fallback_basic",
-            "error": str(e),
-        }
+                try:
+                    # Reuse batch function for each sub-batch
+                    sub_results = _analyze_single_batch(subset)
+                    results.extend(sub_results)
+                    print(f"✅ [SUB-BATCH {batch_num}/{total_batches}] Success!")
+                except Exception:
+                    # If sub-batch still fails, fall back to per-processor for this subset only
+                    print(
+                        f"⚠️ [SUB-BATCH {batch_num}/{total_batches}] Failed, processing individually..."
+                    )
+                    for idx, proc in enumerate(subset):
+                        try:
+                            # Single processor batch
+                            single_result = _analyze_single_batch([proc])
+                            if single_result:
+                                results.extend(single_result)
+                            else:
+                                raise ValueError(
+                                    "Single processor batch returned empty"
+                                )
+                        except Exception as proc_error:
+                            print(
+                                f"❌ [INDIVIDUAL] Failed for {proc.get('name', 'unnamed')}: {proc_error}"
+                            )
+                            # Create error result for failed processor
+                            results.append(
+                                {
+                                    "processor_type": proc.get("processor_type", ""),
+                                    "properties": proc.get("properties", {}),
+                                    "id": proc.get("id", ""),
+                                    "name": proc.get("name", ""),
+                                    "data_manipulation_type": "unknown",
+                                    "actual_data_processing": f"Analysis failed: {str(proc_error)}",
+                                    "transforms_data_content": False,
+                                    "business_purpose": "Analysis failed",
+                                    "data_impact_level": "unknown",
+                                    "key_operations": ["analysis_failed"],
+                                    "analysis_method": "fallback_failed",
+                                    "error": str(proc_error),
+                                }
+                            )
+            return results
+        else:
+            # If batch size is already small, fall back to individual processing
+            print("🔄 [INDIVIDUAL FALLBACK] Processing each processor individually...")
+            results = []
+            for proc in processors:
+                try:
+                    single_result = _analyze_single_batch([proc])
+                    if single_result:
+                        results.extend(single_result)
+                    else:
+                        raise ValueError("Single processor batch returned empty")
+                except Exception as proc_error:
+                    print(
+                        f"❌ [INDIVIDUAL] Failed for {proc.get('name', 'unnamed')}: {proc_error}"
+                    )
+                    results.append(
+                        {
+                            "processor_type": proc.get("processor_type", ""),
+                            "properties": proc.get("properties", {}),
+                            "id": proc.get("id", ""),
+                            "name": proc.get("name", ""),
+                            "data_manipulation_type": "unknown",
+                            "actual_data_processing": f"Analysis failed: {str(proc_error)}",
+                            "transforms_data_content": False,
+                            "business_purpose": "Analysis failed",
+                            "data_impact_level": "unknown",
+                            "key_operations": ["analysis_failed"],
+                            "analysis_method": "fallback_failed",
+                            "error": str(proc_error),
+                        }
+                    )
+            return results
