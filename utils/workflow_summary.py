@@ -201,29 +201,20 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
     print(
         f"\n📦 DATA MOVEMENT PROCESSORS ({summary['data_manipulation_breakdown']['data_movers']['count']}):"
     )
-    movers = summary["data_manipulation_breakdown"]["data_movers"]["processors"][
-        :10
-    ]  # Show more data movers
+    movers = summary["data_manipulation_breakdown"]["data_movers"][
+        "processors"
+    ]  # Show ALL data movers
     for proc in movers:
         print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
-    if len(summary["data_manipulation_breakdown"]["data_movers"]["processors"]) > 10:
-        remaining = (
-            len(summary["data_manipulation_breakdown"]["data_movers"]["processors"])
-            - 10
-        )
-        print(f"   ... and {remaining} more data movement processors")
 
     print(
         f"\n🔗 INFRASTRUCTURE PROCESSORS ({summary['infrastructure_breakdown']['count']}):"
     )
-    infra = summary["infrastructure_breakdown"]["processors"][
-        :8
-    ]  # Show more infrastructure processors
+    infra = summary["infrastructure_breakdown"][
+        "processors"
+    ]  # Show ALL infrastructure processors
     for proc in infra:
         print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
-    if len(summary["infrastructure_breakdown"]["processors"]) > 8:
-        remaining = len(summary["infrastructure_breakdown"]["processors"]) - 8
-        print(f"   ... and {remaining} more infrastructure processors")
 
     print(f"\n⭐ KEY BUSINESS OPERATIONS:")
     for operation, count in summary["key_business_operations"].items():
