@@ -478,24 +478,23 @@ def analyze_processors_batch(
 def _analyze_hybrid_llm_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Batch analyze ambiguous processors that need LLM inspection.
-    Uses individual LLM calls for enhanced context per processor.
+    Uses single LLM call to analyze multiple processors at once.
     """
-    results = []
+    if not processors:
+        return []
 
-    for proc in processors:
-        processor_type = proc.get("processor_type", "")
-        properties = proc.get("properties", {})
-        name = proc.get("name", "")
-        proc_id = proc.get("id", "")
-        short_type = (
-            processor_type.split(".")[-1] if "." in processor_type else processor_type
-        )
+    print(
+        f"🧠 [HYBRID BATCH] Processing {len(processors)} ambiguous processors in single LLM call..."
+    )
 
-        # Use enhanced LLM analysis for each ambiguous processor
-        result = _analyze_with_enhanced_llm(
-            processor_type, properties, name, proc_id, short_type
-        )
-        results.append(result)
+    # Use the existing proven batch analysis function for ambiguous processors
+    # This reuses the efficient batch LLM approach
+    results = _analyze_single_batch(processors)
+
+    # Update analysis method to indicate hybrid batch processing
+    for result in results:
+        if result.get("analysis_method") == "llm_batch_intelligent":
+            result["analysis_method"] = "hybrid_batch_llm"
 
     return results
 
