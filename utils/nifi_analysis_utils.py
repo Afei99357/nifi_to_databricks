@@ -25,6 +25,9 @@ INFRASTRUCTURE_PROCESSORS = {
     "RouteOnContent",
     "DistributeLoad",
     "MergeContent",
+    # Most UpdateAttribute and GenerateFlowFile are infrastructure
+    "UpdateAttribute",  # 90% are just metadata (priorities, retries, mem_limit)
+    "GenerateFlowFile",  # Usually just creates trigger/placeholder flowfiles
 }
 
 DATA_MOVEMENT_PROCESSORS = {
@@ -65,20 +68,75 @@ DATA_TRANSFORMATION_PROCESSORS = {
     "EnrichRecord",
 }
 
-# Processors that need LLM analysis (ambiguous cases)
+# Processors that need LLM analysis (only truly ambiguous cases)
 LLM_ANALYSIS_NEEDED = {
-    "UpdateAttribute",
-    "ExecuteStreamCommand",
-    "ExecuteScript",
-    "ExecuteSQL",
-    "PutSQL",
-    "GenerateTableFetch",
-    "QueryDatabaseTable",
-    "InvokeHTTP",
-    "PostHTTP",
-    "ExecuteProcess",
-    "GenerateFlowFile",
+    "ExecuteStreamCommand",  # Could be REFRESH TABLE vs SHOW TABLES vs full ETL
+    "ExecuteScript",  # Depends on script content
+    "ExecuteSQL",  # Could be DML vs DDL vs SELECT
+    "PutSQL",  # Usually data transformation but context matters
+    "GenerateTableFetch",  # Usually data movement but could be transformation
+    "QueryDatabaseTable",  # Usually data movement but could transform
+    "InvokeHTTP",  # Could be data API vs health check
+    "PostHTTP",  # Could be data submission vs notifications
+    "ExecuteProcess",  # Depends on process being executed
 }
+
+
+def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) -> bool:
+    """
+    Check if UpdateAttribute generates SQL or processing logic (rare case).
+    Most UpdateAttribute just sets metadata, but some generate SQL for downstream use.
+    """
+    # Check if any property values contain SQL-like keywords
+    sql_keywords = [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "CREATE",
+        "ALTER",
+        "REFRESH",
+        "FROM",
+        "WHERE",
+        "JOIN",
+    ]
+
+    for key, value in properties.items():
+        if isinstance(value, str):
+            value_upper = value.upper()
+            # Look for SQL keywords in property values
+            if any(keyword in value_upper for keyword in sql_keywords):
+                return True
+
+    # Check processor name for SQL-related terms
+    name_upper = name.upper() if name else ""
+    sql_name_indicators = ["SQL", "QUERY", "REFRESH", "STATEMENT", "DERIVE"]
+    if any(indicator in name_upper for indicator in sql_name_indicators):
+        return True
+
+    return False
+
+
+def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) -> bool:
+    """
+    Check if GenerateFlowFile creates actual business data (rare case).
+    Most GenerateFlowFile just creates trigger/control flowfiles.
+    """
+    # Check for business data indicators in properties
+    data_indicators = ["CUSTOMER", "ORDER", "RECORD", "DATA", "CONTENT", "PAYLOAD"]
+
+    for key, value in properties.items():
+        if isinstance(value, str):
+            value_upper = value.upper()
+            if any(indicator in value_upper for indicator in data_indicators):
+                return True
+
+    # Check processor name for data-related terms
+    name_upper = name.upper() if name else ""
+    if any(indicator in name_upper for indicator in data_indicators):
+        return True
+
+    return False
 
 
 def classify_processor_hybrid(
@@ -403,13 +461,12 @@ def analyze_processors_batch(
             processor_type.split(".")[-1] if "." in processor_type else processor_type
         )
 
-        # Check if we can classify with rules
+        # Check if we can classify with rules (with smart exceptions)
         if (
-            short_type in INFRASTRUCTURE_PROCESSORS
-            or short_type in DATA_MOVEMENT_PROCESSORS
+            short_type in DATA_MOVEMENT_PROCESSORS
             or short_type in DATA_TRANSFORMATION_PROCESSORS
         ):
-
+            # Always use rules for clear data movement/transformation processors
             result = classify_processor_hybrid(
                 processor_type, properties, name, proc_id
             )
@@ -417,8 +474,34 @@ def analyze_processors_batch(
             print(
                 f"📋 [RULE-BASED] {name} ({short_type}) → {result['data_manipulation_type']}"
             )
+
+        elif short_type in INFRASTRUCTURE_PROCESSORS:
+            # Smart handling for UpdateAttribute and GenerateFlowFile
+            if short_type == "UpdateAttribute" and _is_sql_generating_updateattribute(
+                properties, name
+            ):
+                # Rare case: UpdateAttribute generates SQL - needs LLM analysis
+                print(f"🔍 [SMART DETECTION] {name} generates SQL - sending to LLM")
+                llm_needed_processors.append(proc)
+            elif (
+                short_type == "GenerateFlowFile"
+                and _is_data_generating_generateflowfile(properties, name)
+            ):
+                # Rare case: GenerateFlowFile creates business data - needs LLM analysis
+                print(f"🔍 [SMART DETECTION] {name} generates data - sending to LLM")
+                llm_needed_processors.append(proc)
+            else:
+                # Normal case: Infrastructure processor
+                result = classify_processor_hybrid(
+                    processor_type, properties, name, proc_id
+                )
+                rule_based_results.append(result)
+                print(
+                    f"📋 [RULE-BASED] {name} ({short_type}) → {result['data_manipulation_type']}"
+                )
+
         else:
-            # Needs LLM analysis
+            # Truly ambiguous processors need LLM analysis
             llm_needed_processors.append(proc)
 
     print(
