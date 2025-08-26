@@ -15,6 +15,7 @@ from . import (
     generator_tools,
     job_tools,
     migration_tools,
+    nifi_intelligence,
     xml_tools,
 )
 
@@ -26,6 +27,7 @@ SUBMODULES = [
     dlt_tools,
     eval_tools,
     chunking_tools,
+    nifi_intelligence,
 ]
 
 # Build TOOLS and optionally export names
