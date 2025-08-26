@@ -49,9 +49,27 @@ print("✅ Simple workflow analysis complete!")
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Standard way to display MLflow agent responses
-for output in analysis_resp.output:
-    print(output.content)
+# Debug: Let's see what the agent actually returns
+print("DEBUG - Number of outputs:", len(analysis_resp.output))
+for i, output in enumerate(analysis_resp.output):
+    print(f"Output {i}: type={type(output.content)}, content={repr(output.content)}")
+
+    # If it's a list, check the structure
+    if isinstance(output.content, list):
+        for j, item in enumerate(output.content):
+            print(f"  Item {j}: {type(item)} = {item}")
+
+    # Try to parse as JSON if it looks like JSON
+    elif isinstance(output.content, str):
+        try:
+            import json
+
+            parsed = json.loads(output.content)
+            print(f"  Parsed JSON: {json.dumps(parsed, indent=2)}")
+        except:
+            print(f"  Raw string: {output.content}")
+    else:
+        print(f"  Other type: {output.content}")
 
 print("=" * 60)
 
