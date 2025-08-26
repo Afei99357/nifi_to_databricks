@@ -98,6 +98,16 @@ def display_agent_response(response) -> None:
     print("🤖 AGENT RESPONSE SUMMARY")
     print("=" * 50)
 
+    # First, show all tools that were called
+    tools_called = []
+    for output in response.output:
+        if hasattr(output, "name") and output.type == "function_call":
+            tools_called.append(output.name)
+
+    if tools_called:
+        print(f"\n🔧 TOOLS CALLED: {', '.join(tools_called)}")
+        print("-" * 30)
+
     for i, output in enumerate(response.output):
         print(f"\n📋 Output {i+1}: {output.type}")
 
@@ -135,5 +145,11 @@ def display_agent_response(response) -> None:
         elif hasattr(output, "name") and output.type == "function_call":
             # Function call
             print(f"🔧 Function Call: {output.name}")
+            if hasattr(output, "arguments"):
+                try:
+                    args = json.loads(output.arguments)
+                    print(f"   Arguments: {args}")
+                except:
+                    print(f"   Arguments: {output.arguments}")
 
     print("=" * 50)
