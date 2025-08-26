@@ -45,6 +45,21 @@ req = ResponsesAgentRequest(
 analysis_resp = AGENT.predict(req)
 print("✅ Simple workflow analysis complete!")
 
+# Display the analysis results
+print("\n📋 ANALYSIS RESULTS:")
+print("=" * 60)
+for item in analysis_resp.output:
+    if hasattr(item, "content"):
+        if isinstance(item.content, list):
+            for block in item.content:
+                if hasattr(block, "text"):
+                    print(block.text)
+        elif hasattr(item.content, "text"):
+            print(item.content.text)
+        elif isinstance(item.content, str):
+            print(item.content)
+print("=" * 60)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -77,11 +92,20 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# for item in resp.output:
-#     if item.type == "message":
-#         for block in item.content:
-#             if block["type"] == "output_text":
-#                 print(block["text"])
+# Display the migration results
+print("\n📋 SIMPLE MIGRATION RESULTS:")
+print("=" * 60)
+for item in resp.output:
+    if hasattr(item, "content"):
+        if isinstance(item.content, list):
+            for block in item.content:
+                if hasattr(block, "text"):
+                    print(block.text)
+        elif hasattr(item.content, "text"):
+            print(item.content.text)
+        elif isinstance(item.content, str):
+            print(item.content)
+print("=" * 60)
 
 # COMMAND ----------
 
@@ -105,6 +129,21 @@ req = ResponsesAgentRequest(
 
 complex_analysis_resp = AGENT.predict(req)
 print("✅ Complex workflow analysis complete!")
+
+# Display the complex analysis results
+print("\n📋 COMPLEX ANALYSIS RESULTS:")
+print("=" * 60)
+for item in complex_analysis_resp.output:
+    if hasattr(item, "content"):
+        if isinstance(item.content, list):
+            for block in item.content:
+                if hasattr(block, "text"):
+                    print(block.text)
+        elif hasattr(item.content, "text"):
+            print(item.content.text)
+        elif isinstance(item.content, str):
+            print(item.content)
+print("=" * 60)
 
 # COMMAND ----------
 
@@ -139,11 +178,20 @@ req = ResponsesAgentRequest(
 resp = AGENT.predict(req)
 print("✅ Intelligent migration complete!")
 
-# for item in resp.output:
-#     if item.type == "message":
-#         for block in item.content:
-#             if block["type"] == "output_text":
-#                 print(block["text"])
+# Display the complex migration results
+print("\n📋 COMPLEX MIGRATION RESULTS:")
+print("=" * 60)
+for item in resp.output:
+    if hasattr(item, "content"):
+        if isinstance(item.content, list):
+            for block in item.content:
+                if hasattr(block, "text"):
+                    print(block.text)
+        elif hasattr(item.content, "text"):
+            print(item.content.text)
+        elif isinstance(item.content, str):
+            print(item.content)
+print("=" * 60)
 
 # COMMAND ----------
 
