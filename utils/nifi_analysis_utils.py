@@ -86,13 +86,55 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
     """
     Check if UpdateAttribute generates SQL or processing logic (rare case).
     Most UpdateAttribute just sets metadata, but some generate SQL for downstream use.
-    Very strict criteria to avoid false positives like filename/variable generation.
+    Focus on properties content (reliable) with name as hint only.
     """
-    # Exclude common non-SQL patterns first
-    name_upper = name.upper() if name else ""
+    # PRIMARY: Check properties for actual SQL construction
+    primary_sql_keywords = [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "CREATE",
+        "ALTER",
+        "DROP",
+        "REFRESH",
+        "INVALIDATE",
+    ]
 
-    # Common infrastructure patterns that should NOT be classified as SQL generation
-    infrastructure_patterns = [
+    sql_structure_indicators = [
+        "FROM",
+        "WHERE",
+        "JOIN",
+        "GROUP BY",
+        "ORDER BY",
+        "HAVING",
+        "SET",
+        "VALUES",
+        "TABLE",
+    ]
+
+    # Look for substantial SQL statements in properties
+    for key, value in properties.items():
+        if isinstance(value, str) and len(value) > 30:
+            value_upper = value.upper()
+
+            # Must have both SQL keywords AND structure indicators
+            has_sql_keyword = any(
+                keyword in value_upper for keyword in primary_sql_keywords
+            )
+            has_sql_structure = any(
+                indicator in value_upper for indicator in sql_structure_indicators
+            )
+
+            if has_sql_keyword and has_sql_structure:
+                # Further validation: must be substantial multi-word SQL
+                if len(value) > 50 and value.count(" ") > 5:
+                    return True
+
+    # SECONDARY: Name as hint for extra validation (not decision maker)
+    # If name suggests infrastructure operation, be extra cautious
+    name_upper = name.upper() if name else ""
+    infrastructure_name_hints = [
         "FILENAME",
         "FILE NAME",
         "PATH",
@@ -116,20 +158,13 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
         "LABEL",
     ]
 
-    # If name contains infrastructure patterns, likely not SQL generation
-    # Be extra strict - these should almost never be SQL generation
-    if any(pattern in name_upper for pattern in infrastructure_patterns):
-        # For processors with infrastructure names, require VERY explicit SQL construction
-        # Most filename/parameter/config processors are just metadata operations
-        has_explicit_sql_construction = False
-
-        # Only consider it SQL generation if properties contain substantial complete SQL statements
+    # If name suggests infrastructure AND no clear SQL found, be more conservative
+    if any(hint in name_upper for hint in infrastructure_name_hints):
+        # For infrastructure-named processors, require even more explicit SQL evidence
         for key, value in properties.items():
-            if (
-                isinstance(value, str) and len(value) > 100
-            ):  # Much higher threshold for infrastructure patterns
+            if isinstance(value, str) and len(value) > 100:  # Higher threshold
                 value_upper = value.upper()
-                # Must contain full SQL structure with multiple clauses
+                # Must contain complete SQL with multiple clauses
                 if (
                     any(
                         keyword in value_upper
@@ -140,61 +175,10 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
                         for clause in ["FROM", "WHERE", "SET", "VALUES"]
                     )
                     and value.count(" ") > 10
-                ):  # Must be substantial multi-word SQL
-                    has_explicit_sql_construction = True
-                    break
-
-        if not has_explicit_sql_construction:
-            return False  # Infrastructure patterns default to NOT being SQL generation
-
-    # Primary SQL keywords that indicate actual query construction (not just variables)
-    primary_sql_keywords = [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE",
-        "CREATE",
-        "ALTER",
-        "DROP",
-    ]
-
-    # Look for actual SQL construction, not just query parameters
-    for key, value in properties.items():
-        if isinstance(value, str) and len(value) > 30:  # Increased from 20 to 30
-            value_upper = value.upper()
-
-            # Check for primary SQL keywords with substantial query structure
-            if any(keyword in value_upper for keyword in primary_sql_keywords):
-                # Additional validation: must contain SQL structure indicators
-                sql_structure_indicators = [
-                    "FROM",
-                    "WHERE",
-                    "JOIN",
-                    "GROUP BY",
-                    "ORDER BY",
-                    "HAVING",
-                ]
-                if any(
-                    indicator in value_upper for indicator in sql_structure_indicators
-                ):
-                    # Further check: not just variable substitution
-                    # Look for actual query construction vs just parameter setting
-                    if len(value) > 50 and value.count(" ") > 5:  # Multi-word SQL query
-                        return True
-
-    # Check processor name for explicit SQL construction (very strict)
-    explicit_sql_construction = [
-        "BUILD SQL",
-        "CONSTRUCT SQL",
-        "GENERATE SQL",
-        "CREATE QUERY",
-        "SQL BUILDER",
-        "QUERY BUILDER",
-        "DYNAMIC SQL",
-    ]
-
-    if any(pattern in name_upper for pattern in explicit_sql_construction):
-        return True
+                ):  # Very substantial SQL
+                    return True
+        # If no substantial SQL found despite infrastructure name hints, default to false
+        return False
 
     return False
 
@@ -224,9 +208,9 @@ def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) 
 def _is_sql_operation_executecommand(properties: Dict[str, Any], name: str) -> bool:
     """
     Check if ExecuteStreamCommand is performing SQL operations (data transformation).
-    SQL operations should be classified as data_transformation with high impact.
+    Focus on command properties (reliable) with name as supporting hint only.
     """
-    # SQL operation keywords indicating data manipulation
+    # PRIMARY: Check properties for actual SQL/database operations
     sql_operation_keywords = [
         "REFRESH TABLE",
         "REFRESH",
@@ -239,6 +223,7 @@ def _is_sql_operation_executecommand(properties: Dict[str, Any], name: str) -> b
         "CREATE TABLE",
         "DROP TABLE",
         "ALTER TABLE",
+        "SELECT",
         "IMPALA",
         "HIVE",
         "SPARK-SQL",
@@ -248,87 +233,135 @@ def _is_sql_operation_executecommand(properties: Dict[str, Any], name: str) -> b
         "SQL SCRIPT",
     ]
 
-    # Database command indicators
+    # Database command line tools and flags
     db_command_indicators = [
         "IMPALA-SHELL",
         "HIVE-CLI",
         "BEELINE",
         "SPARK-SQL",
+        "SQLPLUS",
         "--query",
         "-q",
         "-e",
         "--execute",
+        "--file",
+        "-f",
     ]
 
-    # Check command properties for SQL operations
+    # Check all properties for SQL/database operations
     for key, value in properties.items():
-        if isinstance(value, str):
+        if isinstance(value, str) and len(value) > 5:  # Skip trivial values
             value_upper = value.upper()
+
+            # Check for SQL operations or database tools
             if any(keyword in value_upper for keyword in sql_operation_keywords):
                 return True
             if any(cmd in value_upper for cmd in db_command_indicators):
                 return True
 
-    # Check processor name for SQL operation terms
+    # SECONDARY: Name as supporting evidence (not primary decision)
+    # Only use name if properties are ambiguous
     name_upper = name.upper() if name else ""
-    sql_name_indicators = [
-        "EXECUTE",
-        "RUN",
-        "REFRESH",
-        "QUERY",
-        "SQL",
-        "IMPALA",
-        "HIVE",
-        "SPARK",
-        "TABLE",
-        "METADATA",
+
+    # Strong SQL indicators in name
+    strong_sql_name_patterns = [
+        "EXECUTE QUERY",
+        "RUN QUERY",
+        "EXECUTE SQL",
+        "RUN SQL",
+        "IMPALA QUERY",
+        "HIVE QUERY",
+        "REFRESH TABLE",
+        "INVALIDATE METADATA",
+        "SQL SCRIPT",
     ]
 
-    # Must have both a SQL action and a SQL context
-    has_sql_action = any(
-        action in name_upper
-        for action in ["EXECUTE", "RUN", "REFRESH", "CREATE", "DROP"]
-    )
-    has_sql_context = any(
-        context in name_upper
-        for context in ["QUERY", "SQL", "TABLE", "IMPALA", "HIVE", "METADATA"]
-    )
+    if any(pattern in name_upper for pattern in strong_sql_name_patterns):
+        return True
 
+    # Moderate SQL indicators (need both action + context)
+    sql_actions = ["EXECUTE", "RUN", "REFRESH", "CREATE", "DROP"]
+    sql_contexts = ["QUERY", "SQL", "TABLE", "IMPALA", "HIVE", "METADATA"]
+
+    has_sql_action = any(action in name_upper for action in sql_actions)
+    has_sql_context = any(context in name_upper for context in sql_contexts)
+
+    # Only trust name-based classification if both action and context are present
     return has_sql_action and has_sql_context
 
 
 def _is_file_management_executecommand(properties: Dict[str, Any], name: str) -> bool:
     """
     Check if ExecuteStreamCommand is doing file management (not data transformation).
-    File management should be classified as infrastructure_only, not data transformation.
+    Focus on command properties (reliable) with name as supporting hint only.
     """
-    # File management command keywords
+    # PRIMARY: Check properties for file management commands
     file_mgmt_keywords = [
-        "RM",
-        "DELETE",
-        "REMOVE",
-        "CLEAR",
+        "RM ",
+        "DELETE ",
+        "REMOVE ",
+        "CLEAR ",
         "CLEANUP",
         "MKDIR",
         "RMDIR",
         "CHMOD",
         "CHOWN",
-        "MOVE",
-        "COPY",
-        "CP",
-        "MV",
+        "MOVE ",
+        "COPY ",
+        "CP ",
+        "MV ",
+        "FIND ",
+        "LS ",
+        "TAR ",
+        "GZIP ",
+        "UNZIP ",
     ]
 
-    # Check command properties for file management operations
+    # File system paths and operations
+    file_path_indicators = [
+        "/TMP/",
+        "/TEMP/",
+        "/VAR/",
+        "/HOME/",
+        "/DATA/",
+        "/LOG/",
+        "*.TXT",
+        "*.LOG",
+        "*.CSV",
+        "*.JSON",
+        "*.XML",
+        "FILESYSTEM",
+        "HDFS://",
+        "S3://",
+        "FILE://",
+    ]
+
+    # Check all properties for file operations
     for key, value in properties.items():
-        if isinstance(value, str):
+        if isinstance(value, str) and len(value) > 3:
             value_upper = value.upper()
+
+            # Check for file management commands
             if any(keyword in value_upper for keyword in file_mgmt_keywords):
                 return True
+            # Check for file system paths/operations
+            if any(path in value_upper for path in file_path_indicators):
+                return True
 
-    # Check processor name for file management terms
+    # SECONDARY: Name as supporting evidence (not primary decision)
     name_upper = name.upper() if name else ""
-    file_mgmt_name_indicators = ["REMOVE", "DELETE", "CLEAR", "CLEANUP", "FILE"]
+    file_mgmt_name_indicators = [
+        "REMOVE",
+        "DELETE",
+        "CLEAR",
+        "CLEANUP",
+        "FILE MANAGEMENT",
+        "CLEANUP FILES",
+        "DELETE FILES",
+        "REMOVE FILES",
+    ]
+
+    # Only use name as hint, not definitive
     if any(indicator in name_upper for indicator in file_mgmt_name_indicators):
         return True
 
@@ -388,12 +421,17 @@ def classify_processor_hybrid(
     processor_type: str, properties: Dict[str, Any], name: str, proc_id: str
 ) -> Dict[str, Any]:
     """
-    Hybrid classification: Use rules for obvious cases, LLM for ambiguous ones.
+    Type-first classification: Reliable processor type + properties, name as hint only.
+
+    Classification Strategy:
+    1. PRIMARY: Processor type (org.apache.nifi.processors.*) - defines behavior class
+    2. SECONDARY: Properties content - what it actually does
+    3. TERTIARY: Name as hint only - user labels can be misleading
 
     Args:
-        processor_type: Full processor class name
-        properties: Processor configuration properties
-        name: Processor display name
+        processor_type: Full processor class name (reliable behavior indicator)
+        properties: Processor configuration properties (actual configuration)
+        name: Processor display name (user-defined label - hint only)
         proc_id: Processor ID
 
     Returns:
