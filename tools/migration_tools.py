@@ -155,18 +155,23 @@ PROCESSORS TO CONVERT:
 
 REQUIREMENTS:
 1. Return ONLY a valid JSON object with processor index as key and generated code as value
-2. Use proper Databricks patterns (Delta Lake, DataFrame operations, Auto Loader, Structured Streaming)
+2. Use Databricks BATCH patterns (Delta Lake, regular DataFrame operations - NO streaming)
 3. Handle the specific properties for each processor appropriately
 4. Include comments explaining the logic
 5. Make the code functional and ready to use
-6. For GetFile/ListFile: use Auto Loader with cloudFiles format
+6. For GetFile/ListFile: use spark.read (NOT Auto Loader) for batch file processing
 7. For PutFile/PutHDFS: use Delta Lake writes
-8. For ConsumeKafka: use Structured Streaming
+8. For ConsumeKafka: use Structured Streaming (only exception)
 9. For JSON processors: use PySpark JSON functions
 10. CONTEXT-AWARE DATAFRAMES: Use the workflow_context to determine proper DataFrame variable names:
-    - For source processors (GetFile, ListFile, ConsumeKafka): Create df_[processor_name] as output
+    - For source processors (GetFile, ListFile): Create df_[processor_name] as output
     - For processing processors: Read from previous processor's output DataFrame
     - Never use undefined 'df' variable - always reference the actual DataFrame from previous steps
+11. LEGACY HDFS PATH CONVERSION (CRITICAL):
+    - Detect legacy paths in PutFile/PutHDFS: /user/, /hdfs/, /tmp/, /data/, /var/
+    - Convert to Unity Catalog: target_table = 'main.default.converted_table'
+    - Use .saveAsTable() instead of .save('/legacy/path')
+    - Add conversion comments: "# TODO: Converted from legacy HDFS path"
 
 CRITICAL JSON FORMATTING RULES:
 - Return ONLY the JSON object, no markdown, no explanations
@@ -210,6 +215,12 @@ REQUIREMENTS:
    - For processing processors: Use previous processor's DataFrame as input
    - NEVER use undefined 'df' - always create or reference specific DataFrame variables
 9. DATA PASSING: Save results to intermediate Delta tables for next job task to read
+10. LEGACY HDFS PATH CONVERSION (CRITICAL):
+    - If you see paths starting with /user/, /hdfs/, /tmp/, /data/, /var/ in PutFile/PutHDFS
+    - These are LEGACY HDFS paths that must be converted to Unity Catalog
+    - Generate code like: target_table = 'main.default.table_name'  # TODO: Update catalog.schema.table
+    - Use .saveAsTable(target_table) instead of .save('/legacy/path')
+    - Add TODO comments explaining the conversion from legacy path
 
 CRITICAL: Your response must be ONLY a JSON object. Start with {{ and end with }}.
 
