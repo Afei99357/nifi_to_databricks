@@ -86,35 +86,50 @@ def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) ->
     """
     Check if UpdateAttribute generates SQL or processing logic (rare case).
     Most UpdateAttribute just sets metadata, but some generate SQL for downstream use.
+    More strict criteria to avoid false positives.
     """
-    # Check if any property values contain SQL-like keywords
-    sql_keywords = [
-        "SELECT",
-        "INSERT",
-        "UPDATE",
-        "DELETE",
-        "CREATE",
-        "ALTER",
-        "REFRESH",
-        "FROM",
-        "WHERE",
-        "JOIN",
-    ]
+    # Primary SQL keywords that indicate actual query generation
+    primary_sql_keywords = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER"]
+
+    # Secondary SQL keywords (must appear with primary or have substantial content)
+    secondary_sql_keywords = ["FROM", "WHERE", "JOIN", "REFRESH", "TABLE"]
+
+    sql_keyword_found = False
+    substantial_sql_content = False
 
     for key, value in properties.items():
-        if isinstance(value, str):
+        if (
+            isinstance(value, str) and len(value) > 10
+        ):  # Must be substantial content, not just metadata
             value_upper = value.upper()
-            # Look for SQL keywords in property values
-            if any(keyword in value_upper for keyword in sql_keywords):
-                return True
 
-    # Check processor name for SQL-related terms
-    name_upper = name.upper() if name else ""
-    sql_name_indicators = ["SQL", "QUERY", "REFRESH", "STATEMENT", "DERIVE"]
-    if any(indicator in name_upper for indicator in sql_name_indicators):
+            # Check for primary SQL keywords
+            if any(keyword in value_upper for keyword in primary_sql_keywords):
+                sql_keyword_found = True
+
+            # Check for secondary keywords with substantial content
+            if (
+                any(keyword in value_upper for keyword in secondary_sql_keywords)
+                and len(value) > 20
+            ):
+                substantial_sql_content = True
+
+    # Must have either primary SQL keyword OR secondary with substantial content
+    if sql_keyword_found or substantial_sql_content:
         return True
 
-    return False
+    # Check processor name for clear SQL generation indicators (stricter)
+    name_upper = name.upper() if name else ""
+    clear_sql_indicators = ["DERIVE", "GENERATE", "BUILD", "CONSTRUCT", "CREATE"]
+    sql_terms = ["SQL", "QUERY", "STATEMENT"]
+
+    # Must have both a generation verb AND SQL term in name
+    has_generation_verb = any(
+        indicator in name_upper for indicator in clear_sql_indicators
+    )
+    has_sql_term = any(term in name_upper for term in sql_terms)
+
+    return has_generation_verb and has_sql_term
 
 
 def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) -> bool:
@@ -134,6 +149,44 @@ def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) 
     # Check processor name for data-related terms
     name_upper = name.upper() if name else ""
     if any(indicator in name_upper for indicator in data_indicators):
+        return True
+
+    return False
+
+
+def _is_file_management_executecommand(properties: Dict[str, Any], name: str) -> bool:
+    """
+    Check if ExecuteStreamCommand is doing file management (not data transformation).
+    File management should be classified as infrastructure_only, not data transformation.
+    """
+    # File management command keywords
+    file_mgmt_keywords = [
+        "RM",
+        "DELETE",
+        "REMOVE",
+        "CLEAR",
+        "CLEANUP",
+        "MKDIR",
+        "RMDIR",
+        "CHMOD",
+        "CHOWN",
+        "MOVE",
+        "COPY",
+        "CP",
+        "MV",
+    ]
+
+    # Check command properties for file management operations
+    for key, value in properties.items():
+        if isinstance(value, str):
+            value_upper = value.upper()
+            if any(keyword in value_upper for keyword in file_mgmt_keywords):
+                return True
+
+    # Check processor name for file management terms
+    name_upper = name.upper() if name else ""
+    file_mgmt_name_indicators = ["REMOVE", "DELETE", "CLEAR", "CLEANUP", "FILE"]
+    if any(indicator in name_upper for indicator in file_mgmt_name_indicators):
         return True
 
     return False
@@ -314,23 +367,33 @@ STRICT CLASSIFICATION RULES - Focus ONLY on actual data record/file content chan
 
 **INFRASTRUCTURE ONLY** (transforms_data_content: false):
 - Logging, monitoring, alerting
-- FlowFile routing, priorities, attributes
-- Configuration, memory settings
+- FlowFile routing, priorities, attributes, counters, retries
+- Configuration, memory settings, timeouts
+- File management (rm, delete, clear, cleanup, mkdir)
 - ANY UpdateAttribute that only sets metadata/routing info
 - SQL queries that only check status (SHOW TABLES, health checks)
 
+STRICT EXCLUSIONS - These are NEVER data transformation:
+- UpdateAttribute setting priorities, retries, memory limits, counters
+- ExecuteStreamCommand doing file cleanup (rm, delete, clear folders)
+- GenerateFlowFile creating control/timing flowfiles without business data
+- Any operation that only changes FlowFile metadata, not record content
+
 SPECIFIC GUIDANCE FOR AMBIGUOUS TYPES:
-- UpdateAttribute: Only transformation if it generates SQL/processing logic for downstream use
-- ExecuteStreamCommand: Only transformation if command modifies actual data (not just system checks)
-- GenerateFlowFile: Usually infrastructure unless creating data records with business content
+- UpdateAttribute: Only transformation if properties contain substantial SQL (>20 chars with SELECT/INSERT/etc)
+- ExecuteStreamCommand: Only transformation if command modifies actual data tables (not file management)
+- GenerateFlowFile: Only transformation if creating records with business content (not triggers/timers)
 
 EXAMPLES:
 - UpdateAttribute(priority=high): infrastructure_only, just metadata
-- UpdateAttribute(sql=SELECT * FROM customers WHERE...): data_transformation, generates data query
+- UpdateAttribute(mem_limit=2GB): infrastructure_only, just configuration
+- UpdateAttribute(retry_count=${{retry_count:plus(1)}}): infrastructure_only, just counter
+- UpdateAttribute(sql=SELECT customer_id, amount FROM orders WHERE date > ${{date}}): data_transformation, substantial SQL
+- ExecuteStreamCommand("rm /tmp/old_files"): infrastructure_only, file cleanup
 - ExecuteStreamCommand("REFRESH TABLE orders"): external_processing, updates data
 - ExecuteStreamCommand("SHOW TABLES"): infrastructure_only, just checking
-- GenerateFlowFile(empty): infrastructure_only, just triggers workflow
-- GenerateFlowFile(customer_data): data_transformation, creates business records
+- GenerateFlowFile(empty with timer attributes): infrastructure_only, just triggers workflow
+- GenerateFlowFile(customer_data with records): data_transformation, creates business records
 
 BE STRICT: Only classify as transformation if it changes actual data record/file CONTENT.
 
@@ -501,8 +564,32 @@ def analyze_processors_batch(
                 )
 
         else:
-            # Truly ambiguous processors need LLM analysis
-            llm_needed_processors.append(proc)
+            # Handle ExecuteStreamCommand with smart detection for file management
+            if (
+                short_type == "ExecuteStreamCommand"
+                and _is_file_management_executecommand(properties, name)
+            ):
+                # File management commands should be infrastructure, not data transformation
+                result = {
+                    "processor_type": processor_type,
+                    "properties": properties,
+                    "id": proc_id,
+                    "name": name,
+                    "data_manipulation_type": "infrastructure_only",
+                    "actual_data_processing": f"File management: {_get_infrastructure_description('ExecuteStreamCommand')}",
+                    "transforms_data_content": False,
+                    "business_purpose": f"File system operation: {name}",
+                    "data_impact_level": "none",
+                    "key_operations": ["file_management"],
+                    "analysis_method": "smart_detection_file_mgmt",
+                }
+                rule_based_results.append(result)
+                print(
+                    f"🔍 [SMART DETECTION] {name} is file management - classified as infrastructure"
+                )
+            else:
+                # Truly ambiguous processors need LLM analysis
+                llm_needed_processors.append(proc)
 
     print(
         f"✅ [RULE-BASED] Classified {len(rule_based_results)} processors using rules"
