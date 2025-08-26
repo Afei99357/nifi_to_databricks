@@ -48,16 +48,48 @@ print("✅ Simple workflow analysis complete!")
 # Display the analysis results
 print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
+
+# Debug: Let's see what's actually in the response
+print("DEBUG: Response structure:")
+print(f"Type: {type(analysis_resp)}")
+print(f"Has output: {hasattr(analysis_resp, 'output')}")
+if hasattr(analysis_resp, "output"):
+    print(f"Output length: {len(analysis_resp.output)}")
+    for i, item in enumerate(analysis_resp.output):
+        print(f"Item {i}: {type(item)}")
+        print(f"Item {i} attributes: {dir(item)}")
+        if hasattr(item, "content"):
+            print(f"Item {i} content: {item.content}")
+        if hasattr(item, "type"):
+            print(f"Item {i} type: {item.type}")
+
+# Try different ways to extract content
 for item in analysis_resp.output:
+    print(f"\n--- Processing item of type: {type(item)} ---")
+
+    # Method 1: Direct content access
     if hasattr(item, "content"):
+        print("Found content attribute")
         if isinstance(item.content, list):
             for block in item.content:
                 if hasattr(block, "text"):
-                    print(block.text)
+                    print(f"Block text: {block.text}")
+                else:
+                    print(f"Block: {block}")
         elif hasattr(item.content, "text"):
-            print(item.content.text)
+            print(f"Content text: {item.content.text}")
         elif isinstance(item.content, str):
-            print(item.content)
+            print(f"Content string: {item.content}")
+        else:
+            print(f"Content (other): {item.content}")
+
+    # Method 2: Check for text attribute directly
+    if hasattr(item, "text"):
+        print(f"Direct text: {item.text}")
+
+    # Method 3: Convert to string representation
+    print(f"String representation: {str(item)}")
+
 print("=" * 60)
 
 # COMMAND ----------
