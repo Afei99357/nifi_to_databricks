@@ -387,7 +387,34 @@ def recommend_databricks_architecture(xml_content: str) -> str:
     try:
         # First analyze the architecture requirements
         analysis_json = analyze_nifi_architecture_requirements(xml_content)
-        analysis = json.loads(analysis_json)
+
+        # Handle JSON parsing with error recovery
+        try:
+            analysis = json.loads(analysis_json)
+        except json.JSONDecodeError as json_error:
+            print(f"⚠️ [ARCHITECTURE] JSON parsing failed: {json_error}")
+            print(f"Raw response: {analysis_json[:200]}...")
+            # Return fallback recommendation
+            return json.dumps(
+                {
+                    "recommendation": "databricks_job",
+                    "confidence": "low",
+                    "reasoning": [
+                        "Analysis failed - defaulting to Databricks Job",
+                        "JSON parsing error in architecture analysis",
+                    ],
+                    "architecture_details": {"pipeline_type": "batch_orchestration"},
+                    "alternative_options": [
+                        {
+                            "option": "dlt_pipeline",
+                            "reason": "If streaming requirements emerge",
+                        }
+                    ],
+                    "continue_required": False,
+                    "tool_name": "recommend_databricks_architecture",
+                },
+                indent=2,
+            )
 
         feature_flags = analysis["feature_flags"]
         processor_analysis = analysis["processor_analysis"]

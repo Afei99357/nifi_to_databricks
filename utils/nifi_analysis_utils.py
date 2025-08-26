@@ -195,6 +195,82 @@ def _is_data_generating_generateflowfile(properties: Dict[str, Any], name: str) 
     return False
 
 
+def _is_sql_operation_executecommand(properties: Dict[str, Any], name: str) -> bool:
+    """
+    Check if ExecuteStreamCommand is performing SQL operations (data transformation).
+    SQL operations should be classified as data_transformation with high impact.
+    """
+    # SQL operation keywords indicating data manipulation
+    sql_operation_keywords = [
+        "REFRESH TABLE",
+        "REFRESH",
+        "INVALIDATE METADATA",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "MERGE",
+        "UPSERT",
+        "CREATE TABLE",
+        "DROP TABLE",
+        "ALTER TABLE",
+        "IMPALA",
+        "HIVE",
+        "SPARK-SQL",
+        "BEELINE",
+        "EXECUTE QUERY",
+        "RUN QUERY",
+        "SQL SCRIPT",
+    ]
+
+    # Database command indicators
+    db_command_indicators = [
+        "IMPALA-SHELL",
+        "HIVE-CLI",
+        "BEELINE",
+        "SPARK-SQL",
+        "--query",
+        "-q",
+        "-e",
+        "--execute",
+    ]
+
+    # Check command properties for SQL operations
+    for key, value in properties.items():
+        if isinstance(value, str):
+            value_upper = value.upper()
+            if any(keyword in value_upper for keyword in sql_operation_keywords):
+                return True
+            if any(cmd in value_upper for cmd in db_command_indicators):
+                return True
+
+    # Check processor name for SQL operation terms
+    name_upper = name.upper() if name else ""
+    sql_name_indicators = [
+        "EXECUTE",
+        "RUN",
+        "REFRESH",
+        "QUERY",
+        "SQL",
+        "IMPALA",
+        "HIVE",
+        "SPARK",
+        "TABLE",
+        "METADATA",
+    ]
+
+    # Must have both a SQL action and a SQL context
+    has_sql_action = any(
+        action in name_upper
+        for action in ["EXECUTE", "RUN", "REFRESH", "CREATE", "DROP"]
+    )
+    has_sql_context = any(
+        context in name_upper
+        for context in ["QUERY", "SQL", "TABLE", "IMPALA", "HIVE", "METADATA"]
+    )
+
+    return has_sql_action and has_sql_context
+
+
 def _is_file_management_executecommand(properties: Dict[str, Any], name: str) -> bool:
     """
     Check if ExecuteStreamCommand is doing file management (not data transformation).
@@ -260,8 +336,15 @@ def _determine_impact_level(
         return "medium"
 
     # UpdateAttribute should MAX OUT at medium, never high (even with SQL generation)
-    if short_type == "UpdateAttribute" and manipulation_type != "infrastructure_only":
-        return "medium"
+    # Most UpdateAttribute should be "none" unless it's truly generating substantial SQL
+    if short_type == "UpdateAttribute":
+        if (
+            manipulation_type == "data_transformation"
+            and _is_sql_generating_updateattribute(properties, name)
+        ):
+            return "medium"  # Only if it's actually generating SQL
+        else:
+            return "none"  # Default for UpdateAttribute is no impact
 
     # LOW IMPACT: Data movement
     if manipulation_type == "data_movement":
@@ -663,29 +746,49 @@ def analyze_processors_batch(
                 )
 
         else:
-            # Handle ExecuteStreamCommand with smart detection for file management
-            if (
-                short_type == "ExecuteStreamCommand"
-                and _is_file_management_executecommand(properties, name)
-            ):
-                # File management commands should be infrastructure, not data transformation
-                result = {
-                    "processor_type": processor_type,
-                    "properties": properties,
-                    "id": proc_id,
-                    "name": name,
-                    "data_manipulation_type": "infrastructure_only",
-                    "actual_data_processing": f"File management: {_get_infrastructure_description('ExecuteStreamCommand')}",
-                    "transforms_data_content": False,
-                    "business_purpose": f"File system operation: {name}",
-                    "data_impact_level": "none",
-                    "key_operations": ["file_management"],
-                    "analysis_method": "smart_detection_file_mgmt",
-                }
-                rule_based_results.append(result)
-                print(
-                    f"🔍 [SMART DETECTION] {name} is file management - classified as infrastructure"
-                )
+            # Handle ExecuteStreamCommand with smart detection
+            if short_type == "ExecuteStreamCommand":
+                if _is_sql_operation_executecommand(properties, name):
+                    # SQL operations should be data transformation with high impact
+                    result = {
+                        "processor_type": processor_type,
+                        "properties": properties,
+                        "id": proc_id,
+                        "name": name,
+                        "data_manipulation_type": "data_transformation",
+                        "actual_data_processing": f"SQL operation: {name}",
+                        "transforms_data_content": True,
+                        "business_purpose": f"Database operation: {name}",
+                        "data_impact_level": "high",
+                        "key_operations": ["sql_execution"],
+                        "analysis_method": "smart_detection_sql_operation",
+                    }
+                    rule_based_results.append(result)
+                    print(
+                        f"🔍 [SMART DETECTION] {name} is SQL operation - classified as data transformation"
+                    )
+                elif _is_file_management_executecommand(properties, name):
+                    # File management commands should be infrastructure, not data transformation
+                    result = {
+                        "processor_type": processor_type,
+                        "properties": properties,
+                        "id": proc_id,
+                        "name": name,
+                        "data_manipulation_type": "infrastructure_only",
+                        "actual_data_processing": f"File management: {_get_infrastructure_description('ExecuteStreamCommand')}",
+                        "transforms_data_content": False,
+                        "business_purpose": f"File system operation: {name}",
+                        "data_impact_level": "none",
+                        "key_operations": ["file_management"],
+                        "analysis_method": "smart_detection_file_mgmt",
+                    }
+                    rule_based_results.append(result)
+                    print(
+                        f"🔍 [SMART DETECTION] {name} is file management - classified as infrastructure"
+                    )
+                else:
+                    # Ambiguous ExecuteStreamCommand needs LLM analysis
+                    llm_needed_processors.append(proc)
             else:
                 # Truly ambiguous processors need LLM analysis
                 llm_needed_processors.append(proc)
