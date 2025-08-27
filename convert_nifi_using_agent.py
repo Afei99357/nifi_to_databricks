@@ -294,10 +294,12 @@ print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
 
 # Import utility functions for this step
-from utils.response_utils import display_agent_response
+from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
 
-# # Save complex migration response to JSON
-# json_file = save_agent_response_to_json(resp, "complex_workflow_migration.json")
+# Save complex migration response to markdown
+markdown_file = save_agent_summary_to_markdown(
+    resp, f"/tmp/workflow_analysis/complex_workflow_migration_{current}.md"
+)
 
 # Display in clean format
 display_agent_response(resp)
