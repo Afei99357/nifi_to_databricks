@@ -3,12 +3,15 @@
 
 import json
 import os
-import sys
 from datetime import datetime
 from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
+
+from tools.xml_tools import (  # type: ignore[attr-defined]
+    extract_processors_from_nifi_xml,
+)
 
 # Hybrid approach: Rule-based + LLM intelligence
 
@@ -1197,16 +1200,6 @@ def analyze_workflow_patterns(
     Returns:
         Complete workflow analysis results dictionary
     """
-    try:
-        from tools.xml_tools import (  # type: ignore[attr-defined]
-            extract_processors_from_nifi_xml,
-        )
-    except ImportError:
-        sys.path.append(".")
-        from tools.xml_tools import (  # type: ignore[attr-defined]
-            extract_processors_from_nifi_xml,
-        )
-
     print(f"🔍 [WORKFLOW ANALYSIS] Starting analysis of: {xml_path}")
 
     # Read XML file
