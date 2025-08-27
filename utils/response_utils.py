@@ -10,86 +10,79 @@ from typing import Any, Dict, List
 from utils.workflow_summary import print_workflow_summary_from_data
 
 
-def save_agent_response_to_json(response, output_path: str = None) -> str:
+def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
     """
-    Convert MLflow agent response to a clean JSON file.
+    Extract and save the formatted NiFi analysis summary to a markdown file.
 
     Args:
         response: MLflow agent response object
-        output_path: Optional path to save JSON. If None, auto-generates filename.
+        output_path: Optional path to save markdown. If None, auto-generates filename.
 
     Returns:
-        str: Path to saved JSON file
+        str: Path to saved markdown file
     """
     # Auto-generate filename if not provided
     if output_path is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"agent_response_{timestamp}.json"
+        output_path = f"agent_analysis_summary_{timestamp}.md"
 
-    outputs: List[Dict[str, Any]] = []
-    result = {
-        "timestamp": datetime.now().isoformat(),
-        "response_summary": {
-            "total_outputs": len(response.output),
-            "output_types": [output.type for output in response.output],
-        },
-        "outputs": outputs,
-    }
+    # Extract formatted summary from response
+    formatted_summary = None
+    workflow_filename = "Unknown Workflow"
 
-    # Extract each output
-    for i, output in enumerate(response.output):
-        output_data = {
-            "index": i,
-            "type": output.type,
-        }
-
+    for output in response.output:
         if hasattr(output, "output") and output.type == "function_call_output":
-            # Tool result - parse JSON if possible
             try:
-                tool_result = json.loads(output.output)
-                output_data["tool_result"] = tool_result
-                output_data["raw_output"] = output.output
-            except:
-                output_data["raw_output"] = output.output
-
-        elif hasattr(output, "content") and output.type == "message":
-            # Agent message - extract text
-            output_data["content"] = []
-            for content in output.content:
-                if isinstance(content, dict) and content.get("type") == "output_text":
-                    output_data["content"].append(
-                        {"type": "text", "text": content.get("text", "")}
+                content = output.output
+                # Look for formatted summary in the output
+                if "🔍 NIFI WORKFLOW ANALYSIS SUMMARY" in content:
+                    start_marker = "🔍 NIFI WORKFLOW ANALYSIS SUMMARY"
+                    end_marker = (
+                        "============================================================"
                     )
-                else:
-                    output_data["content"].append(content)
 
-        elif hasattr(output, "name") and output.type == "function_call":
-            # Function call info
-            output_data["function_name"] = output.name
-            if hasattr(output, "arguments"):
-                try:
-                    output_data["arguments"] = json.loads(output.arguments)
-                except:
-                    output_data["arguments"] = output.arguments
+                    start_idx = content.find(start_marker)
+                    if start_idx != -1:
+                        # Find the end of the summary section
+                        end_idx = content.find(
+                            end_marker, start_idx + len(start_marker)
+                        )
+                        if end_idx != -1:
+                            end_idx += len(end_marker)
+                            formatted_summary = content[start_idx:end_idx]
+                        else:
+                            formatted_summary = content[start_idx:]
+                        break
+            except Exception:
+                continue
 
-        outputs.append(output_data)
+    if formatted_summary is None:
+        print("⚠️ No formatted NiFi analysis summary found in response")
+        return None
 
-    # Save to JSON file
+    # Create directory if needed
     os.makedirs(
         os.path.dirname(output_path) if os.path.dirname(output_path) else ".",
         exist_ok=True,
     )
+
+    # Save to markdown file
     with open(output_path, "w") as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
+        f.write("# NiFi Workflow Analysis - Agent Summary\n\n")
+        f.write(
+            "**Analysis Date:** " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n"
+        )
+        f.write("**Type:** LLM Agent Intelligence Analysis\n\n")
+        f.write("## Formatted Analysis Summary\n\n")
+        f.write("```\n")
+        f.write(formatted_summary)
+        f.write("\n```\n")
+        f.write("\n\n---\n")
+        f.write(
+            "*Formatted summary extracted from NiFi to Databricks Migration Tool - LLM Agent Analysis*\n"
+        )
 
-    print(f"✅ Agent response saved to: {os.path.abspath(output_path)}")
-
-    # Also print the JSON content in the logs
-    print("📄 JSON Content:")
-    print("=" * 40)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-    print("=" * 40)
-
+    print(f"📄 Formatted analysis summary saved to: {os.path.abspath(output_path)}")
     return output_path
 
 

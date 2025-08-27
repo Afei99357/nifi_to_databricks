@@ -91,11 +91,11 @@ print("\n📋 ANALYSIS RESULTS:")
 print("=" * 60)
 
 # Import utility functions for this step
-from utils.response_utils import display_agent_response
+from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
 
-# Save response to JSON file
-json_file = save_agent_response_to_json(
-    analysis_resp, "/tmp/workflow_analysis/simple_workflow_analysis.json"
+# Save formatted analysis summary to markdown file
+markdown_file = save_agent_summary_to_markdown(
+    analysis_resp, "/tmp/workflow_analysis/simple_workflow_analysis_summary.md"
 )
 
 # Display in clean format
@@ -243,12 +243,13 @@ print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
 # Use utility functions to handle the response
-from utils.response_utils import display_agent_response, save_agent_response_to_json
+from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
 
-# Save complex workflow analysis to JSON
-json_file = save_agent_response_to_json(
-    complex_analysis_resp, "/tmp/workflow_analysis/complex_workflow_analysis.json"
+# Save complex workflow formatted analysis summary to markdown
+markdown_file = save_agent_summary_to_markdown(
+    complex_analysis_resp, "/tmp/workflow_analysis/complex_workflow_analysis_summary.md"
 )
+
 
 # Display in clean format
 display_agent_response(complex_analysis_resp)
