@@ -12,7 +12,7 @@ from utils.workflow_summary import print_workflow_summary_from_data
 
 def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
     """
-    Extract and save the formatted NiFi analysis summary to a markdown file.
+    Capture and save the complete display_agent_response output to a markdown file.
 
     Args:
         response: MLflow agent response object
@@ -24,41 +24,7 @@ def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
     # Auto-generate filename if not provided
     if output_path is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"agent_analysis_summary_{timestamp}.md"
-
-    # Extract formatted summary from response
-    formatted_summary = None
-    workflow_filename = "Unknown Workflow"
-
-    for output in response.output:
-        if hasattr(output, "output") and output.type == "function_call_output":
-            try:
-                content = output.output
-                # Look for formatted summary in the output
-                if "🔍 NIFI WORKFLOW ANALYSIS SUMMARY" in content:
-                    start_marker = "🔍 NIFI WORKFLOW ANALYSIS SUMMARY"
-                    end_marker = (
-                        "============================================================"
-                    )
-
-                    start_idx = content.find(start_marker)
-                    if start_idx != -1:
-                        # Find the end of the summary section
-                        end_idx = content.find(
-                            end_marker, start_idx + len(start_marker)
-                        )
-                        if end_idx != -1:
-                            end_idx += len(end_marker)
-                            formatted_summary = content[start_idx:end_idx]
-                        else:
-                            formatted_summary = content[start_idx:]
-                        break
-            except Exception:
-                continue
-
-    if formatted_summary is None:
-        print("⚠️ No formatted NiFi analysis summary found in response")
-        return None
+        output_path = f"agent_response_summary_{timestamp}.md"
 
     # Create directory if needed
     os.makedirs(
@@ -66,23 +32,35 @@ def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
         exist_ok=True,
     )
 
+    # Capture all the output that display_agent_response() would generate
+    import io
+    import sys
+    from contextlib import redirect_stdout
+
+    # Capture the printed output from display_agent_response
+    captured_output = io.StringIO()
+    with redirect_stdout(captured_output):
+        display_agent_response(response)
+
+    full_output = captured_output.getvalue()
+
     # Save to markdown file
     with open(output_path, "w") as f:
-        f.write("# NiFi Workflow Analysis - Agent Summary\n\n")
+        f.write("# NiFi Workflow Analysis - Agent Response Summary\n\n")
         f.write(
             "**Analysis Date:** " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n"
         )
-        f.write("**Type:** LLM Agent Intelligence Analysis\n\n")
-        f.write("## Formatted Analysis Summary\n\n")
+        f.write("**Type:** Complete Agent Response Output\n\n")
+        f.write("## Agent Response Details\n\n")
         f.write("```\n")
-        f.write(formatted_summary)
+        f.write(full_output)
         f.write("\n```\n")
         f.write("\n\n---\n")
         f.write(
-            "*Formatted summary extracted from NiFi to Databricks Migration Tool - LLM Agent Analysis*\n"
+            "*Complete agent response output captured from NiFi to Databricks Migration Tool*\n"
         )
 
-    print(f"📄 Formatted analysis summary saved to: {os.path.abspath(output_path)}")
+    print(f"📄 Complete agent response saved to: {os.path.abspath(output_path)}")
     return output_path
 
 
