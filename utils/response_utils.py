@@ -40,7 +40,6 @@ def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
     captured_output = io.StringIO()
     with redirect_stdout(captured_output):
         display_agent_response(response)
-        sys.stdout.flush()  # Ensure all output is flushed to the buffer
 
     full_output = captured_output.getvalue()
 
