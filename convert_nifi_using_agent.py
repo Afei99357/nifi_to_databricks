@@ -263,6 +263,8 @@ print("=" * 60)
 
 # COMMAND ----------
 
+from datetime import datetime
+
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
 print("🚀 INTELLIGENT MIGRATION - Complex Workflow")
