@@ -3,6 +3,7 @@
 
 import json
 import os
+import sys
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -1201,12 +1202,10 @@ def analyze_workflow_patterns(
             extract_processors_from_nifi_xml,
         )
     except ImportError:
-        import sys
-
         sys.path.append(".")
-        from tools.xml_tools import extract_processors_from_nifi_xml  # type: ignore[attr-defined]
-    import json
-    import os
+        from tools.xml_tools import (  # type: ignore[attr-defined]
+            extract_processors_from_nifi_xml,
+        )
 
     print(f"🔍 [WORKFLOW ANALYSIS] Starting analysis of: {xml_path}")
 
