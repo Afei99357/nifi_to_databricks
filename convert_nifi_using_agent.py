@@ -19,149 +19,6 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 🔍 Step 1: Direct Workflow Analysis (New Smart Analysis)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Option A: Direct Analysis with Markdown Export (Recommended)
-# MAGIC Uses the new `analyze_workflow_patterns` function to analyze workflows and automatically generate markdown reports.
-
-# COMMAND ----------
-
-from utils.nifi_analysis_utils import analyze_workflow_patterns
-
-# Analyze simple workflow directly
-print("🧠 DIRECT WORKFLOW ANALYSIS - Simple Pipeline")
-print("=" * 60)
-
-# Direct analysis with automatic markdown export
-analysis_result = analyze_workflow_patterns(
-    xml_path="/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml",
-    save_markdown=True,  # Automatically saves markdown report
-    output_dir="/tmp/workflow_analysis",
-)
-
-print("\n📊 ANALYSIS SUMMARY:")
-print(f"• Total Processors: {analysis_result['analysis_summary']['total_processors']}")
-print(
-    f"• Data Transformers: {analysis_result['analysis_summary']['data_transformation_processors']}"
-)
-print(
-    f"• Data Movers: {analysis_result['analysis_summary']['data_movement_processors']}"
-)
-print(
-    f"• Infrastructure: {analysis_result['analysis_summary']['infrastructure_processors']}"
-)
-
-print("✅ Direct workflow analysis complete with markdown export!")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Option B: Agent-Based Analysis (Interactive)
-# MAGIC Uses the LangGraph agent for interactive workflow analysis.
-
-# COMMAND ----------
-
-from datetime import datetime
-
-from mlflow.types.responses import ResponsesAgentRequest
-
-from agents import AGENT
-
-print("🧠 AGENT-BASED WORKFLOW ANALYSIS")
-print("=" * 60)
-
-# Ask the agent to analyze workflow using the XML file path
-req = ResponsesAgentRequest(
-    input=[
-        {
-            "role": "user",
-            "content": "Use analyze_nifi_workflow_intelligence to analyze the NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml and explain what it does in business terms. What processors actually transform data vs just move files?",
-        }
-    ]
-)
-
-analysis_resp = AGENT.predict(req)
-print("✅ Agent-based workflow analysis complete!")
-
-# Display the analysis results
-print("\n📋 ANALYSIS RESULTS:")
-print("=" * 60)
-
-# Import utility functions for this step
-from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
-
-# Save formatted analysis summary to markdown file
-markdown_file = save_agent_summary_to_markdown(
-    analysis_resp, "/tmp/workflow_analysis/simple_workflow_analysis_summary.md"
-)
-
-# Display in clean format
-display_agent_response(analysis_resp)
-
-print("=" * 60)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 🚀 Step 2: Intelligent Migration of Simple Workflow
-
-# COMMAND ----------
-
-from mlflow.types.responses import ResponsesAgentRequest
-
-from agents import AGENT
-
-current = datetime.now().strftime("%Y%m%d%H%M%S")
-
-print("🚀 INTELLIGENT MIGRATION")
-print("=" * 60)
-
-req = ResponsesAgentRequest(
-    input=[
-        {
-            "role": "user",
-            "content": (
-                "Run orchestrate_intelligent_nifi_migration with:\n"
-                "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/nifi_pipeline_eric_1.xml\n"
-                "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results\n"
-                f"project=intelligent_simple_{current}\n"
-                f"notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/intelligent_simple_{current}/main\n"
-                "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "run_now=true"
-            ),
-        }
-    ]
-)
-
-resp = AGENT.predict(req)
-print("✅ Intelligent migration complete!")
-
-# Display the migration results using utilities
-print("\n📋 SIMPLE MIGRATION RESULTS:")
-print("=" * 60)
-
-# Import utility functions for this step
-from utils.response_utils import display_agent_response
-
-# Save migration response to JSON
-# json_file = save_agent_response_to_json(resp, "simple_workflow_migration.json")
-
-# Display in clean format
-display_agent_response(resp)
-
-print("=" * 60)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 🔍 Step 3: Complex Workflow Analysis (Data Processing Pipeline)
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC #### Option A: Direct Analysis with Markdown Export (Recommended)
 # MAGIC Analyzes the complex ICN8_BRS_Feedback workflow and generates comprehensive report.
 
@@ -247,7 +104,7 @@ from utils.response_utils import display_agent_response, save_agent_summary_to_m
 
 # Save complex workflow formatted analysis summary to markdown
 markdown_file = save_agent_summary_to_markdown(
-    complex_analysis_resp, "/tmp/workflow_analysis/complex_workflow_analysis_summary.md"
+    complex_analysis_resp, "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_analysis_summary.md"
 )
 
 
@@ -264,6 +121,10 @@ print("=" * 60)
 # COMMAND ----------
 
 from datetime import datetime
+
+from mlflow.types.responses import ResponsesAgentRequest
+
+from agents import AGENT
 
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
@@ -300,7 +161,7 @@ from utils.response_utils import display_agent_response, save_agent_summary_to_m
 
 # Save complex migration response to markdown
 markdown_file = save_agent_summary_to_markdown(
-    resp, f"/tmp/workflow_analysis/complex_workflow_migration_{current}.md"
+    resp, f"/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_migration_{current}.md"
 )
 
 # Display in clean format
