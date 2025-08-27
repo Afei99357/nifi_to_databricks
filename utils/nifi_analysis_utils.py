@@ -14,8 +14,8 @@ from tools.xml_tools import (  # type: ignore[attr-defined]
 )
 
 from .workflow_summary import (
+    print_and_save_workflow_summary,
     print_workflow_summary_from_data,
-    save_workflow_summary_markdown,
 )
 
 # Hybrid approach: Rule-based + LLM intelligence
@@ -1247,13 +1247,16 @@ def analyze_workflow_patterns(
         json.dump(workflow_analysis, f, indent=2)
     print(f"💾 [WORKFLOW ANALYSIS] Analysis saved to: {json_path}")
 
-    # Generate and save markdown report if requested
+    # Print summary to console and save markdown if requested
     if save_markdown:
-        markdown_path = save_workflow_summary_markdown(workflow_analysis, json_path)
+        # Use unified function that prints AND saves markdown
+        markdown_path = print_and_save_workflow_summary(
+            json_path, save_markdown=True, output_path=None
+        )
         print(f"📄 [WORKFLOW ANALYSIS] Markdown report: {markdown_path}")
-
-    # Print summary to console
-    print_workflow_summary_from_data(workflow_analysis)
+    else:
+        # Just print to console
+        print_workflow_summary_from_data(workflow_analysis)
 
     return workflow_analysis
 

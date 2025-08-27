@@ -3,6 +3,7 @@
 
 import json
 from collections import Counter
+from datetime import datetime
 from typing import Any, Dict, List
 
 
@@ -283,42 +284,19 @@ def print_and_save_workflow_summary(
 
     # Save markdown if requested
     if save_markdown:
-        return save_workflow_summary_markdown(
-            analysis_data, json_file_path, output_path
+        # Generate markdown content
+        summary = summarize_workflow_analysis_from_data(analysis_data)
+        overview = summary["workflow_overview"]
+
+        # Get original filename if available
+        filename = analysis_data.get("workflow_metadata", {}).get(
+            "filename", "Unknown Workflow"
         )
 
-    return None
+        # Generate timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-
-def save_workflow_summary_markdown(
-    analysis_data: Dict[str, Any], json_file_path: str, output_path: str = None
-) -> str:
-    """
-    Save workflow analysis summary as a markdown file.
-
-    Args:
-        analysis_data: Analysis data dictionary
-        json_file_path: Original JSON file path (for determining output path)
-        output_path: Optional path for markdown file. If None, uses same directory as JSON file.
-
-    Returns:
-        Path to the saved markdown file
-    """
-    # Generate markdown content
-    summary = summarize_workflow_analysis_from_data(analysis_data)
-    overview = summary["workflow_overview"]
-
-    # Get original filename if available
-    filename = analysis_data.get("workflow_metadata", {}).get(
-        "filename", "Unknown Workflow"
-    )
-
-    # Generate timestamp
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    markdown = f"""# NiFi Workflow Analysis Report
+        markdown = f"""# NiFi Workflow Analysis Report
 
 **Workflow:** {filename}
 **Analysis Date:** {timestamp}
@@ -337,72 +315,66 @@ def save_workflow_summary_markdown(
 
 """
 
-    # Add data transformers
-    transformers = summary["data_manipulation_breakdown"]["data_transformers"]
-    if transformers["count"] > 0:
-        markdown += f"""### 📈 Data Transformers ({transformers['count']} processors)
+        # Add data transformers
+        transformers = summary["data_manipulation_breakdown"]["data_transformers"]
+        if transformers["count"] > 0:
+            markdown += f"""### 📈 Data Transformers ({transformers['count']} processors)
 
 These processors contain actual business logic and data transformation operations:
 
 """
-        for proc in transformers["processors"]:
-            markdown += (
-                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
-            )
-        markdown += "\n"
+            for proc in transformers["processors"]:
+                markdown += f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            markdown += "\n"
 
-    # Add external processors
-    external = summary["data_manipulation_breakdown"]["external_processors"]
-    if external["count"] > 0:
-        markdown += f"""### 🔌 External Processors ({external['count']} processors)
+        # Add external processors
+        external = summary["data_manipulation_breakdown"]["external_processors"]
+        if external["count"] > 0:
+            markdown += f"""### 🔌 External Processors ({external['count']} processors)
 
 These processors interact with external systems:
 
 """
-        for proc in external["processors"]:
-            markdown += (
-                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
-            )
-        markdown += "\n"
+            for proc in external["processors"]:
+                markdown += f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            markdown += "\n"
 
-    # Add data movement processors
-    data_movers = summary["data_manipulation_breakdown"]["data_movers"]
-    if data_movers["count"] > 0:
-        markdown += f"""## 📦 Data Movement Processors ({data_movers['count']} processors)
+        # Add data movement processors
+        data_movers = summary["data_manipulation_breakdown"]["data_movers"]
+        if data_movers["count"] > 0:
+            markdown += f"""## 📦 Data Movement Processors ({data_movers['count']} processors)
 
 These processors move data without transformation:
 
 """
-        for proc in data_movers["processors"]:
-            markdown += (
-                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
-            )
-        markdown += "\n"
+            for proc in data_movers["processors"]:
+                markdown += f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            markdown += "\n"
 
-    # Add infrastructure breakdown
-    infrastructure = summary["infrastructure_breakdown"]
-    markdown += f"""## 🔗 Infrastructure Processors ({infrastructure['count']} processors)
+        # Add infrastructure breakdown
+        infrastructure = summary["infrastructure_breakdown"]
+        markdown += f"""## 🔗 Infrastructure Processors ({infrastructure['count']} processors)
 
 These processors handle routing, logging, flow control, and metadata operations:
 
 """
 
-    # Show first 10 infrastructure processors, then summarize the rest
-    infra_processors = infrastructure["processors"]
-    for proc in infra_processors[:10]:
-        markdown += (
-            f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
-        )
+        # Show first 10 infrastructure processors, then summarize the rest
+        infra_processors = infrastructure["processors"]
+        for proc in infra_processors[:10]:
+            markdown += (
+                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            )
 
-    if len(infra_processors) > 10:
-        remaining = len(infra_processors) - 10
-        markdown += f"- ... and {remaining} more infrastructure processors\n"
+        if len(infra_processors) > 10:
+            remaining = len(infra_processors) - 10
+            markdown += f"- ... and {remaining} more infrastructure processors\n"
 
-    markdown += "\n"
+        markdown += "\n"
 
-    # Add impact analysis
-    impact = summary["data_impact_analysis"]
-    markdown += f"""## 🎯 Data Impact Analysis
+        # Add impact analysis
+        impact = summary["data_impact_analysis"]
+        markdown += f"""## 🎯 Data Impact Analysis
 
 | Impact Level | Count | Description |
 |-------------|-------|-------------|
@@ -412,51 +384,49 @@ These processors handle routing, logging, flow control, and metadata operations:
 
 """
 
-    # Add critical processors if any
-    if impact["critical_processors"]:
-        markdown += f"""### 🚨 Critical Processors (High Impact)
+        # Add critical processors if any
+        if impact["critical_processors"]:
+            markdown += f"""### 🚨 Critical Processors (High Impact)
 
 These processors require careful migration attention:
 
 """
-        for proc in impact["critical_processors"]:
-            markdown += (
-                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
-            )
-        markdown += "\n"
+            for proc in impact["critical_processors"]:
+                markdown += f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            markdown += "\n"
 
-    # Add business insights
-    insights = summary["business_insights"]
-    markdown += f"""## 💡 Migration Insights
+        # Add business insights
+        insights = summary["business_insights"]
+        markdown += f"""## 💡 Migration Insights
 
 - **Workflow Complexity:** {insights['workflow_complexity'].upper()}
 - **Automation Potential:** {insights['automation_potential'].upper()}
 
 """
 
-    # Add key business operations
-    if summary["key_business_operations"]:
-        markdown += """### ⭐ Key Business Operations
+        # Add key business operations
+        if summary["key_business_operations"]:
+            markdown += """### ⭐ Key Business Operations
 
 """
-        for operation, count in summary["key_business_operations"].items():
-            if count > 1:
-                markdown += f"- **{operation}:** {count} times\n"
-        markdown += "\n"
+            for operation, count in summary["key_business_operations"].items():
+                if count > 1:
+                    markdown += f"- **{operation}:** {count} times\n"
+            markdown += "\n"
 
-    # Add processor type distribution
-    if summary["processor_type_distribution"]:
-        markdown += """### 📊 Processor Type Distribution
+        # Add processor type distribution
+        if summary["processor_type_distribution"]:
+            markdown += """### 📊 Processor Type Distribution
 
 | Processor Type | Count |
 |---------------|-------|
 """
-        for proc_type, count in summary["processor_type_distribution"].items():
-            markdown += f"| {proc_type} | {count} |\n"
-        markdown += "\n"
+            for proc_type, count in summary["processor_type_distribution"].items():
+                markdown += f"| {proc_type} | {count} |\n"
+            markdown += "\n"
 
-    # Add recommendations
-    markdown += f"""## 🏗️ Architecture Recommendations
+        # Add recommendations
+        markdown += f"""## 🏗️ Architecture Recommendations
 
 Based on the analysis:
 
@@ -477,19 +447,21 @@ The majority ({round((overview['infrastructure_processors']/overview['total_proc
 *Generated by NiFi to Databricks Migration Tool - Intelligent Workflow Analysis*
 """
 
-    # Determine output path
-    if output_path is None:
-        import os
+        # Determine output path
+        if output_path is None:
+            import os
 
-        base_path = os.path.splitext(json_file_path)[0]
-        output_path = f"{base_path}_analysis_report.md"
+            base_path = os.path.splitext(json_file_path)[0]
+            output_path = f"{base_path}_analysis_report.md"
 
-    # Save to file
-    with open(output_path, "w") as f:
-        f.write(markdown)
+        # Save to file
+        with open(output_path, "w") as f:
+            f.write(markdown)
 
-    print(f"\n📄 Workflow analysis report saved to: {output_path}")
-    return output_path
+        print(f"\n📄 Workflow analysis report saved to: {output_path}")
+        return output_path
+
+    return None
 
 
 if __name__ == "__main__":
