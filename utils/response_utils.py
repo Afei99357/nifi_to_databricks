@@ -2,8 +2,11 @@
 Utility functions for handling MLflow agent responses
 """
 
+import io
 import json
 import os
+import sys
+from contextlib import redirect_stdout
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -33,10 +36,6 @@ def save_agent_summary_to_markdown(response, output_path: str = None) -> str:
     )
 
     # Capture all the output that display_agent_response() would generate
-    import io
-    import sys
-    from contextlib import redirect_stdout
-
     # Capture the printed output from display_agent_response
     captured_output = io.StringIO()
     with redirect_stdout(captured_output):
