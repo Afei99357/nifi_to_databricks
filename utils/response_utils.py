@@ -108,9 +108,7 @@ def display_agent_response(response) -> None:
             for content in output.content:
                 if isinstance(content, dict) and content.get("type") == "output_text":
                     text = content.get("text", "")
-                    # Truncate long text
-                    if len(text) > 500:
-                        text = text[:500] + "..."
+                    # Display full text without truncation
                     print(f"   {text}")
 
         elif hasattr(output, "name") and output.type == "function_call":
