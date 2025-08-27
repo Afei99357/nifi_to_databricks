@@ -3,6 +3,7 @@
 
 import json
 import os
+from datetime import datetime
 from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
@@ -1179,3 +1180,121 @@ Be specific about what happens to the actual data content, not just metadata or 
                         }
                     )
             return results
+
+
+def analyze_workflow_patterns(
+    xml_path: str, save_markdown: bool = True, output_dir: str = None
+) -> Dict[str, Any]:
+    """
+    Comprehensive workflow analysis with automatic markdown report generation.
+
+    Args:
+        xml_path: Path to the NiFi XML template file
+        save_markdown: Whether to save a markdown analysis report (default: True)
+        output_dir: Optional output directory for analysis files
+
+    Returns:
+        Complete workflow analysis results dictionary
+    """
+    try:
+        from tools.xml_tools import (  # type: ignore[attr-defined]
+            extract_processors_from_nifi_xml,
+        )
+    except ImportError:
+        import sys
+
+        sys.path.append(".")
+        from tools.xml_tools import extract_processors_from_nifi_xml  # type: ignore[attr-defined]
+    import json
+    import os
+
+    print(f"🔍 [WORKFLOW ANALYSIS] Starting analysis of: {xml_path}")
+
+    # Read XML file
+    with open(xml_path, "r") as f:
+        xml_content = f.read()
+
+    # Extract processors
+    processors = extract_processors_from_nifi_xml.func(xml_content)
+    print(f"📊 [WORKFLOW ANALYSIS] Found {len(processors)} processors")
+
+    # Analyze processors using hybrid approach
+    analysis_results = analyze_processors_batch(processors, max_batch_size=20)
+
+    # Create complete analysis data
+    workflow_analysis = {
+        "workflow_metadata": {
+            "filename": os.path.basename(xml_path),
+            "xml_path": xml_path,
+            "total_processors": len(processors),
+            "analysis_timestamp": f"{datetime.now().isoformat()}",
+        },
+        "processors_analysis": analysis_results,
+        "analysis_summary": {
+            "total_processors": len(analysis_results),
+            "classification_breakdown": _get_classification_breakdown(analysis_results),
+            "impact_analysis": _get_impact_breakdown(analysis_results),
+        },
+    }
+
+    # Determine output paths
+    if output_dir is None:
+        output_dir = os.path.dirname(xml_path)
+
+    base_filename = os.path.splitext(os.path.basename(xml_path))[0]
+    json_path = os.path.join(output_dir, f"{base_filename}_workflow_analysis.json")
+
+    # Save JSON analysis
+    with open(json_path, "w") as f:
+        json.dump(workflow_analysis, f, indent=2)
+    print(f"💾 [WORKFLOW ANALYSIS] Analysis saved to: {json_path}")
+
+    # Generate and save markdown report if requested
+    if save_markdown:
+        from .workflow_summary import save_workflow_summary_markdown
+
+        markdown_path = save_workflow_summary_markdown(workflow_analysis, json_path)
+        print(f"📄 [WORKFLOW ANALYSIS] Markdown report: {markdown_path}")
+
+    # Print summary to console
+    from .workflow_summary import print_workflow_summary_from_data
+
+    print_workflow_summary_from_data(workflow_analysis)
+
+    return workflow_analysis
+
+
+def _get_classification_breakdown(
+    analysis_results: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Get breakdown of processor classifications."""
+    breakdown = {
+        "data_transformation": 0,
+        "data_movement": 0,
+        "infrastructure_only": 0,
+        "external_processing": 0,
+        "unknown": 0,
+    }
+
+    for result in analysis_results:
+        classification = result.get("data_manipulation_type", "unknown")
+        if classification in breakdown:
+            breakdown[classification] += 1
+        else:
+            breakdown["unknown"] += 1
+
+    return breakdown
+
+
+def _get_impact_breakdown(analysis_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Get breakdown of processor impact levels."""
+    breakdown = {"high": 0, "medium": 0, "low": 0, "none": 0}
+
+    for result in analysis_results:
+        impact = result.get("data_impact_level", "low")
+        if impact in breakdown:
+            breakdown[impact] += 1
+        else:
+            breakdown["low"] += 1
+
+    return breakdown

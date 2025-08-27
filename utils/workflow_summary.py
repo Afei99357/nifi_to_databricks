@@ -262,16 +262,241 @@ def summarize_workflow_analysis(json_file_path: str) -> Dict[str, Any]:
     return summarize_workflow_analysis_from_data(analysis_data)
 
 
-def print_workflow_summary(json_file_path: str) -> None:
+def print_and_save_workflow_summary(
+    json_file_path: str, save_markdown: bool = True, output_path: str = None
+) -> str:
     """
-    Print a human-readable summary of the workflow analysis from file.
+    Print workflow summary to console and optionally save as markdown file.
 
     Args:
         json_file_path: Path to the workflow analysis JSON file
+        save_markdown: Whether to save markdown report (default: True)
+        output_path: Optional path for markdown file. If None, uses same directory as JSON file.
+
+    Returns:
+        Path to the saved markdown file (if save_markdown=True), otherwise None
     """
     with open(json_file_path, "r") as f:
         analysis_data = json.load(f)
+
+    # Print to console
     print_workflow_summary_from_data(analysis_data)
+
+    # Save markdown if requested
+    if save_markdown:
+        return save_workflow_summary_markdown(
+            analysis_data, json_file_path, output_path
+        )
+
+    return None
+
+
+def save_workflow_summary_markdown(
+    analysis_data: Dict[str, Any], json_file_path: str, output_path: str = None
+) -> str:
+    """
+    Save workflow analysis summary as a markdown file.
+
+    Args:
+        analysis_data: Analysis data dictionary
+        json_file_path: Original JSON file path (for determining output path)
+        output_path: Optional path for markdown file. If None, uses same directory as JSON file.
+
+    Returns:
+        Path to the saved markdown file
+    """
+    # Generate markdown content
+    summary = summarize_workflow_analysis_from_data(analysis_data)
+    overview = summary["workflow_overview"]
+
+    # Get original filename if available
+    filename = analysis_data.get("workflow_metadata", {}).get(
+        "filename", "Unknown Workflow"
+    )
+
+    # Generate timestamp
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    markdown = f"""# NiFi Workflow Analysis Report
+
+**Workflow:** {filename}
+**Analysis Date:** {timestamp}
+**Tool:** NiFi to Databricks Migration Tool
+
+## 📊 Workflow Overview
+
+| Metric | Value | Percentage |
+|--------|-------|------------|
+| **Total Processors** | {overview['total_processors']} | 100% |
+| **Data Processors** | {overview['actual_data_processors']} | {overview['data_processing_ratio']}% |
+| **Infrastructure Processors** | {overview['infrastructure_processors']} | {round((overview['infrastructure_processors']/overview['total_processors'])*100, 1)}% |
+| **Data Movement Processors** | {overview['data_movement_processors']} | {round((overview['data_movement_processors']/overview['total_processors'])*100, 1)}% |
+
+## 🔧 Data Manipulation Processors ({overview['actual_data_processors']} processors)
+
+"""
+
+    # Add data transformers
+    transformers = summary["data_manipulation_breakdown"]["data_transformers"]
+    if transformers["count"] > 0:
+        markdown += f"""### 📈 Data Transformers ({transformers['count']} processors)
+
+These processors contain actual business logic and data transformation operations:
+
+"""
+        for proc in transformers["processors"]:
+            markdown += (
+                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            )
+        markdown += "\n"
+
+    # Add external processors
+    external = summary["data_manipulation_breakdown"]["external_processors"]
+    if external["count"] > 0:
+        markdown += f"""### 🔌 External Processors ({external['count']} processors)
+
+These processors interact with external systems:
+
+"""
+        for proc in external["processors"]:
+            markdown += (
+                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            )
+        markdown += "\n"
+
+    # Add data movement processors
+    data_movers = summary["data_manipulation_breakdown"]["data_movers"]
+    if data_movers["count"] > 0:
+        markdown += f"""## 📦 Data Movement Processors ({data_movers['count']} processors)
+
+These processors move data without transformation:
+
+"""
+        for proc in data_movers["processors"]:
+            markdown += (
+                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            )
+        markdown += "\n"
+
+    # Add infrastructure breakdown
+    infrastructure = summary["infrastructure_breakdown"]
+    markdown += f"""## 🔗 Infrastructure Processors ({infrastructure['count']} processors)
+
+These processors handle routing, logging, flow control, and metadata operations:
+
+"""
+
+    # Show first 10 infrastructure processors, then summarize the rest
+    infra_processors = infrastructure["processors"]
+    for proc in infra_processors[:10]:
+        markdown += (
+            f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+        )
+
+    if len(infra_processors) > 10:
+        remaining = len(infra_processors) - 10
+        markdown += f"- ... and {remaining} more infrastructure processors\n"
+
+    markdown += "\n"
+
+    # Add impact analysis
+    impact = summary["data_impact_analysis"]
+    markdown += f"""## 🎯 Data Impact Analysis
+
+| Impact Level | Count | Description |
+|-------------|-------|-------------|
+| **High Impact** | {impact['high_impact_processors']} | Critical data transformation operations |
+| **Medium Impact** | {impact['medium_impact_processors']} | Significant data processing or external interactions |
+| **Low/No Impact** | {impact['low_impact_processors'] + impact['no_impact_processors']} | Infrastructure and metadata operations |
+
+"""
+
+    # Add critical processors if any
+    if impact["critical_processors"]:
+        markdown += f"""### 🚨 Critical Processors (High Impact)
+
+These processors require careful migration attention:
+
+"""
+        for proc in impact["critical_processors"]:
+            markdown += (
+                f"- **{proc['name']}** ({proc['type']}): {proc['business_purpose']}\n"
+            )
+        markdown += "\n"
+
+    # Add business insights
+    insights = summary["business_insights"]
+    markdown += f"""## 💡 Migration Insights
+
+- **Workflow Complexity:** {insights['workflow_complexity'].upper()}
+- **Automation Potential:** {insights['automation_potential'].upper()}
+
+"""
+
+    # Add key business operations
+    if summary["key_business_operations"]:
+        markdown += """### ⭐ Key Business Operations
+
+"""
+        for operation, count in summary["key_business_operations"].items():
+            if count > 1:
+                markdown += f"- **{operation}:** {count} times\n"
+        markdown += "\n"
+
+    # Add processor type distribution
+    if summary["processor_type_distribution"]:
+        markdown += """### 📊 Processor Type Distribution
+
+| Processor Type | Count |
+|---------------|-------|
+"""
+        for proc_type, count in summary["processor_type_distribution"].items():
+            markdown += f"| {proc_type} | {count} |\n"
+        markdown += "\n"
+
+    # Add recommendations
+    markdown += f"""## 🏗️ Architecture Recommendations
+
+Based on the analysis:
+
+- **Focus Areas:** The {overview['actual_data_processors']} data processors ({overview['data_processing_ratio']}%) contain the core business logic
+- **Migration Priority:** Start with the {impact['high_impact_processors']} high-impact processors
+- **Simplification Opportunity:** {overview['infrastructure_processors']} infrastructure processors can potentially be eliminated or simplified in Databricks
+- **Architecture Choice:** Consider the processor mix when choosing between Databricks Jobs, DLT Pipeline, or Structured Streaming
+
+## 📈 Summary
+
+This workflow contains **{overview['actual_data_processors']} processors with actual business logic** out of {overview['total_processors']} total processors.
+The majority ({round((overview['infrastructure_processors']/overview['total_processors'])*100, 1)}%) are infrastructure operations that handle routing, logging, and flow control.
+
+**Migration Focus:** Concentrate effort on the {overview['actual_data_processors']} data processors, particularly the {impact['high_impact_processors']} high-impact ones, while leveraging Databricks' native capabilities to replace most infrastructure processors.
+
+---
+
+*Generated by NiFi to Databricks Migration Tool - Intelligent Workflow Analysis*
+"""
+
+    # Determine output path
+    if output_path is None:
+        import os
+
+        base_path = os.path.splitext(json_file_path)[0]
+        output_path = f"{base_path}_analysis_report.md"
+
+    # Save to file
+    with open(output_path, "w") as f:
+        f.write(markdown)
+
+    print(f"\n📄 Workflow analysis report saved to: {output_path}")
+    return output_path
+
+
+# Keep old function name for backward compatibility
+def print_workflow_summary(json_file_path: str) -> None:
+    """Print a human-readable summary (backward compatibility)."""
+    print_and_save_workflow_summary(json_file_path, save_markdown=False)
 
 
 if __name__ == "__main__":
