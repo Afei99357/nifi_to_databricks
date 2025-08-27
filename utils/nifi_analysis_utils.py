@@ -10,7 +10,7 @@ from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
 
 from tools.xml_tools import (  # type: ignore[attr-defined]
-    extract_processors_from_nifi_xml,
+    parse_nifi_template,
 )
 
 from .workflow_summary import (
@@ -1212,7 +1212,8 @@ def analyze_workflow_patterns(
         xml_content = f.read()
 
     # Extract processors
-    processors = extract_processors_from_nifi_xml.func(xml_content)
+    template_data = json.loads(parse_nifi_template.func(xml_content))
+    processors = template_data["processors"]
     print(f"📊 [WORKFLOW ANALYSIS] Found {len(processors)} processors")
 
     # Analyze processors using hybrid approach
