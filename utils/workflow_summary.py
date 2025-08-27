@@ -13,7 +13,6 @@ def _deduplicate_processor_list(
     Deduplicate processors with identical names for cleaner display.
     Shows count when multiple instances exist.
     """
-    from collections import Counter
 
     # Count occurrences of each processor name
     name_counts = Counter(p.get("name", "") for p in processors)
@@ -493,16 +492,10 @@ The majority ({round((overview['infrastructure_processors']/overview['total_proc
     return output_path
 
 
-# Keep old function name for backward compatibility
-def print_workflow_summary(json_file_path: str) -> None:
-    """Print a human-readable summary (backward compatibility)."""
-    print_and_save_workflow_summary(json_file_path, save_markdown=False)
-
-
 if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1:
-        print_workflow_summary(sys.argv[1])
+        print_and_save_workflow_summary(sys.argv[1], save_markdown=False)
     else:
         print("Usage: python workflow_summary.py <path_to_analysis_json>")

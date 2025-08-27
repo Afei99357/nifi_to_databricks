@@ -93,9 +93,10 @@ print("=" * 60)
 # Import utility functions for this step
 from utils.response_utils import display_agent_response
 
-# Save response to JSON file (import save function if needed)
-# from utils.response_utils import save_agent_response_to_json
-# json_file = save_agent_response_to_json(analysis_resp, "simple_workflow_analysis.json")
+# Save response to JSON file
+json_file = save_agent_response_to_json(
+    analysis_resp, "/tmp/workflow_analysis/simple_workflow_analysis.json"
+)
 
 # Display in clean format
 display_agent_response(analysis_resp)
@@ -244,10 +245,10 @@ print("=" * 60)
 # Use utility functions to handle the response
 from utils.response_utils import display_agent_response, save_agent_response_to_json
 
-# # Save complex workflow analysis to JSON
-# json_file = save_agent_response_to_json(
-#     complex_analysis_resp, "complex_workflow_analysis.json"
-# )
+# Save complex workflow analysis to JSON
+json_file = save_agent_response_to_json(
+    complex_analysis_resp, "/tmp/workflow_analysis/complex_workflow_analysis.json"
+)
 
 # Display in clean format
 display_agent_response(complex_analysis_resp)
