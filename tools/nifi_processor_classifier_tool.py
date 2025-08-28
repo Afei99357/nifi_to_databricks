@@ -1,5 +1,5 @@
-# utils/nifi_analysis_utils.py
-# Utility functions for NiFi workflow analysis and understanding
+# tools/nifi_processor_classifier_tool.py
+# Comprehensive NiFi processor classification tools using hybrid rule-based + LLM analysis
 
 import json
 import os
@@ -8,15 +8,14 @@ from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
+from langchain_core.tools import tool
 
-from tools.xml_tools import (  # type: ignore[attr-defined]
-    parse_nifi_template,
-)
-
-from .workflow_summary import (
+from utils.workflow_summary import (
     print_and_save_workflow_summary,
     print_workflow_summary_from_data,
 )
+
+from .xml_tools import parse_nifi_template
 
 # Hybrid approach: Rule-based + LLM intelligence
 
@@ -745,9 +744,10 @@ Return ONLY a JSON object:
         }
 
 
+@tool
 def analyze_processors_batch(
     processors: List[Dict[str, Any]], max_batch_size: int = None
-) -> List[Dict[str, Any]]:
+) -> str:
     """
     Hybrid batch analysis: Use rule-based classification for obvious cases,
     then batch LLM analysis for ambiguous processors only.
@@ -757,10 +757,10 @@ def analyze_processors_batch(
         max_batch_size: Maximum processors per batch for LLM analysis
 
     Returns:
-        List of analysis results for all processors
+        JSON string with analysis results for all processors
     """
     if not processors:
-        return []
+        return json.dumps([])
 
     print(
         f"🔄 [HYBRID ANALYSIS] Starting hybrid analysis for {len(processors)} processors..."
@@ -918,7 +918,7 @@ def analyze_processors_batch(
         efficiency = (rule_count / total_count) * 100
         print(f"    ⚡ Efficiency: {efficiency:.1f}% classified without LLM")
 
-    return all_results
+    return json.dumps(all_results, indent=2)
 
 
 def _analyze_hybrid_llm_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1191,9 +1191,10 @@ Be specific about what happens to the actual data content, not just metadata or 
             return results
 
 
+@tool
 def analyze_workflow_patterns(
     xml_path: str, save_markdown: bool = True, output_dir: str = None
-) -> Dict[str, Any]:
+) -> str:
     """
     Comprehensive workflow analysis with automatic markdown report generation.
 
@@ -1203,7 +1204,7 @@ def analyze_workflow_patterns(
         output_dir: Optional output directory for analysis files
 
     Returns:
-        Complete workflow analysis results dictionary
+        JSON string with complete workflow analysis results
     """
     print(f"🔍 [WORKFLOW ANALYSIS] Starting analysis of: {xml_path}")
 
@@ -1217,7 +1218,9 @@ def analyze_workflow_patterns(
     print(f"📊 [WORKFLOW ANALYSIS] Found {len(processors)} processors")
 
     # Analyze processors using hybrid approach
-    analysis_results = analyze_processors_batch(processors, max_batch_size=20)
+    analysis_results = json.loads(
+        analyze_processors_batch.func(processors, max_batch_size=20)
+    )
 
     # Create complete analysis data
     workflow_analysis = {
@@ -1227,9 +1230,9 @@ def analyze_workflow_patterns(
             "total_processors": len(processors),
             "analysis_timestamp": f"{datetime.now().isoformat()}",
         },
-        "processors_analysis": analysis_results,
-        "analysis_summary": {
-            "total_processors": len(analysis_results),
+        "classification_results": analysis_results,
+        "total_processors": len(analysis_results),
+        "workflow_characteristics": {
             "classification_breakdown": _get_classification_breakdown(analysis_results),
             "impact_analysis": _get_impact_breakdown(analysis_results),
         },
@@ -1258,7 +1261,7 @@ def analyze_workflow_patterns(
         # Just print to console
         print_workflow_summary_from_data(workflow_analysis)
 
-    return workflow_analysis
+    return json.dumps(workflow_analysis, indent=2)
 
 
 def _get_classification_breakdown(

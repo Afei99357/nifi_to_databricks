@@ -10,7 +10,7 @@ from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
 
 # Import utility functions
-from utils.nifi_analysis_utils import analyze_processors_batch
+from .nifi_processor_classifier_tool import analyze_processors_batch
 
 
 @tool

@@ -15,7 +15,7 @@ from datetime import datetime
 from mlflow.types.responses import ResponsesAgentRequest
 
 from agents import AGENT
-from utils.nifi_analysis_utils import analyze_workflow_patterns
+from tools.nifi_processor_classifier_tool import analyze_workflow_patterns
 from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
 from utils.workflow_summary import print_and_save_workflow_summary
 
@@ -334,7 +334,7 @@ else:
 # MAGIC
 # MAGIC **Standalone Analysis with Markdown Reports:**
 # MAGIC ```python
-# MAGIC from utils.nifi_analysis_utils import analyze_workflow_patterns
+# MAGIC from tools.nifi_processor_classifier_tool import analyze_workflow_patterns
 # MAGIC
 # MAGIC # Complete analysis with automatic markdown export
 # MAGIC result = analyze_workflow_patterns(

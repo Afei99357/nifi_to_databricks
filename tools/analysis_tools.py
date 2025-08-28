@@ -7,9 +7,10 @@ from typing import Any, Dict
 
 from langchain_core.tools import tool
 
-# Import the sophisticated analysis functions
-from utils.nifi_analysis_utils import analyze_workflow_patterns
 from utils.workflow_summary import print_workflow_summary_from_data
+
+# Import the sophisticated analysis functions
+from .nifi_processor_classifier_tool import analyze_workflow_patterns
 
 
 @tool
