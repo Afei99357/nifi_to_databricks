@@ -7,6 +7,20 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+import json
+
+# Import all required modules at the top for cleaner code
+from datetime import datetime
+
+from mlflow.types.responses import ResponsesAgentRequest
+
+from agents import AGENT
+from utils.nifi_analysis_utils import analyze_workflow_patterns
+from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
+from utils.workflow_summary import print_and_save_workflow_summary
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 🧠 Intelligent NiFi Analysis & Migration
 # MAGIC
@@ -23,8 +37,6 @@ dbutils.library.restartPython()
 # MAGIC Analyzes the complex ICN8_BRS_Feedback workflow and generates comprehensive report.
 
 # COMMAND ----------
-
-from utils.nifi_analysis_utils import analyze_workflow_patterns
 
 # Analyze complex workflow directly
 print("🧠 DIRECT WORKFLOW ANALYSIS - Complex Pipeline")
@@ -73,11 +85,7 @@ print("✅ Complex workflow analysis complete with comprehensive markdown report
 
 # COMMAND ----------
 
-from datetime import datetime
-
-from mlflow.types.responses import ResponsesAgentRequest
-
-from agents import AGENT
+# Using imports from top cell
 
 print("🧠 AGENT-BASED COMPLEX WORKFLOW ANALYSIS")
 print("=" * 60)
@@ -99,12 +107,12 @@ print("✅ Agent-based complex workflow analysis complete!")
 print("\n📋 COMPLEX ANALYSIS RESULTS:")
 print("=" * 60)
 
-# Use utility functions to handle the response
-from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
+# Use utility functions from top imports
 
 # Save complex workflow formatted analysis summary to markdown
 markdown_file = save_agent_summary_to_markdown(
-    complex_analysis_resp, "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_analysis_summary.md"
+    complex_analysis_resp,
+    "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_analysis_summary.md",
 )
 
 
@@ -116,52 +124,56 @@ print("=" * 60)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 🚀 Step 4: Intelligent Migration of Complex Workflow
+# MAGIC ### 🚀 Step 4: Intelligent Multi-Round Agent Migration
+# MAGIC
+# MAGIC **NEW**: The agent now intelligently orchestrates complete migrations through multiple tool calls!
 
 # COMMAND ----------
 
-from datetime import datetime
-
-from mlflow.types.responses import ResponsesAgentRequest
-
-from agents import AGENT
-
+# Using imports from top cell
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
-print("🚀 INTELLIGENT MIGRATION - Complex Workflow")
+print("🤖 INTELLIGENT MULTI-ROUND AGENT MIGRATION")
+print("=" * 60)
+print("🧠 The agent will:")
+print("   1. Analyze the workflow to understand complexity")
+print("   2. Make intelligent decisions about migration approach")
+print("   3. Execute the appropriate migration tools")
+print("   4. Complete the full end-to-end migration")
 print("=" * 60)
 
-# Use intelligent migration for the complex workflow
+# Let the intelligent agent handle the complete migration workflow
 req = ResponsesAgentRequest(
     input=[
         {
             "role": "user",
             "content": (
-                "Run orchestrate_intelligent_nifi_migration with:\n"
-                "xml_path=/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml\n"
-                "out_dir=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results\n"
-                f"project=intelligent_feedback_{current}\n"
-                f"notebook_path=/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/intelligent_feedback_{current}/main\n"
-                "existing_cluster_id=0722-181403-vd3u4c6r\n"
-                "run_now=false"
+                f"I have a complex NiFi workflow with 58+ processors at "
+                f"/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml. "
+                f"Please analyze it and then perform a complete migration to Databricks. "
+                f"Use output directory /Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results "
+                f"with project name intelligent_feedback_{current}. "
+                f"The notebook path should be /Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/intelligent_feedback_{current}/main "
+                f"and use existing cluster 0722-181403-vd3u4c6r but don't run it yet (run_now=false)."
             ),
         }
     ]
 )
 
+print("🚀 Starting intelligent agent migration...")
 resp = AGENT.predict(req)
-print("✅ Intelligent migration complete!")
+print("✅ Intelligent multi-round migration complete!")
 
 # Display the complex migration results using utilities
 print("\n📋 COMPLEX MIGRATION RESULTS:")
 print("=" * 60)
 
-# Import utility functions for this step
-from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
+# Use utility functions from top imports
 
 # Save complex migration response to markdown
 markdown_file = save_agent_summary_to_markdown(
-    resp, f"/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_migration_{current}.md"
+    resp,
+    f"/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_migration_{current}.md",
 )
 
 # Display in clean format
@@ -183,9 +195,7 @@ print("=" * 60)
 
 # COMMAND ----------
 
-import json
-
-from utils.workflow_summary import print_and_save_workflow_summary
+# Using imports from top cell
 
 # First, let's use the direct analysis result we generated earlier
 # This demonstrates the integrated workflow: analysis → summary → markdown export
@@ -334,33 +344,45 @@ else:
 # MAGIC )
 # MAGIC ```
 # MAGIC
-# MAGIC ### **Option 2: Agent-Based Approach (Production Workflows)**
+# MAGIC ### **Option 2: Intelligent Agent Orchestration (Recommended for Complete Migrations)**
 # MAGIC
-# MAGIC **Step 1: Let the Agent Analyze Your Workflow**
+# MAGIC **NEW Multi-Round Agent - Complete End-to-End Migration:**
 # MAGIC ```python
 # MAGIC req = ResponsesAgentRequest(input=[{
 # MAGIC     "role": "user",
-# MAGIC     "content": "Use analyze_nifi_workflow_intelligence to analyze /path/to/workflow.xml"
+# MAGIC     "content": "I have a NiFi workflow at /path/to/workflow.xml with 75+ processors. Please analyze it and perform a complete migration to Databricks using output directory /output and project name my_project."
 # MAGIC }])
 # MAGIC resp = AGENT.predict(req)
 # MAGIC ```
 # MAGIC
-# MAGIC **Step 2: Run Intelligent Migration**
+# MAGIC **What Happens Automatically:**
+# MAGIC - 🔄 **Round 1**: Agent analyzes workflow with `analyze_nifi_workflow_intelligence`
+# MAGIC - 🧠 **Decision**: Agent determines workflow has 75 processors → needs chunked migration
+# MAGIC - 🔄 **Round 2**: Agent calls `orchestrate_chunked_nifi_migration`
+# MAGIC - ✅ **Complete**: Agent detects migration success and stops
+# MAGIC
+# MAGIC **Alternative - Step by Step Control:**
 # MAGIC ```python
+# MAGIC # Step 1: Analysis only
 # MAGIC req = ResponsesAgentRequest(input=[{
 # MAGIC     "role": "user",
-# MAGIC     "content": "Run orchestrate_intelligent_nifi_migration with xml_path=/path/to/workflow.xml out_dir=/output project=my_project"
+# MAGIC     "content": "Analyze the NiFi workflow at /path/to/workflow.xml and tell me about its complexity."
 # MAGIC }])
-# MAGIC resp = AGENT.predict(req)
+# MAGIC analysis_resp = AGENT.predict(req)
+# MAGIC
+# MAGIC # Step 2: Migration based on analysis
+# MAGIC req = ResponsesAgentRequest(input=[{
+# MAGIC     "role": "user",
+# MAGIC     "content": "Based on the analysis, migrate this workflow using the appropriate approach."
+# MAGIC }])
+# MAGIC migration_resp = AGENT.predict(req)
 # MAGIC ```
 # MAGIC
-# MAGIC ### **What You Get:**
-# MAGIC - 🧠 **Business Understanding**: "This workflow does X for business purpose Y"
-# MAGIC - 📊 **Smart Classification**: Data transformation vs data movement vs infrastructure processors
-# MAGIC - 📄 **Rich Reports**: Professional markdown reports with tables and recommendations
-# MAGIC - 🎯 **Architecture Recommendation**: Best Databricks pattern for your workflow
-# MAGIC - 🚀 **Intelligent Migration**: Code generated based on actual workflow understanding
-# MAGIC - 💡 **Migration Insights**: Focus areas, complexity assessment, and automation potential
+# MAGIC ### **Key Benefits:**
+# MAGIC - 🤖 **Smart Agent**: Analyzes workflow and chooses the right migration approach automatically
+# MAGIC - 🔄 **Complete Migration**: Handles everything from analysis to deployment in one request
+# MAGIC - 📊 **Business Understanding**: Explains what your workflow actually does
+# MAGIC - 🎯 **Best Architecture**: Recommends optimal Databricks patterns for your data
 # MAGIC
 # MAGIC ### **Try Your Own Workflows:**
 # MAGIC Replace the file paths above with your NiFi XML files and run the cells!
