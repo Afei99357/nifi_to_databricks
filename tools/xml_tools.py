@@ -8,7 +8,6 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 __all__ = [
     "parse_nifi_template",
@@ -18,16 +17,7 @@ __all__ = [
 ]
 
 
-class XmlContentSchema(BaseModel):
-    """Schema for XML analysis tools that take only xml_content."""
-
-    xml_content: str = Field(description="NiFi XML template content")
-
-    class Config:
-        extra = "forbid"
-
-
-@tool(args_schema=XmlContentSchema)
+@tool
 def parse_nifi_template(xml_content: str) -> str:
     """
     Parse a NiFi XML template and extract processors, properties, and connections.
@@ -94,7 +84,7 @@ def parse_nifi_template(xml_content: str) -> str:
         return f"Unexpected error: {str(e)}"
 
 
-@tool(args_schema=XmlContentSchema)
+@tool
 def extract_nifi_parameters_and_services(xml_content: str) -> str:
     """
     Return NiFi Parameter Contexts and Controller Services with suggested Databricks mappings.
@@ -171,7 +161,7 @@ def extract_nifi_parameters_and_services(xml_content: str) -> str:
         return f"Failed to parse NiFi XML: {e}"
 
 
-@tool(args_schema=XmlContentSchema)
+@tool
 def analyze_nifi_architecture_requirements(xml_content: str) -> str:
     """
     Analyze NiFi XML to detect processor types and determine architecture requirements.
@@ -375,7 +365,7 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
         return f"Failed to analyze NiFi architecture requirements: {e}"
 
 
-@tool(args_schema=XmlContentSchema)
+@tool
 def recommend_databricks_architecture(xml_content: str) -> str:
     """
     Recommend the best Databricks architecture based on NiFi XML analysis.

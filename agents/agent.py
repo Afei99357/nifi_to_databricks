@@ -32,8 +32,31 @@ if not DATABRICKS_HOSTNAME:
 os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 
+
+# --- Fixed ChatDatabricks class to handle schema validation ---
+class FixedChatDatabricks(ChatDatabricks):
+    """Fixed version of ChatDatabricks that properly handles tool schemas."""
+
+    def bind_tools(self, tools, **kwargs):
+        """Override to fix additionalProperties in tool schemas."""
+        # Get the bound tools from parent
+        bound = super().bind_tools(tools, **kwargs)
+
+        # Fix the schema in the bound LLM
+        if hasattr(bound, "kwargs") and "tools" in bound.kwargs:
+            for tool in bound.kwargs["tools"]:
+                if "function" in tool and "parameters" in tool["function"]:
+                    params = tool["function"]["parameters"]
+                    if "additionalProperties" not in params:
+                        params["additionalProperties"] = False
+                    elif params["additionalProperties"] is True:
+                        params["additionalProperties"] = False
+
+        return bound
+
+
 # --- LLM & system prompt ---
-llm = ChatDatabricks(endpoint=MODEL_ENDPOINT)
+llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an intelligent Apache NiFi migration orchestrator with deep expertise in both NiFi workflows and Databricks architecture patterns.
 
 🎯 YOUR MISSION: Analyze NiFi workflows and intelligently orchestrate complete migrations to Databricks by making informed decisions about which tools to use and when.

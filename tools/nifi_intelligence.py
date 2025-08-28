@@ -8,24 +8,12 @@ from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 
 # Import utility functions
 from utils.nifi_analysis_utils import analyze_processors_batch
 
 
-class AnalyzeWorkflowSchema(BaseModel):
-    """Schema for analyze_nifi_workflow_intelligence tool."""
-
-    xml_content: str = Field(
-        description="NiFi XML template content OR file path to NiFi XML file"
-    )
-
-    class Config:
-        extra = "forbid"  # This prevents additionalProperties: true
-
-
-@tool(args_schema=AnalyzeWorkflowSchema)
+@tool
 def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
     """
     Analyze a NiFi workflow and provide high-level migration strategy recommendations.
