@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from config import DATABRICKS_HOSTNAME, logger
 
@@ -635,7 +636,31 @@ def process_nifi_chunk(chunk_data: str, project: str, chunk_index: int = 0) -> s
         )
 
 
-@tool
+class OrchestateChunkedMigrationSchema(BaseModel):
+    """Schema for orchestrate_chunked_nifi_migration tool."""
+
+    xml_path: str = Field(description="Path to the NiFi XML file (local or DBFS)")
+    out_dir: str = Field(description="Output directory for generated artifacts")
+    project: str = Field(description="Project name")
+    job: str = Field(description="Job name")
+    notebook_path: str = Field(
+        default="", description="Target notebook path in Databricks workspace"
+    )
+    max_processors_per_chunk: int = Field(
+        default=20, description="Maximum processors per chunk"
+    )
+    existing_cluster_id: str = Field(
+        default="", description="Existing cluster ID to use"
+    )
+    run_now: bool = Field(
+        default=False, description="Whether to run the job immediately"
+    )
+
+    class Config:
+        extra = "forbid"
+
+
+@tool(args_schema=OrchestateChunkedMigrationSchema)
 def orchestrate_chunked_nifi_migration(
     xml_path: str,
     out_dir: str,
