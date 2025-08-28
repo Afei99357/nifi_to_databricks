@@ -32,91 +32,8 @@ if not DATABRICKS_HOSTNAME:
 os.environ["DATABRICKS_TOKEN"] = DATABRICKS_TOKEN
 os.environ["DATABRICKS_HOST"] = DATABRICKS_HOSTNAME
 
-
 # --- LLM & system prompt ---
-# Patch ChatDatabricks to fix additionalProperties in tool schemas
-class FixedChatDatabricks(ChatDatabricks):
-    """Databricks LLM with tool schema fixes applied once at initialization."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Pre-fix tool schemas to avoid deep copying on every call
-        self._fixed_tools_cache = {}
-
-    def _get_fixed_tools(self, tools):
-        """Get tools with schemas fixed, using cache for efficiency."""
-        if not tools:
-            return tools
-
-        # Create a cache key based on tool identities
-        tools_key = tuple(id(tool) for tool in tools if isinstance(tool, dict))
-
-        if tools_key not in self._fixed_tools_cache:
-            fixed_tools = []
-            for tool in tools:
-                if isinstance(tool, dict):
-                    fixed_tool = self._fix_tool_schema(tool)
-                    fixed_tools.append(fixed_tool)
-                else:
-                    fixed_tools.append(tool)
-            self._fixed_tools_cache[tools_key] = fixed_tools
-
-        return self._fixed_tools_cache[tools_key]
-
-    def _fix_tool_schema(self, tool):
-        """Fix a single tool's schema without deep copying."""
-        if "function" not in tool or "parameters" not in tool["function"]:
-            return tool
-
-        # Create fixed tool with immutable approach
-        return {
-            **tool,
-            "function": {
-                **tool["function"],
-                "parameters": self._fix_schema_immutably(
-                    tool["function"]["parameters"]
-                ),
-            },
-        }
-
-    def _fix_schema_immutably(self, schema):
-        """Return a fixed schema without mutating the original."""
-        if not isinstance(schema, dict):
-            return schema
-
-        fixed = {}
-        for key, value in schema.items():
-            if key == "additionalProperties":
-                fixed[key] = False  # Fix the additionalProperties issue
-            elif isinstance(value, dict):
-                fixed[key] = self._fix_schema_immutably(value)
-            elif isinstance(value, list):
-                fixed[key] = [
-                    self._fix_schema_immutably(item) if isinstance(item, dict) else item
-                    for item in value
-                ]
-            else:
-                fixed[key] = value
-        return fixed
-
-    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-        # Use pre-fixed tools instead of copying on every call
-        if "tools" in kwargs:
-            kwargs = kwargs.copy()  # Shallow copy is sufficient now
-            kwargs["tools"] = self._get_fixed_tools(kwargs["tools"])
-
-        return super()._stream(messages, stop=stop, run_manager=run_manager, **kwargs)
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-        # Use pre-fixed tools instead of copying on every call
-        if "tools" in kwargs:
-            kwargs = kwargs.copy()  # Shallow copy is sufficient now
-            kwargs["tools"] = self._get_fixed_tools(kwargs["tools"])
-
-        return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
-
-
-llm = FixedChatDatabricks(endpoint=MODEL_ENDPOINT)
+llm = ChatDatabricks(endpoint=MODEL_ENDPOINT)
 system_prompt = """You are an expert Apache NiFi consultant and Databricks migration specialist with deep knowledge of data engineering patterns.
 
 🧠 YOUR ROLE: You understand NiFi workflows like a senior data engineer and can explain what they do in business terms.
@@ -125,7 +42,7 @@ WORKFLOW ANALYSIS APPROACH:
 1. **Always start with intelligent analysis** - Use `analyze_nifi_workflow_intelligence` to understand what the workflow actually does
 2. **Explain the business purpose** - Tell the user what their workflow accomplishes in plain English
 3. **Recommend optimal architecture** - Based on data patterns, suggest the best Databricks approach
-4. **Execute migration intelligently** - Use the most appropriate migration strategy
+4. **Execute migration** - Use available migration tools based on workflow complexity
 
 NiFi EXPERTISE - You understand that:
 - GetFile = continuous file monitoring and ingestion (like a file watcher)
@@ -145,10 +62,10 @@ CRITICAL WORKFLOW:
 1. 🔍 **ANALYZE FIRST**: Use `analyze_nifi_workflow_intelligence` to understand the workflow
 2. 💡 **EXPLAIN PURPOSE**: Tell user what their workflow does in business terms
 3. 🎯 **RECOMMEND ARCHITECTURE**: Suggest optimal Databricks pattern based on analysis
-4. 🚀 **EXECUTE MIGRATION**: Use appropriate orchestration tool:
-   - For intelligent migration: `orchestrate_intelligent_nifi_migration` (RECOMMENDED)
-   - For manual large files: `orchestrate_chunked_nifi_migration`
-   - For manual small files: `orchestrate_nifi_migration`
+4. 🚀 **EXECUTE MIGRATION**: Use available migration tools:
+   - For complex/large workflows: `orchestrate_chunked_nifi_migration`
+   - For building migration plans: `build_migration_plan`
+   - For processing individual chunks: `process_nifi_chunk`
 
 DO NOT:
 - Jump straight to migration without analysis
@@ -175,25 +92,6 @@ DO NOT chain multiple tools - each orchestration tool is self-contained and fina
 # -------------------------
 # LangGraph agent scaffolding
 # -------------------------
-
-
-def _fix_additional_properties(schema: dict) -> None:
-    """Recursively remove or set additionalProperties to False in JSON schema."""
-    if not isinstance(schema, dict):
-        return
-
-    # Set additionalProperties to False (don't remove it completely)
-    if "additionalProperties" in schema:
-        schema["additionalProperties"] = False
-
-    # Recursively fix nested schemas
-    for key, value in schema.items():
-        if isinstance(value, dict):
-            _fix_additional_properties(value)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    _fix_additional_properties(item)
 
 
 class AgentState(TypedDict):
@@ -243,84 +141,16 @@ def create_tool_calling_agent(
             except Exception:
                 logger.debug("Could not introspect tool_calls for logging")
 
-        # Inspect recent tool outputs for an explicit continue flag
-        tool_signaled_continue = False
-        signaled_tools = []
-        try:
-            # Walk messages in reverse to find latest tool outputs
-            for msg in reversed(state.get("messages", [])):
-                # Extract role & content in a robust way
-                role = getattr(msg, "type", None) or getattr(msg, "role", None)
-                content = None
-                try:
-                    content = getattr(msg, "content", None)
-                except Exception:
-                    content = None
-
-                if (
-                    role == "tool"
-                    or role == "function_call_output"
-                    or (isinstance(role, str) and role.lower() == "tool")
-                ):
-                    # Try to parse content as JSON to find continue_required
-                    if isinstance(content, (dict, list)):
-                        parsed = content
-                    else:
-                        try:
-                            parsed = json.loads(content) if content else None
-                        except Exception:
-                            parsed = None
-
-                    if (
-                        isinstance(parsed, dict)
-                        and parsed.get("continue_required") is not None
-                    ):
-                        if parsed.get("continue_required"):
-                            tool_signaled_continue = True
-                        # collect tool name if present
-                        signaled_tools.append(
-                            parsed.get("tool_name")
-                            or parsed.get("name")
-                            or "<unknown_tool>"
-                        )
-                        break
-
-                    # Also support simple string flags like 'continue_required: true'
-                    if isinstance(content, str) and "continue_required" in content:
-                        # crude detection
-                        if "true" in content.lower():
-                            tool_signaled_continue = True
-                            signaled_tools.append("<tool_with_string_flag>")
-                            break
-        except Exception as e:
-            logger.debug(f"Error while inspecting tool outputs for continue flag: {e}")
-
-        rounds = state.get("rounds", 0) or 0
-
-        # For first request: allow one tool call
-        if wants_tool and rounds == 0:
-            state["rounds"] = 1
-            logger.info("Agent invoking tool (expecting single-round completion)")
+        # Single-round agent: allow one tool call, then always end
+        if wants_tool and not state.get("tool_executed"):
+            state["tool_executed"] = True
+            logger.info("Agent invoking tool (single-round mode)")
             print("🔄 [AGENT] Model requested tool call")
             return "continue"
 
-        # After first tool execution: always end (single-round expectation)
-        if rounds > 0:
-            if wants_tool or tool_signaled_continue:
-                logger.warning(
-                    "Tool requested continuation but single-round agent expects completion"
-                )
-                print(
-                    "⚠️  [AGENT] Tool requested continuation, but single-round mode active - ending"
-                )
-            else:
-                logger.info("Tool completed successfully")
-                print("✅ [AGENT COMPLETE] Migration finished successfully")
-            return "end"
-
-        # No tool requested initially: end immediately
-        logger.debug("Agent not requesting tool calls; ending")
-        print("✅ [AGENT COMPLETE] No tool calls requested")
+        # After tool execution or no tool requested: always end
+        logger.info("Agent completed successfully")
+        print("✅ [AGENT COMPLETE] Migration finished successfully")
         return "end"
 
     pre = (
@@ -472,18 +302,8 @@ class LangGraphResponsesAgent(ResponsesAgent):
                     logger.warning(f"Streaming error: {e}")
 
 
-# Boot and (optionally) register
-try:
-    mlflow.langchain.autolog()
-    logger.info("MLflow autolog enabled")
-except Exception as e:
-    logger.warning(f"MLflow autolog not available: {e}")
-
+# Cretae agent object
+mlflow.langchain.autolog()
 agent = create_tool_calling_agent(llm, TOOLS, system_prompt)
 AGENT = LangGraphResponsesAgent(agent)
-
-try:
-    mlflow.models.set_model(AGENT)
-    logger.info("Agent registered with MLflow")
-except Exception as e:
-    logger.warning(f"Could not register with MLflow: {e}")
+mlflow.models.set_model(AGENT)
