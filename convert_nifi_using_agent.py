@@ -49,33 +49,12 @@ complex_analysis_result = analyze_workflow_patterns(
     output_dir="/tmp/workflow_analysis",
 )
 
-print("\n📊 COMPLEX WORKFLOW SUMMARY:")
 print(
-    f"• Total Processors: {complex_analysis_result['analysis_summary']['total_processors']}"
+    f"✅ Analysis complete! Found {complex_analysis_result['analysis_summary']['total_processors']} processors"
 )
 print(
-    f"• Data Transformers: {complex_analysis_result['analysis_summary']['data_transformation_processors']}"
+    f"💡 {complex_analysis_result['analysis_summary']['data_processing_ratio']:.1f}% are doing actual data processing"
 )
-print(
-    f"• Data Movers: {complex_analysis_result['analysis_summary']['data_movement_processors']}"
-)
-print(
-    f"• Infrastructure: {complex_analysis_result['analysis_summary']['infrastructure_processors']}"
-)
-print(
-    f"• External Processors: {complex_analysis_result['analysis_summary']['external_processing_processors']}"
-)
-
-# Show some key insights
-print(f"\n💡 KEY INSIGHTS:")
-print(
-    f"• Processing Ratio: {complex_analysis_result['analysis_summary']['data_processing_ratio']:.1f}%"
-)
-print(
-    f"• High Impact Processors: {len([p for p in complex_analysis_result['processors_analysis'] if p.get('data_impact_level') == 'high'])}"
-)
-
-print("✅ Complex workflow analysis complete with comprehensive markdown report!")
 
 # COMMAND ----------
 
@@ -87,8 +66,7 @@ print("✅ Complex workflow analysis complete with comprehensive markdown report
 
 # Using imports from top cell
 
-print("🧠 AGENT-BASED COMPLEX WORKFLOW ANALYSIS")
-print("=" * 60)
+print("🧠 AGENT-BASED WORKFLOW ANALYSIS")
 
 # Analyze the complex ICN8_BRS_Feedback workflow using file path
 req = ResponsesAgentRequest(
@@ -133,14 +111,8 @@ print("=" * 60)
 # Using imports from top cell
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
-print("🤖 INTELLIGENT MULTI-ROUND AGENT MIGRATION")
-print("=" * 60)
-print("🧠 The agent will:")
-print("   1. Analyze the workflow to understand complexity")
-print("   2. Make intelligent decisions about migration approach")
-print("   3. Execute the appropriate migration tools")
-print("   4. Complete the full end-to-end migration")
-print("=" * 60)
+print("🤖 INTELLIGENT AGENT MIGRATION")
+print("🧠 Agent will analyze → decide → migrate → complete automatically")
 
 # Let the intelligent agent handle the complete migration workflow
 req = ResponsesAgentRequest(
