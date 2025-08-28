@@ -135,6 +135,117 @@ class AgentState(TypedDict):
     rounds: Optional[int]
 
 
+def analyze_tool_results_and_decide_next_action(state: AgentState) -> str:
+    """
+    Analyze recent tool results and provide guidance for the next action.
+    This adds explicit decision-making logic based on tool outputs.
+    """
+    try:
+        # Look for recent tool messages (ToolMessage type)
+        recent_tool_outputs = []
+        recent_ai_messages = []
+
+        for msg in reversed(state.get("messages", [])[-10:]):  # Last 10 messages
+            if hasattr(msg, "type"):
+                if msg.type == "tool":
+                    recent_tool_outputs.append(
+                        {
+                            "tool_call_id": getattr(msg, "tool_call_id", "unknown"),
+                            "content": getattr(msg, "content", ""),
+                            "name": getattr(msg, "name", "unknown_tool"),
+                        }
+                    )
+                elif msg.type == "ai" and hasattr(msg, "tool_calls") and msg.tool_calls:
+                    # Get the tool names that were just called
+                    for tc in msg.tool_calls:
+                        tool_name = (
+                            tc.get("name")
+                            if isinstance(tc, dict)
+                            else getattr(tc, "name", "unknown")
+                        )
+                        recent_ai_messages.append(tool_name)
+
+        if not recent_tool_outputs:
+            return "No recent tool outputs to analyze."
+
+        # Analyze the most recent tool output for decision making
+        latest_output = recent_tool_outputs[0]
+        tool_content = latest_output.get("content", "")
+
+        # Decision logic based on tool results
+        decision_guidance = []
+
+        # Check if workflow analysis was completed
+        if "analyze_nifi_workflow_intelligence" in recent_ai_messages:
+            if "total_processors" in tool_content.lower():
+                processor_count = 0
+                try:
+                    # Try to extract processor count
+                    import re
+
+                    match = re.search(r'"total_processors":\s*(\d+)', tool_content)
+                    if match:
+                        processor_count = int(match.group(1))
+                except:
+                    pass
+
+                if processor_count > 50:
+                    decision_guidance.append(
+                        f"🎯 DECISION: {processor_count} processors detected - recommend orchestrate_chunked_nifi_migration"
+                    )
+                elif processor_count > 0:
+                    decision_guidance.append(
+                        f"🎯 DECISION: {processor_count} processors - could use build_migration_plan then orchestrate_chunked_nifi_migration"
+                    )
+
+                decision_guidance.append(
+                    "✨ NEXT: Execute migration based on complexity analysis"
+                )
+
+        # Check if migration plan was built
+        elif "build_migration_plan" in recent_ai_messages:
+            if "processors" in tool_content.lower():
+                decision_guidance.append(
+                    "🎯 DECISION: Migration plan ready - proceed with orchestrate_chunked_nifi_migration"
+                )
+
+        # Check if migration was completed
+        elif "orchestrate_chunked_nifi_migration" in recent_ai_messages:
+            # Check for clear completion indicators
+            migration_success_indicators = [
+                'continue_required": false',
+                'deployment_success": true',
+                "final_job_config_path",
+                "migration complete",
+                "successfully",
+            ]
+
+            if any(
+                indicator in tool_content.lower()
+                for indicator in migration_success_indicators
+            ):
+                decision_guidance.append(
+                    "✅ DECISION: Migration completed successfully"
+                )
+                decision_guidance.append(
+                    "🎉 NEXT: Migration finished - no further action needed"
+                )
+            else:
+                decision_guidance.append(
+                    "⚠️ DECISION: Check migration status - may need retry or different approach"
+                )
+
+        return (
+            "\n".join(decision_guidance)
+            if decision_guidance
+            else "Continue with LLM's natural reasoning."
+        )
+
+    except Exception as e:
+        logger.debug(f"Error analyzing tool results: {e}")
+        return "Error in decision analysis - continue with LLM reasoning."
+
+
 def create_tool_calling_agent(
     model: LanguageModelLike,
     tools: Union[ToolNode, Sequence[BaseTool]],
@@ -183,21 +294,62 @@ def create_tool_calling_agent(
             print(f"🔄 [AGENT ROUND {rounds + 1}] Model requested tool call")
             return "continue"
 
-        # No more tools needed: agent has completed its work
+        # Before ending, analyze recent tool results and provide decision guidance
+        # This helps the agent make better decisions in multi-step workflows
         rounds = state.get("rounds", 0) or 0
+        if rounds > 0:  # Only analyze if we've made tool calls
+            decision_guidance = analyze_tool_results_and_decide_next_action(state)
+            if (
+                decision_guidance
+                and "Continue with LLM's natural reasoning" not in decision_guidance
+            ):
+                logger.info(f"Decision analysis: {decision_guidance}")
+                print(f"🧠 [DECISION ANALYSIS] {decision_guidance}")
+
+                # Add decision guidance to state for LLM to consider
+                state["decision_guidance"] = decision_guidance
+
+                # Check if migration is complete
+                if "Migration finished - no further action needed" in decision_guidance:
+                    logger.info("Decision analysis indicates migration is complete")
+                    print("🎉 [DECISION] Migration complete - ending agent")
+                elif (
+                    "NEXT:" in decision_guidance
+                    and "complete" not in decision_guidance.lower()
+                ):
+                    logger.info(
+                        "Decision analysis suggests more work - allowing LLM to continue"
+                    )
+                    print(
+                        "🔄 [DECISION] Analysis suggests continuing - awaiting LLM decision"
+                    )
+                    # Don't force continuation, let LLM decide based on the guidance
+
+        # No more tools needed: agent has completed its work
         logger.info(f"Agent completed successfully after {rounds} rounds")
         print(
             f"✅ [AGENT COMPLETE] Migration finished successfully after {rounds} rounds"
         )
         return "end"
 
-    pre = (
-        RunnableLambda(
-            lambda s: [{"role": "system", "content": system_prompt}] + s["messages"]
-        )
-        if system_prompt
-        else RunnableLambda(lambda s: s["messages"])
-    )
+    def inject_system_prompt_with_guidance(state):
+        messages = []
+
+        # Add system prompt
+        if system_prompt:
+            enhanced_system_prompt = system_prompt
+
+            # Add decision guidance if available
+            if state.get("decision_guidance"):
+                enhanced_system_prompt += f"\n\n🧠 DECISION GUIDANCE FROM PREVIOUS ANALYSIS:\n{state['decision_guidance']}\n\nConsider this analysis when deciding your next action."
+
+            messages.append({"role": "system", "content": enhanced_system_prompt})
+
+        # Add conversation messages
+        messages.extend(state["messages"])
+        return messages
+
+    pre = RunnableLambda(inject_system_prompt_with_guidance)
     runnable = pre | model
 
     def call_model(state: AgentState, config: RunnableConfig):
