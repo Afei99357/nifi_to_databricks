@@ -47,12 +47,29 @@ class FixedChatDatabricks(ChatDatabricks):
             for tool in bound.kwargs["tools"]:
                 if "function" in tool and "parameters" in tool["function"]:
                     params = tool["function"]["parameters"]
-                    if "additionalProperties" not in params:
-                        params["additionalProperties"] = False
-                    elif params["additionalProperties"] is True:
-                        params["additionalProperties"] = False
+                    self._fix_additional_properties(params)
 
         return bound
+
+    def _fix_additional_properties(self, schema_obj):
+        """Recursively fix additionalProperties in schema objects."""
+        if not isinstance(schema_obj, dict):
+            return
+
+        # Fix additionalProperties at current level
+        if "additionalProperties" not in schema_obj:
+            schema_obj["additionalProperties"] = False
+        elif schema_obj["additionalProperties"] is True:
+            schema_obj["additionalProperties"] = False
+
+        # Recursively fix nested properties
+        if "properties" in schema_obj:
+            for prop_schema in schema_obj["properties"].values():
+                self._fix_additional_properties(prop_schema)
+
+        # Fix items in arrays
+        if "items" in schema_obj:
+            self._fix_additional_properties(schema_obj["items"])
 
 
 # --- LLM & system prompt ---
