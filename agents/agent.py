@@ -96,6 +96,24 @@ You have access to specialized tools for different aspects of migration. Based o
 - `parse_nifi_template`: Parse XML to extract processors, properties, and connections when you need structural details
 - `extract_nifi_parameters_and_services`: Extract parameter contexts and controller services for configuration mapping
 
+🔧 SEMANTIC MIGRATION TOOLS:
+- `prune_infrastructure_processors`: **STEP 2** - Remove infrastructure-only processors using existing classifications:
+  * Input: results from analyze_nifi_workflow_detailed
+  * Filters out logging, routing, and infrastructure processors
+  * Keeps only data_transformation and data_movement processors
+  * Shows reduction statistics (e.g., 58 → 15 processors)
+
+- `detect_data_flow_chains`: **STEP 3** - Detect source→transformation→sink chains:
+  * Uses existing connection parsing and topological sorting
+  * Groups remaining processors into logical data flow chains
+  * Identifies business patterns (file_ingestion, stream_processing, etc.)
+
+- `create_semantic_data_flows`: **STEP 4** - Convert chains into business-meaningful flows:
+  * Transforms processor chains into semantic data flow descriptions
+  * Recommends Databricks architecture (Jobs, DLT, Structured Streaming)
+  * Provides migration blueprint with complexity assessment
+  * **This creates the real-world migration approach instead of 1:1 processor mapping**
+
 🚀 MIGRATION ORCHESTRATION TOOLS:
 - `orchestrate_chunked_nifi_migration`: For complex workflows with >50 processors. Handles large workflows by breaking them into manageable chunks.
 - `build_migration_plan`: Create migration strategy and understand processor dependencies before execution.

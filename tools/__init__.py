@@ -18,12 +18,14 @@ from . import (
     migration_tools,
     nifi_intelligence,
     nifi_processor_classifier_tool,
+    pruning_tools,
     xml_tools,
 )
 
 SUBMODULES = [
     analysis_tools,
     nifi_processor_classifier_tool,
+    pruning_tools,
     xml_tools,
     migration_tools,
     job_tools,
