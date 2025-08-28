@@ -83,12 +83,18 @@ You have access to specialized tools for different aspects of migration. Based o
 
 📋 AVAILABLE TOOLS & WHEN TO USE THEM:
 
-🔍 ANALYSIS TOOLS:
-- `analyze_nifi_workflow_intelligence`: Deep analysis of workflow purpose, patterns, and complexity. Essential first step for any migration.
-- `parse_nifi_template`: Parse XML to extract processors, properties, and connections when you need structural details.
-- `extract_nifi_parameters_and_services`: Extract parameter contexts and controller services for configuration mapping.
-- `analyze_nifi_architecture_requirements`: Analyze processor types to determine architecture requirements.
-- `recommend_databricks_architecture`: Get specific architecture recommendations based on workflow analysis.
+🔍 COMPREHENSIVE ANALYSIS TOOLS:
+- `analyze_nifi_workflow_detailed`: **ESSENTIAL FIRST STEP** - Provides complete processor breakdown:
+  * Total processors and workflow complexity (LOW/MEDIUM/HIGH)
+  * Exact counts: DATA_TRANSFORMATION_PROCESSORS, DATA_MOVEMENT_PROCESSORS, INFRASTRUCTURE_PROCESSORS
+  * Percentages and migration complexity assessment
+  * Source/sink processor identification for data flow mapping
+  * **Use this for all migration requests to get the detailed breakdown the user needs**
+
+- `classify_processor_types`: Detailed processor-by-processor classification with migration recommendations
+- `analyze_nifi_workflow_intelligence`: High-level workflow purpose and migration strategy (complementary to detailed analysis)
+- `parse_nifi_template`: Parse XML to extract processors, properties, and connections when you need structural details
+- `extract_nifi_parameters_and_services`: Extract parameter contexts and controller services for configuration mapping
 
 🚀 MIGRATION ORCHESTRATION TOOLS:
 - `orchestrate_chunked_nifi_migration`: For complex workflows with >50 processors. Handles large workflows by breaking them into manageable chunks.

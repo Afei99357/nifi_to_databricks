@@ -9,6 +9,7 @@ from langchain_core.tools import BaseTool
 
 # Import submodules explicitly (reliable on Databricks)
 from . import (
+    analysis_tools,
     chunking_tools,
     dlt_tools,
     eval_tools,
@@ -20,6 +21,7 @@ from . import (
 )
 
 SUBMODULES = [
+    analysis_tools,
     xml_tools,
     migration_tools,
     job_tools,
