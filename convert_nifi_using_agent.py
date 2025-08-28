@@ -102,6 +102,45 @@ print("=" * 60)
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### 🔬 Step 3.5: Test New Agent Analysis Tools
+# MAGIC
+# MAGIC **NEW**: Test the agent's new detailed workflow analysis capabilities that provide exact processor breakdown.
+
+# COMMAND ----------
+
+print("🧪 TESTING NEW AGENT ANALYSIS TOOLS")
+print("=" * 60)
+
+# Test the new analyze_nifi_workflow_detailed tool directly
+req_analysis = ResponsesAgentRequest(
+    input=[
+        {
+            "role": "user",
+            "content": (
+                "Please use analyze_nifi_workflow_detailed to analyze the workflow at "
+                "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml. "
+                "I need to see the exact breakdown of how many processors are DATA_TRANSFORMATION_PROCESSORS, "
+                "DATA_MOVEMENT_PROCESSORS, and INFRASTRUCTURE_PROCESSORS."
+            ),
+        }
+    ]
+)
+
+print("🔍 Requesting detailed processor classification analysis...")
+analysis_resp = AGENT.predict(req_analysis)
+
+print("✅ Analysis complete!")
+print("\n📊 PROCESSOR BREAKDOWN RESULTS:")
+print("=" * 60)
+
+# Display the analysis results
+display_agent_response(analysis_resp)
+
+print("=" * 60)
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ### 🚀 Step 4: Intelligent Multi-Round Agent Migration
 # MAGIC
 # MAGIC **NEW**: The agent now intelligently orchestrates complete migrations through multiple tool calls!
