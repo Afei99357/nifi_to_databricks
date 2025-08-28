@@ -16,19 +16,19 @@ from utils.nifi_analysis_utils import analyze_processors_batch
 @tool
 def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
     """
-    Intelligently analyze a NiFi workflow to understand its real-world purpose and data patterns.
+    Analyze a NiFi workflow and provide high-level migration strategy recommendations.
 
-    This function acts as a NiFi expert, analyzing workflows to understand:
-    - What the workflow actually does in business terms
-    - Data flow patterns and characteristics
-    - Processing intent and architecture patterns
-    - Optimal Databricks migration strategy
+    This function acts as a migration strategist, focusing on:
+    - Understanding the overall business purpose of the workflow
+    - Identifying data flow patterns (batch, streaming, hybrid)
+    - Recommending optimal Databricks architecture patterns
+    - Providing concrete migration tasks and implementation approach
 
     Args:
         xml_content: NiFi XML template content OR file path to NiFi XML file
 
     Returns:
-        JSON with comprehensive workflow intelligence analysis
+        JSON with business purpose analysis, architecture recommendations, and migration strategy
     """
     try:
         # Check if xml_content is a file path
@@ -41,78 +41,131 @@ def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
                     {"error": f"Failed to read file {xml_content}: {str(e)}"}
                 )
 
-        # If it looks like a file path but doesn't exist, return error
-        elif xml_content.startswith("/") or xml_content.endswith(".xml"):
-            return json.dumps(
-                {
-                    "error": f"File path appears invalid or file doesn't exist: {xml_content}"
-                }
-            )
-
         if not xml_content.strip():
             return json.dumps({"error": "Empty XML content provided"})
 
         root = ET.fromstring(xml_content)
 
-        # Extract all processors with their properties (no individual analysis yet)
-        processors_data = []
-        connections_analysis = []
+        # Extract high-level workflow characteristics for strategy analysis
+        processors = root.findall(".//processors")
+        connections = root.findall(".//connections")
 
-        # Extract processor data for batch analysis
-        for processor in root.findall(".//processors"):
-            proc_id = (processor.findtext("id") or "").strip()
-            proc_name = (processor.findtext("name") or "Unknown").strip()
+        # Count processor types to understand workflow patterns
+        processor_types = {}
+        data_sources = []
+        data_sinks = []
+        processing_patterns = []
+
+        for processor in processors:
             proc_type = (processor.findtext("type") or "").strip()
+            proc_name = (processor.findtext("name") or "Unknown").strip()
 
-            # Extract properties
-            properties = {}
-            config = processor.find("config")
-            if config is not None:
-                props_elem = config.find("properties")
-                if props_elem is not None:
-                    for entry in props_elem.findall("entry"):
-                        key_elem = entry.find("key")
-                        value_elem = entry.find("value")
-                        if key_elem is not None and value_elem is not None:
-                            key = key_elem.text or ""
-                            value = value_elem.text or ""
-                            if value:  # Only store non-empty values
-                                properties[key] = value
+            # Count processor types
+            processor_types[proc_type] = processor_types.get(proc_type, 0) + 1
 
-            processors_data.append(
-                {
-                    "id": proc_id,
-                    "name": proc_name,
-                    "processor_type": proc_type,
-                    "properties": properties,
-                }
-            )
+            # Identify data sources
+            if proc_type in [
+                "GetFile",
+                "ListFile",
+                "ConsumeKafka",
+                "GetHTTP",
+                "GenerateFlowFile",
+            ]:
+                data_sources.append({"type": proc_type, "name": proc_name})
 
-        # 🚀 BATCH ANALYSIS - Analyze ALL processors in a single LLM call!
-        processors_analysis = analyze_processors_batch(processors_data)
+            # Identify data sinks
+            elif proc_type in [
+                "PutFile",
+                "PutHDFS",
+                "PublishKafka",
+                "PutSQL",
+                "PutSFTP",
+            ]:
+                data_sinks.append({"type": proc_type, "name": proc_name})
 
-        # Analyze connections to understand data flow
-        for connection in root.findall(".//connections"):
-            src_id = (connection.findtext(".//source/id") or "").strip()
-            dst_id = (connection.findtext(".//destination/id") or "").strip()
-            relationship = (connection.findtext("selectedRelationships") or "").strip()
+            # Identify key processing patterns
+            elif proc_type in [
+                "ExecuteStreamCommand",
+                "ExecuteSQL",
+                "RouteOnAttribute",
+                "UpdateAttribute",
+            ]:
+                processing_patterns.append({"type": proc_type, "name": proc_name})
 
-            connections_analysis.append(
-                {
-                    "source_id": src_id,
-                    "destination_id": dst_id,
-                    "relationship": relationship,
-                }
-            )
+        total_processors = len(processors)
 
+        # Determine workflow complexity
+        complexity = "Low"
+        if total_processors > 50:
+            complexity = "High"
+        elif total_processors > 20:
+            complexity = "Medium"
+
+        # Use LLM to analyze workflow patterns and provide migration strategy
+        model_endpoint = os.getenv(
+            "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
+        )
+        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.1)
+
+        analysis_prompt = f"""
+You are a NiFi-to-Databricks migration strategist. Analyze this workflow and provide high-level migration recommendations.
+
+WORKFLOW OVERVIEW:
+- Total Processors: {total_processors}
+- Complexity: {complexity}
+- Data Sources: {data_sources}
+- Data Sinks: {data_sinks}
+- Key Processing: {processing_patterns}
+- Most Common Processor Types: {dict(sorted(processor_types.items(), key=lambda x: x[1], reverse=True)[:5])}
+
+Provide your analysis in this JSON format:
+{{
+  "business_purpose": "What this workflow does in business terms (1-2 sentences)",
+  "data_flow_pattern": "batch|streaming|hybrid",
+  "complexity_assessment": "{complexity}",
+  "recommended_architecture": "Best Databricks approach (Jobs|DLT|Structured Streaming|Hybrid)",
+  "migration_strategy": {{
+    "approach": "High-level migration approach",
+    "key_components": ["List of main Databricks components needed"],
+    "implementation_tasks": [
+      "Task 1: High-level implementation step",
+      "Task 2: Another key step",
+      "Task 3: Final step"
+    ]
+  }},
+  "estimated_effort": "Low|Medium|High",
+  "key_considerations": ["Important factors for migration success"]
+}}
+
+Focus on STRATEGY and ARCHITECTURE, not individual processor conversion.
+"""
+
+        response = llm.invoke(analysis_prompt)
+        strategy_analysis = response.content
+
+        # Try to parse as JSON, fallback to text if needed
+        try:
+            strategy_json = json.loads(strategy_analysis)
+        except:
+            strategy_json = {
+                "business_purpose": "Analysis pending - see raw response",
+                "raw_llm_response": strategy_analysis,
+            }
+
+        # Add workflow metadata
         result = {
-            "processors_analysis": processors_analysis,
-            "connections_analysis": connections_analysis,
-            "total_processors": len(processors_analysis),
-            "analysis_timestamp": "generated_by_nifi_intelligence_engine",
+            "workflow_metadata": {
+                "total_processors": total_processors,
+                "complexity": complexity,
+                "data_sources_count": len(data_sources),
+                "data_sinks_count": len(data_sinks),
+                "processing_patterns_count": len(processing_patterns),
+            },
+            "migration_analysis": strategy_json,
+            "analysis_timestamp": "generated_by_migration_strategist",
         }
 
         return json.dumps(result, indent=2)
 
     except Exception as e:
-        return json.dumps({"error": f"Workflow intelligence analysis failed: {str(e)}"})
+        return json.dumps({"error": f"Migration strategy analysis failed: {str(e)}"})

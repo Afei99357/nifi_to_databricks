@@ -177,30 +177,55 @@ def analyze_tool_results_and_decide_next_action(state: AgentState) -> str:
 
         # Check if workflow analysis was completed
         if "analyze_nifi_workflow_intelligence" in recent_ai_messages:
-            if "total_processors" in tool_content.lower():
+            # Look for migration strategy analysis results
+            if (
+                "migration_analysis" in tool_content.lower()
+                or "workflow_metadata" in tool_content.lower()
+            ):
                 processor_count = 0
+                complexity = "Unknown"
+                architecture_rec = "Unknown"
+
                 try:
-                    # Try to extract processor count
+                    # Try to extract key strategy information
                     import re
 
+                    # Extract processor count
                     match = re.search(r'"total_processors":\s*(\d+)', tool_content)
                     if match:
                         processor_count = int(match.group(1))
+
+                    # Extract complexity
+                    complexity_match = re.search(
+                        r'"complexity[^"]*":\s*"([^"]+)"', tool_content
+                    )
+                    if complexity_match:
+                        complexity = complexity_match.group(1)
+
+                    # Extract recommended architecture
+                    arch_match = re.search(
+                        r'"recommended_architecture":\s*"([^"]+)"', tool_content
+                    )
+                    if arch_match:
+                        architecture_rec = arch_match.group(1)
+
                 except:
                     pass
 
-                if processor_count > 50:
-                    decision_guidance.append(
-                        f"🎯 DECISION: {processor_count} processors detected - recommend orchestrate_chunked_nifi_migration"
-                    )
-                elif processor_count > 0:
-                    decision_guidance.append(
-                        f"🎯 DECISION: {processor_count} processors - could use build_migration_plan then orchestrate_chunked_nifi_migration"
-                    )
-
                 decision_guidance.append(
-                    "✨ NEXT: Execute migration based on complexity analysis"
+                    f"🎯 MIGRATION STRATEGY: {processor_count} processors, {complexity} complexity"
                 )
+                decision_guidance.append(f"🏗️ RECOMMENDED: {architecture_rec}")
+
+                # Decision based on complexity and processor count
+                if processor_count > 50 or complexity == "High":
+                    decision_guidance.append(
+                        "✨ NEXT: Use orchestrate_chunked_nifi_migration for complex workflow"
+                    )
+                else:
+                    decision_guidance.append(
+                        "✨ NEXT: Execute migration based on recommended architecture"
+                    )
 
         # Check if migration plan was built
         elif "build_migration_plan" in recent_ai_messages:
