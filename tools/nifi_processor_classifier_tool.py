@@ -657,7 +657,7 @@ Return ONLY a JSON object:
   "key_operations": ["list", "of", "key", "operations"]
 }}"""
 
-        print(f"🧠 [HYBRID LLM] Analyzing ambiguous processor: {name} ({short_type})")
+        # Reduced verbosity - only log critical steps
         response = llm.invoke(enhanced_prompt)
 
         # Parse LLM response with recovery strategies
@@ -801,14 +801,14 @@ def analyze_processors_batch(
                 properties, name
             ):
                 # Rare case: UpdateAttribute generates SQL - needs LLM analysis
-                print(f"🔍 [SMART DETECTION] {name} generates SQL - sending to LLM")
+                # SQL processor detected
                 llm_needed_processors.append(proc)
             elif (
                 short_type == "GenerateFlowFile"
                 and _is_data_generating_generateflowfile(properties, name)
             ):
                 # Rare case: GenerateFlowFile creates business data - needs LLM analysis
-                print(f"🔍 [SMART DETECTION] {name} generates data - sending to LLM")
+                # Data generator detected
                 llm_needed_processors.append(proc)
             else:
                 # Normal case: Most infrastructure processors use rules
@@ -871,7 +871,9 @@ def analyze_processors_batch(
     print(
         f"✅ [RULE-BASED] Classified {len(rule_based_results)} processors using rules"
     )
-    print(f"🧠 [LLM NEEDED] {len(llm_needed_processors)} processors need LLM analysis")
+    print(
+        f"🧠 [LLM ANALYSIS] Processing {len(llm_needed_processors)} complex processors..."
+    )
 
     # Step 2: Batch analyze the ambiguous processors with LLM
     llm_results = []
@@ -906,7 +908,7 @@ def analyze_processors_batch(
                 )
                 batch_results = _analyze_hybrid_llm_batch(batch)
                 llm_results.extend(batch_results)
-                print(f"✅ [LLM BATCH {batch_num}/{total_batches}] Completed")
+                # LLM batch completed
 
     # Step 3: Combine results
     all_results = rule_based_results + llm_results
@@ -916,15 +918,12 @@ def analyze_processors_batch(
     llm_count = len(llm_results)
     total_count = len(all_results)
 
-    print(f"🎉 [HYBRID COMPLETE] Analysis finished:")
-    print(f"    📋 Rule-based: {rule_count} processors")
-    print(f"    🧠 LLM analysis: {llm_count} processors")
-    print(f"    🏆 Total: {total_count} processors")
-
-    # Show efficiency gains
+    # Show efficiency summary
     if total_count > 0:
         efficiency = (rule_count / total_count) * 100
-        print(f"    ⚡ Efficiency: {efficiency:.1f}% classified without LLM")
+        print(
+            f"✅ [ANALYSIS COMPLETE] {total_count} processors classified ({efficiency:.1f}% rule-based)"
+        )
 
     return json.dumps(all_results, indent=2)
 
@@ -1235,7 +1234,7 @@ def analyze_workflow_patterns(
         analyze_processors_batch(processors, max_batch_size=20)
     )
 
-    # Create complete analysis data
+    # Create complete analysis data (excluding detailed processor data for console output)
     workflow_analysis = {
         "workflow_metadata": {
             "filename": os.path.basename(xml_path),
@@ -1243,13 +1242,17 @@ def analyze_workflow_patterns(
             "total_processors": len(processors),
             "analysis_timestamp": f"{datetime.now().isoformat()}",
         },
-        "classification_results": analysis_results,
+        # "classification_results": analysis_results,  # Comment out to reduce verbose output
         "total_processors": len(analysis_results),
         "workflow_characteristics": {
             "classification_breakdown": _get_classification_breakdown(analysis_results),
             "impact_analysis": _get_impact_breakdown(analysis_results),
         },
     }
+
+    # Save detailed results to JSON file only (not for console output)
+    detailed_analysis = workflow_analysis.copy()
+    detailed_analysis["classification_results"] = analysis_results
 
     # Determine output paths
     if output_dir is None:
@@ -1261,9 +1264,9 @@ def analyze_workflow_patterns(
     base_filename = os.path.splitext(os.path.basename(xml_path))[0]
     json_path = os.path.join(output_dir, f"{base_filename}_workflow_analysis.json")
 
-    # Save JSON analysis
+    # Save detailed JSON analysis (with full processor data)
     with open(json_path, "w") as f:
-        json.dump(workflow_analysis, f, indent=2)
+        json.dump(detailed_analysis, f, indent=2)
     print(f"💾 [WORKFLOW ANALYSIS] Analysis saved to: {json_path}")
 
     # Print summary to console and save markdown if requested

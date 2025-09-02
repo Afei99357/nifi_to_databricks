@@ -108,8 +108,8 @@ print(f"📓 Notebook Path: {migration_result['configuration']['notebook_path']}
 
 print("\n🔍 ANALYSIS BREAKDOWN:")
 analysis = migration_result["analysis"]
-print(f"📊 Workflow Analysis: {analysis.get('workflow_analysis', 'Completed')}")
-print(f"🏷️  Processor Classifications: Available")
+print(f"📊 Workflow Analysis: Completed")
+print(f"🏷️  Processor Classifications: Completed")
 print(f"✂️  Pruning Results: Infrastructure processors removed")
 print(f"🔗 Data Flow Chains: Semantic chains detected")
 print(f"🌊 Semantic Flows: Business flows created")

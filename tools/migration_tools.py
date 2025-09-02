@@ -165,7 +165,7 @@ def _generate_batch_processor_code(
                     }
                 )
 
-        print(f"🔍 [LLM BATCH] Processor types: {', '.join(processor_types)}")
+        # Batch processing processors
 
         # If all processors have built-in patterns, return early
         if not llm_needed_processors:
@@ -184,7 +184,7 @@ def _generate_batch_processor_code(
             )
             max_batch_size = 20
 
-        print(f"⚙️ [LLM BATCH] Using batch size: {max_batch_size}")
+        # Using configured batch size
 
         # Process LLM processors in batches to avoid JSON parsing issues
         if len(llm_needed_processors) <= max_batch_size:
@@ -305,7 +305,7 @@ VALIDATE: Your JSON must parse correctly. Test before responding.
 GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
         response = llm_json.invoke(json_enforced_prompt)
-        print(f"✅ [LLM BATCH] Received response, parsing generated code...")
+        # Parsing LLM response
 
         # Log the first 200 chars of response for debugging
         def clean_json_escape_sequences(content: str) -> str:
@@ -406,7 +406,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             }
             generated_tasks.append(task)
 
-        print(f"✨ [LLM BATCH] Generated {len(generated_tasks)} tasks for {chunk_id}")
+        print(f"✅ [LLM BATCH] Generated {len(generated_tasks)} processor tasks")
         return generated_tasks
 
     except Exception as e:
@@ -730,15 +730,10 @@ def orchestrate_focused_nifi_migration(
             elif classification == "external_processing":
                 external_processing_procs.append(proc)
 
-        print(f"📊 [PROCESSOR BREAKDOWN]")
+        total_complex = len(data_transformation_procs) + len(external_processing_procs)
         print(
-            f"   • Data Transformation: {len(data_transformation_procs)} (LLM generation)"
+            f"📊 [PROCESSOR BREAKDOWN] {len(essential_processors)} essential processors ({total_complex} complex, {len(data_movement_procs)} simple)"
         )
-        print(
-            f"   • External Processing: {len(external_processing_procs)} (LLM generation)"
-        )
-        print(f"   • Data Movement: {len(data_movement_procs)} (Simple templates)")
-        print(f"   • Infrastructure: 0 (Skipped entirely)")
 
         # Setup output directory
         root = Path(out_dir)

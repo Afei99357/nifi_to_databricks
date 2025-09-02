@@ -5,8 +5,6 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from utils.workflow_summary import print_workflow_summary_from_data
-
 # Import the sophisticated analysis functions
 from .nifi_processor_classifier_tool import analyze_workflow_patterns
 

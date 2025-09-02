@@ -84,64 +84,21 @@ def migrate_nifi_to_databricks_simplified(
         output_dir=f"{out_dir}/{project}",
         _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
     )
-    print(f"📊 Workflow Analysis: {workflow_analysis}")
+    print(f"📊 Workflow Analysis: Completed")
 
     # Create processor classifications from the same analysis
     processor_classifications = classify_processor_types(
         xml_path,
         _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
     )
-    print(f"🏷️  Processor Classifications: {processor_classifications}")
+    print(f"🏷️  Processor Classifications: Completed")
 
-    # DEBUG: Check what classifications were actually generated
+    # Parse classification results for pruning
     try:
         class_data = json.loads(processor_classifications)
         classifications = class_data.get("processor_classifications", [])
-        print(f"\n🔍 CLASSIFICATION DEBUG:")
-        print(f"Total classified: {len(classifications)}")
 
-        # Count by classification type
-        data_transformation = [
-            p
-            for p in classifications
-            if p.get("classification") == "data_transformation"
-        ]
-        data_movement = [
-            p for p in classifications if p.get("classification") == "data_movement"
-        ]
-        infrastructure = [
-            p
-            for p in classifications
-            if p.get("classification") == "infrastructure_only"
-        ]
-        unknown = [p for p in classifications if p.get("classification") == "unknown"]
-
-        print(f"- Data Transformation: {len(data_transformation)}")
-        print(f"- Data Movement: {len(data_movement)}")
-        print(f"- Infrastructure Only: {len(infrastructure)}")
-        print(f"- Unknown: {len(unknown)}")
-
-        # Show a few examples of each type
-        if data_transformation:
-            print(f"\nData Transformation examples:")
-            for i, p in enumerate(data_transformation[:3]):
-                print(
-                    f"  {i+1}. {p.get('name')} ({p.get('type')}) - {p.get('reasoning', 'No reason')[:100]}..."
-                )
-
-        if data_movement:
-            print(f"\nData Movement examples:")
-            for i, p in enumerate(data_movement[:3]):
-                print(
-                    f"  {i+1}. {p.get('name')} ({p.get('type')}) - {p.get('reasoning', 'No reason')[:100]}..."
-                )
-
-        if unknown and len(unknown) > 40:  # Only show if most are unknown
-            print(f"\nFirst few Unknown examples:")
-            for i, p in enumerate(unknown[:3]):
-                print(
-                    f"  {i+1}. {p.get('name')} ({p.get('type')}) - {p.get('reasoning', 'No reason')[:100]}..."
-                )
+        # Classifications loaded for pruning
 
     except Exception as e:
         print(f"🚨 Failed to parse classifications: {e}")
@@ -149,7 +106,7 @@ def migrate_nifi_to_databricks_simplified(
     # Step 4: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
     pruned_result = prune_infrastructure_processors(processor_classifications)
-    print(f"🎯 Pruned Result: {pruned_result}")
+    # print(f"🎯 Pruned Result: {pruned_result}")  # Comment out detailed JSON output
 
     # DEBUG: Check pruning results
     try:
@@ -176,12 +133,12 @@ def migrate_nifi_to_databricks_simplified(
     # Step 5: Detect data flow chains
     print("🔗 Detecting semantic data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
-    print(f"⛓️  Chains Result: {chains_result}")
+    # print(f"⛓️  Chains Result: {chains_result}")  # Comment out detailed JSON output
 
     # Step 6: Create semantic data flows
     print("🌊 Creating semantic data flows...")
     semantic_flows = create_semantic_data_flows(chains_result)
-    print(f"🎨 Semantic Flows: {semantic_flows}")
+    # print(f"🎨 Semantic Flows: {semantic_flows}")  # Comment out detailed JSON output
 
     # Step 7: Extract and catalog all workflow assets for manual review
     print("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
