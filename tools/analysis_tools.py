@@ -263,12 +263,14 @@ def _get_migration_action(processor: Dict[str, Any]) -> str:
     """Determine what migration action to take for a processor."""
     classification = processor.get("classification", "unknown")
 
-    if classification == "infrastructure":
+    if classification in ["infrastructure", "infrastructure_only"]:
         return "prune"  # Remove from migration - handled by Databricks natively
     elif classification == "data_transformation":
         return "migrate_transform"  # Core business logic - must migrate
     elif classification == "data_movement":
         return "migrate_io"  # Data sources/sinks - migrate but may simplify
+    elif classification == "external_processing":
+        return "migrate_transform"  # External processing also needs migration
     else:
         return "analyze_further"  # Needs additional analysis
 

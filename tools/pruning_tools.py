@@ -83,7 +83,10 @@ def prune_infrastructure_processors(classification_results_json: str) -> str:
         }
 
         for processor in classifications:
-            classification = processor.get("data_manipulation_type", "unknown")
+            # Handle both old and new classification key names
+            classification = processor.get(
+                "classification", processor.get("data_manipulation_type", "unknown")
+            )
 
             # Keep processors that actually handle data content
             if classification in [
