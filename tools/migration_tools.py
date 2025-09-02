@@ -26,31 +26,55 @@ from utils import write_text as _write_text
 
 
 def _generate_task_id(
-    proc_name: str, proc_type: str, fallback_prefix: str, idx: int
+    proc_name: str,
+    proc_type: str,
+    fallback_prefix: str,
+    idx: int,
+    group_name: str = None,
 ) -> str:
     """
-    Generate descriptive task ID from processor name.
+    Generate descriptive task ID from processor name with optional group context.
 
     Args:
         proc_name: NiFi processor display name
         proc_type: Processor type (for fallback)
         fallback_prefix: Prefix for fallback (chunk_id, subset_id, etc.)
         idx: Index for uniqueness
+        group_name: Process group name for enhanced naming
 
     Returns:
-        Descriptive task ID like "BQ_Tracing_Comp_Add_Queries" or "ExecuteStreamCommand_0"
+        Descriptive task ID like "DataGroup_BQ_Tracing_Comp" or "Root_ExecuteStreamCommand_0"
     """
+    # Build base task name
     if proc_name and proc_name != "Unknown":
-        # Use processor name, sanitized for task naming
-        task_id = _safe_name(proc_name)
-        # Ensure it's not too long for Databricks task names
-        if len(task_id) > 80:
-            task_id = task_id[:80]
-        return task_id
+        base_name = _safe_name(proc_name)
     else:
         # Fallback to type + index
         proc_class = proc_type.split(".")[-1] if "." in proc_type else proc_type
-        return f"{proc_class}_{idx}"
+        base_name = f"{proc_class}_{idx}"
+
+    # Add group prefix if available and not Root
+    if group_name and group_name != "Root" and group_name != "UnnamedGroup":
+        group_prefix = _safe_name(group_name)
+        # Limit group prefix length to keep total under Databricks limits
+        if len(group_prefix) > 30:
+            group_prefix = group_prefix[:30]
+        task_id = f"{group_prefix}_{base_name}"
+    else:
+        task_id = base_name
+
+    # Ensure total length is under Databricks task name limit
+    if len(task_id) > 80:
+        # Try to trim the base name while keeping group prefix
+        if group_name and group_name != "Root":
+            group_prefix = _safe_name(group_name)[:30]
+            remaining_length = 80 - len(group_prefix) - 1  # -1 for underscore
+            base_name = base_name[: max(10, remaining_length)]  # Keep at least 10 chars
+            task_id = f"{group_prefix}_{base_name}"
+        else:
+            task_id = task_id[:80]
+
+    return task_id
 
 
 def _unescape_code(code: str) -> str:
@@ -107,6 +131,7 @@ def _generate_batch_processor_code(
             )
             proc_name = processor.get("name", f"processor_{idx}")
             props = processor.get("properties", {})
+            group_name = processor.get("parentGroupName", "Root")
 
             # Include business context from analysis for better code generation
             classification = processor.get("classification", "unknown")
@@ -134,7 +159,10 @@ def _generate_batch_processor_code(
 
                 task = {
                     "id": processor.get(
-                        "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
+                        "id",
+                        _generate_task_id(
+                            proc_name, proc_type, chunk_id, idx, group_name
+                        ),
                     ),
                     "name": _safe_name(proc_name),
                     "type": proc_type,
@@ -156,7 +184,10 @@ def _generate_batch_processor_code(
                         "name": proc_name,
                         "properties": props,
                         "id": processor.get(
-                            "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
+                            "id",
+                            _generate_task_id(
+                                proc_name, proc_type, chunk_id, idx, group_name
+                            ),
                         ),
                         "classification": classification,
                         "business_purpose": business_purpose or reasoning,

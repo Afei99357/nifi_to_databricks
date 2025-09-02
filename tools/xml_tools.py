@@ -32,12 +32,29 @@ def parse_nifi_template(xml_content: str) -> str:
         processors: List[Dict[str, Any]] = []
         connections: List[Dict[str, Any]] = []
 
+        # Build process group mapping for enhanced task naming
+        process_groups = {}
+        for group in root.findall(".//processGroups"):
+            group_id = group.findtext("id")
+            group_name = group.findtext("name") or "UnnamedGroup"
+            if group_id:
+                process_groups[group_id] = group_name
+
         # processors
         for processor in root.findall(".//processors"):
+            parent_group_id = processor.findtext("parentGroupId")
+            parent_group_name = (
+                process_groups.get(parent_group_id, "Root")
+                if parent_group_id
+                else "Root"
+            )
+
             proc_info = {
                 "name": (processor.findtext("name") or "Unknown").strip(),
                 "type": (processor.findtext("type") or "Unknown").strip(),
                 "properties": {},
+                "parentGroupId": parent_group_id,
+                "parentGroupName": parent_group_name,
             }
 
             props_node = processor.find(".//properties")
