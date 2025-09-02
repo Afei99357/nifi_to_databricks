@@ -42,7 +42,7 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 
 ### 🧠 Intelligent Architecture Decision System
 
-The tool now automatically analyzes NiFi workflows and recommends the optimal Databricks architecture:
+The tool automatically analyzes NiFi workflows and recommends the optimal Databricks architecture:
 
 **Architecture Options:**
 - **Databricks Jobs**: Batch orchestration for file-based ETL workflows
@@ -54,6 +54,8 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 - **Transformations**: JSON processing, routing logic, complex transformations
 - **Sinks**: File outputs vs external systems
 - **Complexity**: Workflow size and interconnection complexity
+
+> **⚠️ Implementation Status**: Architecture analysis and recommendations are fully implemented. However, the current simplified migration pipeline generates **Databricks Jobs only**. DLT Pipeline and Structured Streaming generation will be integrated in future releases.
 
 ### Core Components
 
@@ -175,7 +177,9 @@ result = migrate_nifi_to_databricks_simplified(
 print("Migration complete! Check output_results/ for generated assets")
 ```
 
-**Result:** Production-ready Databricks pipeline with job configurations and documentation.
+**Result:** Production-ready Databricks **batch job** pipeline with job configurations and documentation.
+
+> **📋 Current Limitation**: The simplified migration currently generates **Databricks Jobs (batch processing)** for all workflows. Even if the LLM analysis recommends DLT Pipeline or Structured Streaming, the system will create a batch job implementation. Architecture decision integration is planned for future releases.
 
 ## 📁 Input Files
 
@@ -210,7 +214,17 @@ out_dir = "/Workspace/Users/me@company.com/migrations/output"
 
 ## 📊 Migration Process
 
-### Unified Chunked Migration Process (handles all workflow sizes)
+### Simplified Migration Pipeline (Current Implementation)
+1. **Workflow Analysis**: LLM-powered processor classification and business understanding
+2. **Smart Pruning**: Remove infrastructure-only processors (logging, monitoring)
+3. **Chain Detection**: Identify semantic data flow chains using DAG analysis
+4. **Semantic Flows**: Create business-meaningful data flows
+5. **Code Generation**: LLM-powered PySpark code generation with batched API calls
+6. **Job Creation**: Generate **Databricks Jobs** with task dependencies and configurations
+
+> **📋 Output**: All migrations currently produce **Databricks batch jobs**, regardless of workflow type. This provides universal compatibility and reliable execution for all NiFi patterns.
+
+### Legacy Chunked Migration Process (for large workflows)
 1. **Complete Workflow Mapping**: Extracts full NiFi structure including processors, connections, funnels, and controller services
 2. **Funnel Detection & Bypass**: Identifies NiFi funnels and creates bypass mappings to preserve connectivity
 3. **Intelligent Chunking**: Splits workflow by process groups (if needed) while preserving graph relationships

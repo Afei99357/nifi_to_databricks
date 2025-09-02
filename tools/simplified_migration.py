@@ -10,7 +10,7 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
-from tools.migration_tools import orchestrate_intelligent_nifi_migration
+from tools.migration_tools import orchestrate_chunked_nifi_migration
 from tools.nifi_processor_classifier_tool import (
     analyze_processors_batch,
     analyze_workflow_patterns,
@@ -86,12 +86,13 @@ def migrate_nifi_to_databricks_simplified(
 
     # Step 6: Execute intelligent migration
     print("🧠 Executing intelligent migration with optimized flows...")
-    migration_result = orchestrate_intelligent_nifi_migration(
+    migration_result = orchestrate_chunked_nifi_migration(
         xml_path=xml_path,
         out_dir=out_dir,
         project=project,
-        notebook_path=notebook_path,
-        deploy=deploy,
+        job=f"{project}_job",
+        notebook_path=notebook_path or "",
+        run_now=deploy,
     )
 
     # Compile complete results
