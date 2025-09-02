@@ -475,38 +475,62 @@ def generate_asset_summary_report(
 ## Critical Scripts Requiring Manual Migration
 """
 
-    # List unique script files
-    script_files = set()
-    for item in consolidated.get("all_script_files", []):
-        script_files.add(item)
+    # Group script files by processor
+    script_by_processor = {}
+    processor_assets = workflow_assets.get("processor_assets", [])
+    for proc_asset in processor_assets:
+        proc_name = proc_asset.get("processor_name", "Unknown")
+        proc_type = proc_asset.get("processor_type", "Unknown")
+        for script in proc_asset.get("script_files", []):
+            if script not in script_by_processor:
+                script_by_processor[script] = []
+            script_by_processor[script].append(f"{proc_name} ({proc_type})")
 
-    for script in sorted(script_files):
-        report += f"- `{script}`\n"
+    for script in sorted(script_by_processor.keys()):
+        processors = ", ".join(script_by_processor[script])
+        report += f"- `{script}` ← Used by: {processors}\n"
 
     report += "\n## HDFS Paths Requiring Unity Catalog Migration\n"
 
-    # List unique HDFS paths by type
-    hdfs_paths_by_type = {}
-    for item in consolidated.get("all_hdfs_paths", []):
-        path_type = item.get("type", "other")
-        if path_type not in hdfs_paths_by_type:
-            hdfs_paths_by_type[path_type] = []
-        hdfs_paths_by_type[path_type].append(item.get("path", ""))
+    # Group HDFS paths by processor
+    hdfs_by_processor = {}
+    for proc_asset in processor_assets:
+        proc_name = proc_asset.get("processor_name", "Unknown")
+        proc_type = proc_asset.get("processor_type", "Unknown")
+        for hdfs_path in proc_asset.get("hdfs_paths", []):
+            path_str = (
+                hdfs_path.get("path", "")
+                if isinstance(hdfs_path, dict)
+                else str(hdfs_path)
+            )
+            if path_str not in hdfs_by_processor:
+                hdfs_by_processor[path_str] = []
+            hdfs_by_processor[path_str].append(f"{proc_name} ({proc_type})")
 
-    for path_type, paths in hdfs_paths_by_type.items():
-        report += f"\n### {path_type.replace('_', ' ').title()}\n"
-        for path in sorted(set(paths)):
-            report += f"- `{path}`\n"
+    for path in sorted(hdfs_by_processor.keys()):
+        processors = ", ".join(hdfs_by_processor[path])
+        report += f"- `{path}` ← Used by: {processors}\n"
 
     report += "\n## Table References for Schema Mapping\n"
 
-    # List table references
-    tables = set()
-    for item in consolidated.get("all_table_references", []):
-        tables.add(item.get("table", ""))
+    # Group table references by processor
+    table_by_processor = {}
+    for proc_asset in processor_assets:
+        proc_name = proc_asset.get("processor_name", "Unknown")
+        proc_type = proc_asset.get("processor_type", "Unknown")
+        for table_ref in proc_asset.get("table_references", []):
+            table_str = (
+                table_ref.get("table", "")
+                if isinstance(table_ref, dict)
+                else str(table_ref)
+            )
+            if table_str not in table_by_processor:
+                table_by_processor[table_str] = []
+            table_by_processor[table_str].append(f"{proc_name} ({proc_type})")
 
-    for table in sorted(tables):
-        report += f"- `{table}`\n"
+    for table in sorted(table_by_processor.keys()):
+        processors = ", ".join(table_by_processor[table])
+        report += f"- `{table}` ← Used by: {processors}\n"
 
     report += "\n## Working Directories\n"
 
