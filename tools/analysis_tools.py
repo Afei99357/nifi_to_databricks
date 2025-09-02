@@ -14,7 +14,9 @@ from .nifi_processor_classifier_tool import analyze_workflow_patterns
 
 
 # Removed @tool decorator - direct function call approach
-def analyze_nifi_workflow_detailed(xml_path: str, save_markdown: bool = True) -> str:
+def analyze_nifi_workflow_detailed(
+    xml_path: str, save_markdown: bool = True, output_dir: str = None
+) -> str:
     """
     Perform comprehensive NiFi workflow analysis with detailed processor classification.
 
@@ -38,7 +40,7 @@ def analyze_nifi_workflow_detailed(xml_path: str, save_markdown: bool = True) ->
     try:
         # Use the sophisticated analysis system
         analysis_result = analyze_workflow_patterns(
-            xml_path=xml_path, save_markdown=save_markdown
+            xml_path=xml_path, save_markdown=save_markdown, output_dir=output_dir
         )
 
         # Extract key metrics for agent decision making

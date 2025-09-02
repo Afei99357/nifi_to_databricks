@@ -61,8 +61,10 @@ def migrate_nifi_to_databricks_simplified(
     # Step 2: Analyze and classify processors
     print("🔍 Analyzing workflow and classifying processors...")
 
-    # Get detailed workflow analysis
-    workflow_analysis = analyze_nifi_workflow_detailed(xml_path, save_markdown=False)
+    # Get detailed workflow analysis - save to output directory
+    workflow_analysis = analyze_nifi_workflow_detailed(
+        xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
+    )
     print(f"📊 Workflow Analysis: {workflow_analysis}")
 
     # Get processor classifications
@@ -155,7 +157,13 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
         xml_content = f.read()
 
     # Perform analysis steps
-    workflow_analysis = analyze_nifi_workflow_detailed(xml_path, save_markdown=False)
+    # For analysis-only, save to a temp directory next to XML
+    import os
+
+    temp_output_dir = os.path.join(os.path.dirname(xml_path), "analysis_temp")
+    workflow_analysis = analyze_nifi_workflow_detailed(
+        xml_path, save_markdown=False, output_dir=temp_output_dir
+    )
     processor_classifications = classify_processor_types(xml_path)
     pruned_result = prune_infrastructure_processors(processor_classifications)
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
