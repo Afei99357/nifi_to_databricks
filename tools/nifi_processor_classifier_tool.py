@@ -1278,10 +1278,8 @@ def analyze_workflow_patterns(
         # Just print to console
         print_workflow_summary_from_data(workflow_analysis)
 
-    # Return summary data only (without detailed processor data for console)
-    summary_data = workflow_analysis.copy()
-    summary_data.pop("classification_results", None)  # Remove detailed data from return
-    return json.dumps(summary_data, indent=2)
+    # Return complete data (needed for downstream processing)
+    return json.dumps(workflow_analysis, indent=2)
 
 
 def _get_classification_breakdown(
