@@ -62,26 +62,26 @@ def migrate_nifi_to_databricks_simplified(
     print("🔍 Analyzing workflow and classifying processors...")
 
     # Get detailed workflow analysis
-    workflow_analysis = analyze_nifi_workflow_detailed.func(xml_content)
+    workflow_analysis = analyze_nifi_workflow_detailed(xml_path, save_markdown=False)
     print(f"📊 Workflow Analysis: {workflow_analysis}")
 
     # Get processor classifications
-    processor_classifications = classify_processor_types.func(xml_content)
+    processor_classifications = classify_processor_types(xml_path)
     print(f"🏷️  Processor Classifications: {processor_classifications}")
 
     # Step 3: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
-    pruned_result = prune_infrastructure_processors.func(processor_classifications)
+    pruned_result = prune_infrastructure_processors(processor_classifications)
     print(f"🎯 Pruned Result: {pruned_result}")
 
     # Step 4: Detect data flow chains
     print("🔗 Detecting semantic data flow chains...")
-    chains_result = detect_data_flow_chains.func(xml_content, pruned_result)
+    chains_result = detect_data_flow_chains(xml_content, pruned_result)
     print(f"⛓️  Chains Result: {chains_result}")
 
     # Step 5: Create semantic data flows
     print("🌊 Creating semantic data flows...")
-    semantic_flows = create_semantic_data_flows.func(chains_result)
+    semantic_flows = create_semantic_data_flows(chains_result)
     print(f"🎨 Semantic Flows: {semantic_flows}")
 
     # Step 6: Execute intelligent migration
@@ -140,11 +140,11 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
         xml_content = f.read()
 
     # Perform analysis steps
-    workflow_analysis = analyze_nifi_workflow_detailed.func(xml_content)
-    processor_classifications = classify_processor_types.func(xml_content)
-    pruned_result = prune_infrastructure_processors.func(processor_classifications)
-    chains_result = detect_data_flow_chains.func(xml_content, pruned_result)
-    semantic_flows = create_semantic_data_flows.func(chains_result)
+    workflow_analysis = analyze_nifi_workflow_detailed(xml_path, save_markdown=False)
+    processor_classifications = classify_processor_types(xml_path)
+    pruned_result = prune_infrastructure_processors(processor_classifications)
+    chains_result = detect_data_flow_chains(xml_content, pruned_result)
+    semantic_flows = create_semantic_data_flows(chains_result)
 
     analysis_result = {
         "workflow_analysis": workflow_analysis,
