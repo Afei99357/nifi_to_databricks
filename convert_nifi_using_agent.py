@@ -35,7 +35,7 @@ from tools.simplified_migration import (
 
 # Configuration
 current = datetime.now().strftime("%Y%m%d%H%M%S")
-xml_path = "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml"
+xml_path = "/Volumes/eliao/nifi_to_databricks/nifi_files/query_configuration_frank.xml"
 output_dir = (
     "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results"
 )
