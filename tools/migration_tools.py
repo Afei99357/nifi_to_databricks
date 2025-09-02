@@ -178,62 +178,79 @@ def _generate_batch_processor_code(
             )
             return builtin_tasks
 
-        # Continue with LLM generation for remaining processors
-        print(
-            f"🚀 [LLM BATCH] Sending {len(llm_needed_processors)} processors to LLM..."
-        )
+        # Get batch size from environment (same as processor classification)
+        max_batch_size = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
+
+        # Ensure max_batch_size is valid
+        if max_batch_size <= 0:
+            print(
+                f"⚠️ Invalid MAX_PROCESSORS_PER_CHUNK: {max_batch_size}, using default of 20"
+            )
+            max_batch_size = 20
+
+        print(f"⚙️ [LLM BATCH] Using batch size: {max_batch_size}")
+
+        # Process LLM processors in batches to avoid JSON parsing issues
+        if len(llm_needed_processors) <= max_batch_size:
+            # Single batch - current behavior
+            print(
+                f"🚀 [LLM BATCH] Sending {len(llm_needed_processors)} processors to LLM..."
+            )
+            llm_tasks = _process_single_llm_batch(
+                llm_needed_processors, processor_specs, chunk_id, project
+            )
+            builtin_tasks.extend(llm_tasks)
+        else:
+            # Multiple batches - new chunked approach
+            print(
+                f"📦 [LLM CHUNKING] Splitting {len(llm_needed_processors)} processors into batches of {max_batch_size}..."
+            )
+
+            for i in range(0, len(llm_needed_processors), max_batch_size):
+                batch_processors = llm_needed_processors[i : i + max_batch_size]
+                batch_specs = processor_specs[i : i + max_batch_size]
+                batch_num = (i // max_batch_size) + 1
+                total_batches = (
+                    len(llm_needed_processors) + max_batch_size - 1
+                ) // max_batch_size
+
+                print(
+                    f"🚀 [LLM BATCH {batch_num}/{total_batches}] Sending {len(batch_processors)} processors to LLM..."
+                )
+
+                batch_tasks = _process_single_llm_batch(
+                    batch_processors,
+                    batch_specs,
+                    f"{chunk_id}_batch_{batch_num}",
+                    project,
+                )
+                builtin_tasks.extend(batch_tasks)
+
+                print(
+                    f"✅ [LLM BATCH {batch_num}/{total_batches}] Completed {len(batch_tasks)} tasks"
+                )
+
+        return builtin_tasks
+
+    except Exception as e:
+        logger.error(f"Batch code generation failed: {e}")
+        # Fall back to processing each batch individually
+        return []
+
+
+def _process_single_llm_batch(
+    processors: List[Dict[str, Any]],
+    processor_specs: List[Dict[str, Any]],
+    chunk_id: str,
+    project: str,
+) -> List[Dict[str, Any]]:
+    """Process a single batch of processors with LLM generation"""
+    try:
 
         # Get the model endpoint from environment
         model_endpoint = os.environ.get(
             "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
         )
-        llm = ChatDatabricks(endpoint=model_endpoint)
-
-        # Create batched prompt for all processors
-        batch_prompt = f"""You are a NiFi to Databricks migration expert. Generate PySpark code for multiple NiFi processors in a single response.
-
-For each processor below, generate the equivalent PySpark/Databricks code that performs the same function.
-IMPORTANT: Use the business_purpose and analysis_reasoning fields to understand what each processor actually does - don't just rely on the type field.
-
-PROCESSORS TO CONVERT:
-{json.dumps(processor_specs, indent=2)}
-
-REQUIREMENTS:
-1. Return ONLY a valid JSON object with processor index as key and generated code as value
-2. Include a header comment for each processor with: NiFi Processor: [name], Type: [type], Purpose: [business_purpose]
-3. Use the business_purpose and analysis_reasoning to understand the processor's actual function
-4. Use Databricks BATCH patterns (Delta Lake, regular DataFrame operations - NO streaming)
-5. Handle the specific properties for each processor appropriately
-6. Include comments explaining the logic based on business purpose
-7. Make the code functional and ready to use
-8. For GetFile/ListFile: use spark.read (NOT Auto Loader) for batch file processing
-9. For PutFile/PutHDFS: use Delta Lake writes
-10. For ConsumeKafka: use Structured Streaming (only exception)
-11. For JSON processors: use PySpark JSON functions
-12. CONTEXT-AWARE DATAFRAMES: Use the workflow_context to determine proper DataFrame variable names:
-    - For source processors (GetFile, ListFile): Create df_[processor_name] as output
-    - For processing processors: Read from previous processor's output DataFrame
-    - Never use undefined 'df' variable - always reference the actual DataFrame from previous steps
-13. LEGACY HDFS PATH CONVERSION (CRITICAL):
-    - Detect legacy paths in PutFile/PutHDFS: /user/, /hdfs/, /tmp/, /data/, /var/
-    - Convert to Unity Catalog: target_table = 'main.default.converted_table'
-    - Use .saveAsTable() instead of .save('/legacy/path')
-    - Add conversion comments: "# TODO: Converted from legacy HDFS path"
-
-CRITICAL JSON FORMATTING RULES:
-- Return ONLY the JSON object, no markdown, no explanations
-- Escape all backslashes as double backslashes (\\\\)
-- Escape all newlines as \\\\n
-- Escape all quotes as \\\\"
-- Do not include any text outside the JSON object
-
-RESPONSE FORMAT (EXACT):
-{{
-  "0": "# ProcessorType1 → Databricks equivalent\\\\nfrom pyspark.sql.functions import *\\\\n\\\\n# Your PySpark code here",
-  "1": "# ProcessorType2 → Databricks equivalent\\\\nfrom pyspark.sql.functions import *\\\\n\\\\n# Your PySpark code here"
-}}
-
-Generate the code for all {len(processor_specs)} processors as a valid JSON object:"""
 
         # Create LLM with very low temperature for consistent JSON output
         llm_json = ChatDatabricks(endpoint=model_endpoint, temperature=0.05)
@@ -382,25 +399,6 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                 f"# {spec['type']} → Code generation failed\\n# TODO: Implement manually",
             )
 
-            # Prepare pattern for bulk save later
-            processor_class = (
-                spec["type"].split(".")[-1] if "." in spec["type"] else spec["type"]
-            )
-            pattern_obj = {
-                "category": "llm_generated",
-                "databricks_equivalent": "LLM Generated Solution",
-                "description": f"Auto-generated pattern for {processor_class} based on properties analysis",
-                "code_template": code,
-                "best_practices": [
-                    "Review and customize the generated code",
-                    "Test thoroughly before production use",
-                    "Consider processor-specific optimizations",
-                ],
-                "generated_from_properties": spec["properties"],
-                "generation_source": "llm_hybrid_approach",
-            }
-            # Registry removed - no pattern buffering
-
             task = {
                 "id": spec["id"],
                 "name": _safe_name(spec["name"]),
@@ -412,39 +410,32 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
             }
             generated_tasks.append(task)
 
-        # Registry removed - generating fresh each time
-
-        # Combine built-in patterns with LLM-generated tasks
-        all_tasks = builtin_tasks + generated_tasks
-
-        print(
-            f"✨ [LLM BATCH] Generated {len(all_tasks)} processor tasks for {chunk_id} "
-            f"({len(builtin_tasks)} built-in, {len(generated_tasks)} LLM)"
-        )
-        logger.info(
-            f"Generated code for {len(all_tasks)} processors: {len(builtin_tasks)} built-in patterns, {len(generated_tasks)} LLM-generated"
-        )
-        return all_tasks
+        print(f"✨ [LLM BATCH] Generated {len(generated_tasks)} tasks for {chunk_id}")
+        return generated_tasks
 
     except Exception as e:
-        logger.error(f"Batch code generation failed: {e}")
+        logger.error(f"Single batch code generation failed: {e}")
         # Sub-batch fallback to reduce per-processor LLM calls
         sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
 
         if len(processors) > sub_batch_size:
+            print(
+                f"🔄 [LLM SUB-BATCH] Splitting {len(processors)} into sub-batches of {sub_batch_size}..."
+            )
             generated_tasks: List[Dict[str, Any]] = []
             for start in range(0, len(processors), sub_batch_size):
-                subset = processors[start : start + sub_batch_size]
+                subset_processors = processors[start : start + sub_batch_size]
+                subset_specs = processor_specs[start : start + sub_batch_size]
                 subset_id = f"{chunk_id}__sb{start // sub_batch_size}"
                 try:
-                    # Reuse batch pathway for each sub-batch
-                    sub_tasks = _generate_batch_processor_code(
-                        subset, subset_id, project
+                    # Recursive call to _process_single_llm_batch for sub-batch
+                    sub_tasks = _process_single_llm_batch(
+                        subset_processors, subset_specs, subset_id, project
                     )
                     generated_tasks.extend(sub_tasks)
                 except Exception:
                     # If sub-batch still fails, fall back to per-processor for this subset only
-                    for idx, processor in enumerate(subset):
+                    for idx, processor in enumerate(subset_processors):
                         proc_type = processor.get("type", "Unknown")
                         proc_name = processor.get("name", f"processor_{start+idx}")
                         props = processor.get("properties", {})
@@ -462,10 +453,7 @@ df = spark.read.format('delta').load('/path/to/input')
 df.write.format('delta').mode('append').save('/path/to/output')
 """
                         task = {
-                            "id": processor.get(
-                                "id",
-                                _generate_task_id(proc_name, proc_type, subset_id, idx),
-                            ),
+                            "id": subset_specs[idx]["id"],
                             "name": _safe_name(proc_name),
                             "type": proc_type,
                             "code": code,
@@ -477,8 +465,12 @@ df.write.format('delta').mode('append').save('/path/to/output')
             return generated_tasks
         else:
             # Final fallback: individual generation for small sets
+            print(
+                f"🔄 [LLM INDIVIDUAL] Falling back to individual generation for {len(processors)} processors..."
+            )
             generated_tasks = []
             for idx, processor in enumerate(processors):
+                proc_spec = processor_specs[idx]
                 proc_type = processor.get("type", "Unknown")
                 proc_name = processor.get("name", f"processor_{idx}")
                 props = processor.get("properties", {})
@@ -497,9 +489,7 @@ df = spark.read.format('delta').load('/path/to/input')
 df.write.format('delta').mode('append').save('/path/to/output')
 """
                 task = {
-                    "id": processor.get(
-                        "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
-                    ),
+                    "id": proc_spec["id"],
                     "name": _safe_name(proc_name),
                     "type": proc_type,
                     "code": code,
