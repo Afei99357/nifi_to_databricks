@@ -15,7 +15,10 @@ from .nifi_processor_classifier_tool import analyze_workflow_patterns
 
 # Removed @tool decorator - direct function call approach
 def analyze_nifi_workflow_detailed(
-    xml_path: str, save_markdown: bool = True, output_dir: str = None
+    xml_path: str,
+    save_markdown: bool = True,
+    output_dir: str = None,
+    _reuse_analysis: str = None,
 ) -> str:
     """
     Perform comprehensive NiFi workflow analysis with detailed processor classification.
@@ -38,10 +41,22 @@ def analyze_nifi_workflow_detailed(
         - migration_insights: strategic recommendations
     """
     try:
-        # Use the sophisticated analysis system
-        analysis_result = analyze_workflow_patterns(
-            xml_path=xml_path, save_markdown=save_markdown, output_dir=output_dir
-        )
+        # Use the sophisticated analysis system (reuse existing analysis if provided)
+        if _reuse_analysis:
+            analysis_result = (
+                json.loads(_reuse_analysis)
+                if isinstance(_reuse_analysis, str)
+                else _reuse_analysis
+            )
+        else:
+            analysis_result = analyze_workflow_patterns(
+                xml_path=xml_path, save_markdown=save_markdown, output_dir=output_dir
+            )
+            analysis_result = (
+                json.loads(analysis_result)
+                if isinstance(analysis_result, str)
+                else analysis_result
+            )
 
         # Extract key metrics for agent decision making
         total_processors = analysis_result.get("total_processors", 0)
@@ -148,7 +163,7 @@ def analyze_nifi_workflow_detailed(
 
 
 # Removed @tool decorator - direct function call approach
-def classify_processor_types(xml_path: str) -> str:
+def classify_processor_types(xml_path: str, _reuse_analysis: str = None) -> str:
     """
     Classify all processors in a NiFi workflow using hybrid rule-based + LLM analysis.
 
@@ -165,9 +180,21 @@ def classify_processor_types(xml_path: str) -> str:
     """
     try:
         # Reuse the comprehensive analysis but focus on processor details
-        analysis_result = analyze_workflow_patterns(
-            xml_path=xml_path, save_markdown=False
-        )
+        if _reuse_analysis:
+            analysis_result = (
+                json.loads(_reuse_analysis)
+                if isinstance(_reuse_analysis, str)
+                else _reuse_analysis
+            )
+        else:
+            analysis_result = analyze_workflow_patterns(
+                xml_path=xml_path, save_markdown=False
+            )
+            analysis_result = (
+                json.loads(analysis_result)
+                if isinstance(analysis_result, str)
+                else analysis_result
+            )
 
         classification_results = analysis_result.get("classification_results", [])
 

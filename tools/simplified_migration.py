@@ -58,17 +58,28 @@ def migrate_nifi_to_databricks_simplified(
     with open(xml_path, "r", encoding="utf-8") as f:
         xml_content = f.read()
 
-    # Step 2: Analyze and classify processors
+    # Step 2: Analyze and classify processors (single analysis shared between functions)
     print("🔍 Analyzing workflow and classifying processors...")
 
-    # Get detailed workflow analysis - save to output directory
+    # Single analysis call that both functions can use
+    analysis_result = analyze_workflow_patterns(
+        xml_path=xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
+    )
+
+    # Create workflow analysis summary from the single analysis
     workflow_analysis = analyze_nifi_workflow_detailed(
-        xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
+        xml_path,
+        save_markdown=False,
+        output_dir=f"{out_dir}/{project}",
+        _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
     )
     print(f"📊 Workflow Analysis: {workflow_analysis}")
 
-    # Get processor classifications
-    processor_classifications = classify_processor_types(xml_path)
+    # Create processor classifications from the same analysis
+    processor_classifications = classify_processor_types(
+        xml_path,
+        _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
+    )
     print(f"🏷️  Processor Classifications: {processor_classifications}")
 
     # Step 3: Prune infrastructure processors
@@ -156,15 +167,27 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     with open(xml_path, "r", encoding="utf-8") as f:
         xml_content = f.read()
 
-    # Perform analysis steps
+    # Perform analysis steps (single analysis shared between functions)
     # For analysis-only, save to a temp directory next to XML
     import os
 
     temp_output_dir = os.path.join(os.path.dirname(xml_path), "analysis_temp")
-    workflow_analysis = analyze_nifi_workflow_detailed(
-        xml_path, save_markdown=False, output_dir=temp_output_dir
+
+    # Single analysis call that both functions can use
+    analysis_result = analyze_workflow_patterns(
+        xml_path=xml_path, save_markdown=False, output_dir=temp_output_dir
     )
-    processor_classifications = classify_processor_types(xml_path)
+
+    # Create workflow analysis and processor classifications from the same analysis
+    workflow_analysis = analyze_nifi_workflow_detailed(
+        xml_path,
+        save_markdown=False,
+        output_dir=temp_output_dir,
+        _reuse_analysis=analysis_result,
+    )
+    processor_classifications = classify_processor_types(
+        xml_path, _reuse_analysis=analysis_result
+    )
     pruned_result = prune_infrastructure_processors(processor_classifications)
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
     semantic_flows = create_semantic_data_flows(chains_result)
