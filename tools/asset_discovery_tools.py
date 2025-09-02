@@ -517,33 +517,6 @@ def generate_asset_summary_report(
             processors_str = ", ".join(processors)
             report += f"- `{path}` ← Used by: {processors_str}\n"
 
-    report += "\n## Table References for Schema Mapping\n"
-
-    # Group table references by processor
-    table_by_processor = {}
-    for proc_asset in processor_assets:
-        proc_name = proc_asset.get("processor_name", "Unknown")
-        proc_type = proc_asset.get("processor_type", "Unknown")
-        for table_ref in proc_asset.get("table_references", []):
-            table_str = (
-                table_ref.get("table", "")
-                if isinstance(table_ref, dict)
-                else str(table_ref)
-            )
-            if table_str not in table_by_processor:
-                table_by_processor[table_str] = []
-            table_by_processor[table_str].append(f"{proc_name} ({proc_type})")
-
-    for table in sorted(table_by_processor.keys()):
-        processors = table_by_processor[table]
-        if len(processors) > 3:
-            # Too many processors - show count only to avoid redundancy
-            report += f"- `{table}` ← Used by: {len(processors)} processors\n"
-        else:
-            # Few processors - show specific names
-            processors_str = ", ".join(processors)
-            report += f"- `{table}` ← Used by: {processors_str}\n"
-
     report += "\n## Working Directories\n"
 
     for wd in summary.get("unique_working_directories", []):
