@@ -1,6 +1,6 @@
 # NiFi to Databricks Migration Tool
 
-An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based data pipelines) into Databricks jobs using AI agents. The system leverages LangGraph agents with access to specialized tools to automate the complex process of translating NiFi processors, connections, and configurations into equivalent Databricks PySpark code and job definitions.
+An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based data pipelines) into Databricks jobs using direct function calls and LLM intelligence. The system uses a simplified approach to automate the complex process of translating NiFi processors, connections, and configurations into equivalent Databricks PySpark code and job definitions.
 
 ## 🎯 Overview
 
@@ -8,7 +8,8 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 
 - **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and recommends optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming)
 - **🔍 Smart Workflow Analysis**: Advanced processor classification system that accurately identifies data transformations vs infrastructure operations
-- **AI-Powered Agent**: LangGraph-based conversational agent using Databricks Foundation Models
+- **🚀 Simplified Pipeline**: Direct function calls without agent complexity - linear execution path
+- **✂️ Semantic Migration**: Prune → Chain → Flow approach for business-meaningful migrations
 - **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
 - **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
 - **Fresh Code Generation**: LLM-powered conversion of NiFi processors to PySpark with builtin templates for common processors
@@ -19,23 +20,23 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 ## 🏗️ Architecture
 
 ```
-                     🧠 Intelligent Architecture Decision
+                     🧠 Simplified Migration Pipeline
                                     │
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│   NiFi XML     │───▶│ Architecture     │───▶│ Optimal Migration   │
-│   Templates    │    │ Analyzer         │    │ Strategy Selection  │
+│   NiFi XML     │───▶│ Analyze & Prune  │───▶│ Semantic Chain      │
+│   Templates    │    │ Processors       │    │ Detection           │
 └─────────────────┘    └──────────────────┘    └─────────────────────┘
                               │                           │
                               ▼                           ▼
                     ┌──────────────────┐    ┌──────────────────────────┐
-                    │   AI Agent       │───▶│ Migration Execution      │
-                    │   + Tools        │    │ (Jobs/DLT/Streaming)     │
+                    │ Create Semantic  │───▶│ Generate Databricks      │
+                    │ Data Flows       │    │ Assets & Deploy          │
                     └──────────────────┘    └──────────────────────────┘
                               │                           │
                               ▼                           ▼
                     ┌──────────────────┐         ┌──────────────────┐
-                    │ Fresh Code Gen   │         │   Databricks     │
-                    │ (LLM + Builtin)  │         │ Assets & Deploy  │
+                    │ LLM Code Gen     │         │   Production     │
+                    │ (Batched)        │         │   Pipeline       │
                     └──────────────────┘         └──────────────────┘
 ```
 
@@ -56,7 +57,7 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 
 ### Core Components
 
-- **Agent System** (`agents/`, `nifi_databricks_agent.py`): LangGraph-based conversational interface
+- **Simplified Migration** (`tools/simplified_migration.py`): Direct function call interface
 - **Migration Tools** (`tools/`): Specialized tools for each aspect of the conversion process
 - **Code Generation** (`tools/generator_tools.py`): LLM-powered PySpark code generation with builtin templates
 - **Configuration** (`config/`): Environment management and logging
@@ -75,7 +76,7 @@ The tool now automatically analyzes NiFi workflows and recommends the optimal Da
 The migration system now includes significant performance optimizations, enhanced JSON reliability, and honest job status reporting:
 
 - **⚡ Batched LLM Generation**: Generate code for multiple processors in single requests (up to 96% fewer API calls)
-- **🎯 Smart Round Limiting**: Agent completes in 1-2 rounds instead of endless loops
+- **🎯 Simplified Pipeline**: Linear execution without orchestration complexity
 - **📊 Real-time Progress Tracking**: Visual progress indicators show exactly what's happening
 - **🛡️ Robust Error Handling**: Graceful fallbacks prevent migration failures
 - **🔧 Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
@@ -103,7 +104,7 @@ MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
 # Email Configuration (Optional)
 NOTIFICATION_EMAIL=your-email@company.com
 
-# Agent Configuration
+# LLM Configuration
 ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
 
 # Batch Processing Configuration (Performance tuning)
@@ -120,9 +121,9 @@ LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10
 **Required Variables:**
 - `DATABRICKS_TOKEN`: Personal access token or service principal token for authentication
 - `DATABRICKS_HOSTNAME`: Full URL to your Databricks workspace (include https://)
-- `MODEL_ENDPOINT`: Foundation model endpoint for the AI agent (uses Llama 3.3 70B by default)
+- `MODEL_ENDPOINT`: Foundation model endpoint for LLM analysis (uses Llama 3.3 70B by default)
 
-**Agent Configuration Variables:**
+**LLM Configuration Variables:**
 - `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM code generation (default: true)
 
 **Batch Processing Configuration Variables:**
@@ -142,16 +143,11 @@ Before migrating, you can now analyze your NiFi workflows to understand their st
 
 ```python
 # In Databricks notebook
-from agents import AGENT
-from mlflow.types.responses import ResponsesAgentRequest
+from tools.simplified_migration import analyze_nifi_workflow_only
 
-# Analyze workflow and get insights
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": "Run analyze_workflow_patterns with xml_path=nifi_pipeline_file/your_workflow.xml"
-}])
-
-resp = AGENT.predict(req)
+# Quick analysis to understand workflow
+analysis = analyze_nifi_workflow_only("nifi_pipeline_file/your_workflow.xml")
+print("Analysis complete - ready for migration")
 ```
 
 **What you get:**
@@ -161,17 +157,25 @@ resp = AGENT.predict(req)
 - **⚡ Migration insights**: Focus areas and automation opportunities
 - **📈 Complexity analysis**: Workflow size and interconnection patterns
 
-### **Analysis-Driven Migration**
+### **Complete Migration**
 
-Use analysis results to choose the right migration approach:
+Execute the full migration pipeline:
 
 ```python
-# For workflows with mostly batch processing + few transformations
-"Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
+from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
-# For large complex workflows (>50 processors)
-"Run orchestrate_chunked_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
+# Complete migration: analyze → prune → chain → migrate
+result = migrate_nifi_to_databricks_simplified(
+    xml_path="nifi_pipeline_file/your_workflow.xml",
+    out_dir="output_results",
+    project="my_migration_project",
+    deploy=False  # Set True to auto-deploy
+)
+
+print("Migration complete! Check output_results/ for generated assets")
 ```
+
+**Result:** Production-ready Databricks pipeline with job configurations and documentation.
 
 ## 📁 Input Files
 
@@ -232,7 +236,7 @@ out_dir = "/Workspace/Users/me@company.com/migrations/output"
 
 ## 🔧 Available Tools
 
-The agent has access to specialized tools in the `tools/` folder:
+The migration system uses specialized tools in the `tools/` folder:
 
 ### Core Migration Tools
 - **`xml_tools.py`**: NiFi XML parsing and template extraction
@@ -486,9 +490,9 @@ def my_custom_tool(parameter: str) -> str:
 
 ### Performance Issues (Fixed in v2.1)
 
-8. **Excessive LLM Calls**: Set `ENABLE_LLM_CODE_GENERATION=true` for optimal performance (single-round agent)
+8. **Excessive LLM Calls**: Set `ENABLE_LLM_CODE_GENERATION=true` for optimal batched performance
 9. **Slow Code Generation**: The system now uses batched LLM generation (1 call per chunk vs 1 per processor)
-10. **Agent Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
+10. **Pipeline Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
 11. **JSON Parsing Failures**: Fixed "Invalid \escape" errors with explicit JSON format enforcement in prompts
 12. **Wasteful Fallbacks**: Reduced `LLM_SUB_BATCH_SIZE=5` to minimize individual processor generation
 
