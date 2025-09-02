@@ -1255,6 +1255,9 @@ def analyze_workflow_patterns(
     if output_dir is None:
         output_dir = os.path.dirname(xml_path)
 
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+
     base_filename = os.path.splitext(os.path.basename(xml_path))[0]
     json_path = os.path.join(output_dir, f"{base_filename}_workflow_analysis.json")
 

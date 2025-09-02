@@ -53,12 +53,18 @@ def migrate_nifi_to_databricks_simplified(
 
     print("🚀 Starting simplified NiFi to Databricks migration...")
 
-    # Step 1: Read XML content
+    # Step 1: Create output directory structure
+    print("📁 Creating output directory structure...")
+    import os
+
+    os.makedirs(f"{out_dir}/{project}", exist_ok=True)
+
+    # Step 2: Read XML content
     print("📖 Reading NiFi XML template...")
     with open(xml_path, "r", encoding="utf-8") as f:
         xml_content = f.read()
 
-    # Step 2: Analyze and classify processors (single analysis shared between functions)
+    # Step 3: Analyze and classify processors (single analysis shared between functions)
     print("🔍 Analyzing workflow and classifying processors...")
 
     # Single analysis call that both functions can use
@@ -131,7 +137,7 @@ def migrate_nifi_to_databricks_simplified(
     except Exception as e:
         print(f"DEBUG: Failed to parse classifications: {e}")
 
-    # Step 3: Prune infrastructure processors
+    # Step 4: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
     pruned_result = prune_infrastructure_processors(processor_classifications)
     print(f"🎯 Pruned Result: {pruned_result}")
@@ -161,17 +167,17 @@ def migrate_nifi_to_databricks_simplified(
     except Exception as e:
         print(f"DEBUG: Failed to parse pruning results: {e}")
 
-    # Step 4: Detect data flow chains
+    # Step 5: Detect data flow chains
     print("🔗 Detecting semantic data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
     print(f"⛓️  Chains Result: {chains_result}")
 
-    # Step 5: Create semantic data flows
+    # Step 6: Create semantic data flows
     print("🌊 Creating semantic data flows...")
     semantic_flows = create_semantic_data_flows(chains_result)
     print(f"🎨 Semantic Flows: {semantic_flows}")
 
-    # Step 6: Execute FOCUSED migration (only essential processors)
+    # Step 7: Execute FOCUSED migration (only essential processors)
     print("🎯 Executing focused migration on essential data processors only...")
 
     # Parse pruned_result to get the list of essential processors
