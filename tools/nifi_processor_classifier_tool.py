@@ -879,6 +879,13 @@ def analyze_processors_batch(
         if max_batch_size is None:
             max_batch_size = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
 
+        # Ensure max_batch_size is valid
+        if max_batch_size <= 0:
+            print(
+                f"⚠️ Invalid MAX_PROCESSORS_PER_CHUNK: {max_batch_size}, using default of 20"
+            )
+            max_batch_size = 20
+
         # Process ambiguous processors in batches
         if len(llm_needed_processors) <= max_batch_size:
             llm_results = _analyze_hybrid_llm_batch(llm_needed_processors)
@@ -1103,6 +1110,11 @@ Be specific about what happens to the actual data content, not just metadata or 
         print(f"❌ [BATCH ANALYSIS] Batch analysis failed: {str(e)}")
         # Sub-batch fallback to reduce per-processor LLM calls (same as migration_tools.py)
         sub_batch_size = int(os.environ.get("LLM_SUB_BATCH_SIZE", "10"))
+        if sub_batch_size <= 0:
+            print(
+                f"⚠️ Invalid LLM_SUB_BATCH_SIZE: {sub_batch_size}, using default of 10"
+            )
+            sub_batch_size = 10
         if len(processors) > sub_batch_size:
             print(
                 f"🔄 [SUB-BATCH FALLBACK] Trying smaller batches of {sub_batch_size} processors..."
