@@ -152,8 +152,13 @@ def summarize_workflow_analysis_from_data(
             ),
             "automation_potential": (
                 "high"
-                if len(infrastructure) / len(processors) > 0.4
-                else "medium" if len(infrastructure) / len(processors) > 0.2 else "low"
+                if len(processors) > 0 and len(infrastructure) / len(processors) > 0.4
+                else (
+                    "medium"
+                    if len(processors) > 0
+                    and len(infrastructure) / len(processors) > 0.2
+                    else "low"
+                )
             ),
         },
     }
@@ -308,8 +313,8 @@ def print_and_save_workflow_summary(
 |--------|-------|------------|
 | **Total Processors** | {overview['total_processors']} | 100% |
 | **Data Processors** | {overview['actual_data_processors']} | {overview['data_processing_ratio']}% |
-| **Infrastructure Processors** | {overview['infrastructure_processors']} | {round((overview['infrastructure_processors']/overview['total_processors'])*100, 1)}% |
-| **Data Movement Processors** | {overview['data_movement_processors']} | {round((overview['data_movement_processors']/overview['total_processors'])*100, 1)}% |
+| **Infrastructure Processors** | {overview['infrastructure_processors']} | {round((overview['infrastructure_processors']/overview['total_processors'])*100, 1) if overview['total_processors'] > 0 else 0}% |
+| **Data Movement Processors** | {overview['data_movement_processors']} | {round((overview['data_movement_processors']/overview['total_processors'])*100, 1) if overview['total_processors'] > 0 else 0}% |
 
 ## 🔧 Data Manipulation Processors ({overview['actual_data_processors']} processors)
 
@@ -438,7 +443,7 @@ Based on the analysis:
 ## 📈 Summary
 
 This workflow contains **{overview['actual_data_processors']} processors with actual business logic** out of {overview['total_processors']} total processors.
-The majority ({round((overview['infrastructure_processors']/overview['total_processors'])*100, 1)}%) are infrastructure operations that handle routing, logging, and flow control.
+The majority ({round((overview['infrastructure_processors']/overview['total_processors'])*100, 1) if overview['total_processors'] > 0 else 0}%) are infrastructure operations that handle routing, logging, and flow control.
 
 **Migration Focus:** Concentrate effort on the {overview['actual_data_processors']} data processors, particularly the {impact['high_impact_processors']} high-impact ones, while leveraging Databricks' native capabilities to replace most infrastructure processors.
 
