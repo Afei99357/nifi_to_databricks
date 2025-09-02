@@ -25,6 +25,34 @@ from utils import write_text as _write_text
 # Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 
+def _generate_task_id(
+    proc_name: str, proc_type: str, fallback_prefix: str, idx: int
+) -> str:
+    """
+    Generate descriptive task ID from processor name.
+
+    Args:
+        proc_name: NiFi processor display name
+        proc_type: Processor type (for fallback)
+        fallback_prefix: Prefix for fallback (chunk_id, subset_id, etc.)
+        idx: Index for uniqueness
+
+    Returns:
+        Descriptive task ID like "BQ_Tracing_Comp_Add_Queries" or "ExecuteStreamCommand_0"
+    """
+    if proc_name and proc_name != "Unknown":
+        # Use processor name, sanitized for task naming
+        task_id = _safe_name(proc_name)
+        # Ensure it's not too long for Databricks task names
+        if len(task_id) > 80:
+            task_id = task_id[:80]
+        return task_id
+    else:
+        # Fallback to type + index
+        proc_class = proc_type.split(".")[-1] if "." in proc_type else proc_type
+        return f"{proc_class}_{idx}"
+
+
 def _unescape_code(code: str) -> str:
     """
     Unescape literal escape sequences from LLM-generated code.
@@ -109,7 +137,9 @@ def _generate_batch_processor_code(
                 processor_types.append(f"{class_name} (built-in)")
 
                 task = {
-                    "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                    "id": processor.get(
+                        "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
+                    ),
                     "name": _safe_name(proc_name),
                     "type": proc_type,
                     "code": pattern["code"],
@@ -129,7 +159,9 @@ def _generate_batch_processor_code(
                         "type": proc_type,
                         "name": proc_name,
                         "properties": props,
-                        "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                        "id": processor.get(
+                            "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
+                        ),
                         "classification": classification,
                         "business_purpose": business_purpose or reasoning,
                         "analysis_reasoning": reasoning,
@@ -430,7 +462,10 @@ df = spark.read.format('delta').load('/path/to/input')
 df.write.format('delta').mode('append').save('/path/to/output')
 """
                         task = {
-                            "id": processor.get("id", f"{subset_id}_task_{idx}"),
+                            "id": processor.get(
+                                "id",
+                                _generate_task_id(proc_name, proc_type, subset_id, idx),
+                            ),
                             "name": _safe_name(proc_name),
                             "type": proc_type,
                             "code": code,
@@ -462,7 +497,9 @@ df = spark.read.format('delta').load('/path/to/input')
 df.write.format('delta').mode('append').save('/path/to/output')
 """
                 task = {
-                    "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                    "id": processor.get(
+                        "id", _generate_task_id(proc_name, proc_type, chunk_id, idx)
+                    ),
                     "name": _safe_name(proc_name),
                     "type": proc_type,
                     "code": code,
