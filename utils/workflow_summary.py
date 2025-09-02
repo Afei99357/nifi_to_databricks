@@ -169,7 +169,8 @@ def summarize_workflow_analysis_from_data(
 
 def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
     """
-    Print a human-readable summary of the workflow analysis from data.
+    Print a concise summary of the workflow analysis from data.
+    Detailed information is saved to JSON/MD files.
 
     Args:
         analysis_data: The workflow analysis dictionary
@@ -188,44 +189,28 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
     print(f"   • Data Movement Only: {overview['data_movement_processors']}")
     print(f"   • Infrastructure/Routing: {overview['infrastructure_processors']}")
 
-    print(f"\n🔧 DATA MANIPULATION PROCESSORS ({overview['actual_data_processors']}):")
+    # Show counts only, not individual processor details (saved to files)
     transformers = summary["data_manipulation_breakdown"]["data_transformers"]
     external = summary["data_manipulation_breakdown"]["external_processors"]
-
+    print(f"\n🔧 DATA MANIPULATION PROCESSORS ({overview['actual_data_processors']}):")
     if transformers["count"] > 0:
-        print(f"   📈 Data Transformers ({transformers['count']}):")
-        for proc in transformers["processors"]:  # Show ALL transformers
-            print(
-                f"      - {proc['name']} ({proc['type']}): {proc['business_purpose']}"
-            )
-
+        print(f"   📈 Data Transformers: {transformers['count']} processors")
     if external["count"] > 0:
-        print(f"   🔌 External Processors ({external['count']}):")
-        for proc in external["processors"]:  # Show ALL external processors
-            print(
-                f"      - {proc['name']} ({proc['type']}): {proc['business_purpose']}"
-            )
+        print(f"   🔌 External Processors: {external['count']} processors")
 
-    print(
-        f"\n📦 DATA MOVEMENT PROCESSORS ({summary['data_manipulation_breakdown']['data_movers']['count']}):"
-    )
-    movers = summary["data_manipulation_breakdown"]["data_movers"][
-        "processors"
-    ]  # Show ALL data movers
-    for proc in movers:
-        print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
+    movers_count = summary["data_manipulation_breakdown"]["data_movers"]["count"]
+    if movers_count > 0:
+        print(f"\n📦 DATA MOVEMENT PROCESSORS: {movers_count} processors")
 
-    print(
-        f"\n🔗 INFRASTRUCTURE PROCESSORS ({summary['infrastructure_breakdown']['count']}):"
-    )
-    infra = summary["infrastructure_breakdown"][
-        "processors"
-    ]  # Show ALL infrastructure processors
-    for proc in infra:
-        print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
+    infra_count = summary["infrastructure_breakdown"]["count"]
+    print(f"\n🔗 INFRASTRUCTURE PROCESSORS: {infra_count} processors")
 
+    # Show top business operations only
     print(f"\n⭐ KEY BUSINESS OPERATIONS:")
-    for operation, count in summary["key_business_operations"].items():
+    top_operations = sorted(
+        summary["key_business_operations"].items(), key=lambda x: x[1], reverse=True
+    )[:5]
+    for operation, count in top_operations:
         if count > 1:  # Only show operations done multiple times
             print(f"   • {operation}: {count} times")
 
@@ -237,22 +222,19 @@ def print_workflow_summary_from_data(analysis_data: Dict[str, Any]) -> None:
         f"   • Low/No Impact: {impact['low_impact_processors'] + impact['no_impact_processors']} processors"
     )
 
-    if impact["critical_processors"]:
-        print(f"\n🚨 CRITICAL PROCESSORS (High Impact):")
-        for proc in impact["critical_processors"]:  # Show ALL critical processors
-            print(f"   • {proc['name']} ({proc['type']}): {proc['business_purpose']}")
-
     insights = summary["business_insights"]
     print(f"\n💡 BUSINESS INSIGHTS:")
     print(f"   • Workflow Complexity: {insights['workflow_complexity'].upper()}")
     print(f"   • Automation Potential: {insights['automation_potential'].upper()}")
 
     primary_ops = [
-        f"{op} ({count})" for op, count in insights["primary_data_operations"]
+        f"{op} ({count})"
+        for op, count in insights["primary_data_operations"][:3]  # Show top 3 only
     ]
     print(f"   • Primary Operations: {', '.join(primary_ops)}")
 
     print("=" * 60)
+    print("💾 Detailed analysis saved to JSON and markdown files")
 
 
 def summarize_workflow_analysis(json_file_path: str) -> Dict[str, Any]:
