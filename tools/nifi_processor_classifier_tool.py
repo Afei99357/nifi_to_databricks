@@ -773,28 +773,15 @@ def analyze_processors_batch(
     llm_needed_processors = []
 
     for proc in processors:
-        processor_type = proc.get("processor_type", "")
+        # FIX: Use "type" key instead of "processor_type"
+        processor_type = proc.get("type", "")
         properties = proc.get("properties", {})
         name = proc.get("name", "")
         proc_id = proc.get("id", "")
 
-        # DEBUG: Show actual processor data structure
-        print(f"🔍 [PROCESSOR DATA] {name}")
-        print(f"    Raw keys: {list(proc.keys())}")
-        print(f"    processor_type: '{processor_type}'")
-        print(f"    type field: '{proc.get('type', 'MISSING')}'")
-
         short_type = (
             processor_type.split(".")[-1] if "." in processor_type else processor_type
         )
-
-        # Check if we can classify with rules (with smart exceptions for infrastructure)
-        print(f"🔍 [DEBUG] {name} ({short_type}) - checking classification...")
-        print(f"    DATA_MOVEMENT: {short_type in DATA_MOVEMENT_PROCESSORS}")
-        print(
-            f"    DATA_TRANSFORMATION: {short_type in DATA_TRANSFORMATION_PROCESSORS}"
-        )
-        print(f"    INFRASTRUCTURE: {short_type in INFRASTRUCTURE_PROCESSORS}")
 
         if (
             short_type in DATA_MOVEMENT_PROCESSORS
