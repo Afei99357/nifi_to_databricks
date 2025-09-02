@@ -1110,7 +1110,10 @@ def orchestrate_focused_nifi_migration(
         external_processing_procs = []
 
         for proc in pruned_processors:
-            classification = proc.get("data_manipulation_type", "unknown")
+            # Handle both classification key names for compatibility
+            classification = proc.get(
+                "classification", proc.get("data_manipulation_type", "unknown")
+            )
             if classification == "data_transformation":
                 data_transformation_procs.append(proc)
             elif classification == "data_movement":
