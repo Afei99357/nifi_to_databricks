@@ -10,6 +10,11 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
+from tools.asset_discovery_tools import (
+    extract_workflow_assets,
+    generate_asset_summary_report,
+    save_asset_catalog,
+)
 from tools.migration_tools import orchestrate_focused_nifi_migration
 from tools.nifi_processor_classifier_tool import (
     analyze_processors_batch,
@@ -178,7 +183,43 @@ def migrate_nifi_to_databricks_simplified(
     semantic_flows = create_semantic_data_flows(chains_result)
     print(f"🎨 Semantic Flows: {semantic_flows}")
 
-    # Step 7: Execute FOCUSED migration (only essential processors)
+    # Step 7: Extract and catalog all workflow assets for manual review
+    print("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
+
+    # Parse analysis result for asset extraction
+    if isinstance(analysis_result, str):
+        analysis_data = json.loads(analysis_result)
+    else:
+        analysis_data = analysis_result
+
+    # Extract comprehensive asset catalog
+    workflow_assets = extract_workflow_assets(analysis_data)
+
+    # Save asset catalog and summary
+    asset_catalog_path = save_asset_catalog(workflow_assets, f"{out_dir}/{project}")
+    asset_summary_path = generate_asset_summary_report(
+        workflow_assets, f"{out_dir}/{project}"
+    )
+
+    print(f"📋 Asset catalog saved: {asset_catalog_path}")
+    print(f"📄 Asset summary saved: {asset_summary_path}")
+
+    # Show key findings
+    asset_summary = workflow_assets.get("asset_summary", {})
+    if asset_summary.get("total_script_files", 0) > 0:
+        print(
+            f"🔍 Found {asset_summary['total_script_files']} script files requiring manual migration"
+        )
+    if asset_summary.get("total_hdfs_paths", 0) > 0:
+        print(
+            f"🔍 Found {asset_summary['total_hdfs_paths']} HDFS paths needing Unity Catalog migration"
+        )
+    if asset_summary.get("total_table_references", 0) > 0:
+        print(
+            f"🔍 Found {asset_summary['total_table_references']} table references for schema mapping"
+        )
+
+    # Step 8: Execute FOCUSED migration (only essential processors)
     print("🎯 Executing focused migration on essential data processors only...")
 
     # Parse pruned_result to get the list of essential processors
@@ -213,6 +254,17 @@ def migrate_nifi_to_databricks_simplified(
             "pruned_processors": pruned_result,
             "data_flow_chains": chains_result,
             "semantic_flows": semantic_flows,
+        },
+        "asset_discovery": {
+            "workflow_assets": workflow_assets,
+            "asset_catalog_path": asset_catalog_path,
+            "asset_summary_path": asset_summary_path,
+            "summary_stats": {
+                "script_files": asset_summary.get("total_script_files", 0),
+                "hdfs_paths": asset_summary.get("total_hdfs_paths", 0),
+                "table_references": asset_summary.get("total_table_references", 0),
+                "sql_statements": asset_summary.get("total_sql_statements", 0),
+            },
         },
         "configuration": {
             "xml_path": xml_path,
