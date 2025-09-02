@@ -10,7 +10,7 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
-from tools.migration_tools import orchestrate_chunked_nifi_migration
+from tools.migration_tools import orchestrate_focused_nifi_migration
 from tools.nifi_processor_classifier_tool import (
     analyze_processors_batch,
     analyze_workflow_patterns,
@@ -84,10 +84,25 @@ def migrate_nifi_to_databricks_simplified(
     semantic_flows = create_semantic_data_flows(chains_result)
     print(f"🎨 Semantic Flows: {semantic_flows}")
 
-    # Step 6: Execute intelligent migration
-    print("🧠 Executing intelligent migration with optimized flows...")
-    migration_result = orchestrate_chunked_nifi_migration(
+    # Step 6: Execute FOCUSED migration (only essential processors)
+    print("🎯 Executing focused migration on essential data processors only...")
+
+    # Parse pruned_result to get the list of essential processors
+
+    if isinstance(pruned_result, str):
+        pruned_data = json.loads(pruned_result)
+    else:
+        pruned_data = pruned_result
+
+    essential_processors = pruned_data.get("pruned_processors", [])
+    print(
+        f"📊 Focusing on {len(essential_processors)} essential processors (infrastructure skipped)"
+    )
+
+    migration_result = orchestrate_focused_nifi_migration(
         xml_path=xml_path,
+        pruned_processors=essential_processors,
+        semantic_flows=semantic_flows,
         out_dir=out_dir,
         project=project,
         job=f"{project}_job",

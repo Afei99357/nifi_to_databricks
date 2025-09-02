@@ -78,11 +78,14 @@ analysis = analyze_nifi_workflow_only("<path>")
 
 This will:
 1. Analyze the NiFi XML and classify processors
-2. Prune infrastructure-only processors
+2. Prune infrastructure-only processors (logging, routing, flow control)
 3. Detect semantic data flow chains
 4. Create optimized semantic flows
-5. Execute intelligent migration
-6. Return comprehensive results
+5. Execute **FOCUSED migration on essential processors only**:
+   - **LLM generation**: Only for `data_transformation` + `external_processing` processors
+   - **Simple templates**: For `data_movement` processors (read/write operations)
+   - **Complete skip**: All `infrastructure` processors (Databricks handles natively)
+6. Return comprehensive results focusing on real data processing logic
 
 #### Alternative Direct Tool Usage
 For when you need granular control over specific migration steps:
