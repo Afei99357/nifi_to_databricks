@@ -4,23 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-This is a NiFi to Databricks migration tool that uses LangGraph agents to convert Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming).
+This is a NiFi to Databricks migration tool that converts Apache NiFi workflows into Databricks pipelines. The system features an intelligent architecture decision system that automatically analyzes NiFi XML and recommends the optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming).
 
 **Performance Optimizations (v2.1):**
 - **Batched LLM Generation**: Generates code for multiple processors in single requests (96% fewer API calls)
-- **Single-Round Agent**: Simplified to complete migrations in exactly 1 agent round
+- **Direct Function Pipeline**: Simplified linear execution without agent overhead
 - **Real-time Progress Tracking**: Visual indicators show migration progress and call counts
 - **Robust Error Handling**: Graceful fallbacks and comprehensive logging
 - **Enhanced JSON Parsing**: Explicit JSON format enforcement prevents escape sequence errors
 - **Configurable Batch Sizes**: Tune batch sizes with `MAX_PROCESSORS_PER_CHUNK` and `LLM_SUB_BATCH_SIZE`
 
-The system provides both programmatic APIs and an agent-based interface for automating the migration process.
+The system provides programmatic APIs for automating the migration process.
 
 ### Core Components
 
-- **Agent System**: LangGraph-based conversational agent using Databricks Foundation Models
-  - `agents/agent.py`: Main agent implementation with MLflow integration and all migration tools
-  - `convert_nifi_using_agent.py`: Databricks notebook interface for agent usage
+- **Simplified Migration System**: Direct function call approach without agent complexity
+  - `tools/simplified_migration.py`: Main migration functions for complete workflows
+  - `convert_nifi_using_agent.py`: Databricks notebook interface for direct function usage
 
 - **Migration Tools**: Modular tools for different aspects of NiFi conversion
   - `tools/xml_tools.py`: NiFi XML parsing, template extraction, and intelligent architecture analysis
@@ -84,27 +84,20 @@ This will:
 5. Execute intelligent migration
 6. Return comprehensive results
 
-#### Agent Migration (Legacy)
-For when you prefer agent orchestration (adds complexity):
+#### Alternative Direct Tool Usage
+For when you need granular control over specific migration steps:
 
 ```python
-# In Databricks notebook
-from agents import AGENT
-from mlflow.types.responses import ResponsesAgentRequest
+# Individual migration tools
+from tools.migration_tools import orchestrate_intelligent_nifi_migration
+from tools.xml_tools import analyze_nifi_architecture_requirements
 
-# For regular-sized NiFi files (<50 processors)
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": "Run orchestrate_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
-}])
-
-# For large NiFi files (>50 processors or complex workflows)
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": "Run orchestrate_chunked_nifi_migration with xml_path=<path> out_dir=<dir> project=<name> max_processors_per_chunk=25"
-}])
-
-resp = AGENT.predict(req)
+# Direct tool usage
+result = orchestrate_intelligent_nifi_migration(
+    xml_path="<path>",
+    out_dir="<dir>",
+    project="<name>"
+)
 ```
 
 ### Running Migrations Programmatically
@@ -128,11 +121,11 @@ print("Analysis:", result['analysis'])
 print("Configuration:", result['configuration'])
 ```
 
-#### Legacy Intelligent Migration
+#### Direct Migration Tools
 ```python
 from tools.migration_tools import orchestrate_intelligent_nifi_migration
 
-# Legacy agent-based migration - automatically chooses best architecture
+# Direct tool usage - automatically chooses best architecture
 result = orchestrate_intelligent_nifi_migration(
     xml_path="nifi_pipeline_file/example.xml",
     out_dir="output_results/intelligent_project",

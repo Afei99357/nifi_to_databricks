@@ -7,7 +7,7 @@ import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
-from langchain_core.tools import tool
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 __all__ = [
     "parse_nifi_template",
@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def parse_nifi_template(xml_content: str) -> str:
     """
     Parse a NiFi XML template and extract processors, properties, and connections.
@@ -84,7 +84,7 @@ def parse_nifi_template(xml_content: str) -> str:
         return f"Unexpected error: {str(e)}"
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def extract_nifi_parameters_and_services(xml_content: str) -> str:
     """
     Return NiFi Parameter Contexts and Controller Services with suggested Databricks mappings.
@@ -161,7 +161,7 @@ def extract_nifi_parameters_and_services(xml_content: str) -> str:
         return f"Failed to parse NiFi XML: {e}"
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def analyze_nifi_architecture_requirements(xml_content: str) -> str:
     """
     Analyze NiFi XML to detect processor types and determine architecture requirements.
@@ -365,7 +365,7 @@ def analyze_nifi_architecture_requirements(xml_content: str) -> str:
         return f"Failed to analyze NiFi architecture requirements: {e}"
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def recommend_databricks_architecture(xml_content: str) -> str:
     """
     Recommend the best Databricks architecture based on NiFi XML analysis.

@@ -7,13 +7,14 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
-from langchain_core.tools import tool
 
 # Import utility functions
 from .nifi_processor_classifier_tool import analyze_processors_batch
 
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
-@tool
+
+# Removed @tool decorator - direct function call approach
 def analyze_nifi_workflow_intelligence(xml_content: str) -> str:
     """
     Analyze a NiFi workflow and provide high-level migration strategy recommendations.

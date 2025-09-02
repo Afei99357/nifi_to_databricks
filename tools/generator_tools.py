@@ -10,7 +10,8 @@ from datetime import datetime
 from typing import Any, Dict
 
 from databricks_langchain import ChatDatabricks
-from langchain_core.tools import tool
+
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 # Registry functionality removed - generate fresh every time
 
@@ -303,7 +304,7 @@ def _get_builtin_pattern(
     }
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def generate_databricks_code(
     processor_type: str,
     properties: str = "{}",
@@ -624,7 +625,7 @@ def _track_fallback_processor(
 # Pattern saving removed - generate fresh each time
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def get_migration_pattern(nifi_component: str, properties: str = "{}") -> str:
     """
     Return a human-readable description of the migration pattern for a NiFi component.
@@ -661,7 +662,7 @@ def get_migration_pattern(nifi_component: str, properties: str = "{}") -> str:
     )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def suggest_autoloader_options(properties: str = "{}") -> str:
     """
     Given NiFi GetFile/ListFile-like properties, suggest Auto Loader code & tips.

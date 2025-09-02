@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import json
 
-from langchain_core.tools import tool
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 __all__ = ["generate_dlt_expectations", "generate_dlt_pipeline_config"]
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def generate_dlt_expectations(table_name: str, rules_json: str) -> str:
     """
     Return SQL to create a DLT/Lakeflow dataset with expectations from simple rules.
@@ -32,7 +32,7 @@ def generate_dlt_expectations(table_name: str, rules_json: str) -> str:
         return f"Invalid rules: {e}"
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def generate_dlt_pipeline_config(
     pipeline_name: str, catalog: str, db_schema: str, notebook_path: str
 ) -> str:

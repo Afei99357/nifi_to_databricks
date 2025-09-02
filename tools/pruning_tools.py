@@ -4,13 +4,13 @@
 import json
 from typing import Any, Dict, List
 
-from langchain_core.tools import tool
-
 from .migration_tools import build_migration_plan
 from .xml_tools import parse_nifi_template
 
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
-@tool
+
+# Removed @tool decorator - direct function call approach
 def prune_infrastructure_processors(classification_results_json: str) -> str:
     """
     Remove infrastructure-only processors using existing sophisticated classifications.
@@ -143,7 +143,7 @@ def prune_infrastructure_processors(classification_results_json: str) -> str:
         )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def detect_data_flow_chains(xml_content: str, pruned_processors_json: str) -> str:
     """
     Detect source → transformation → sink chains using existing topological sorting
@@ -268,7 +268,7 @@ def detect_data_flow_chains(xml_content: str, pruned_processors_json: str) -> st
         )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def create_semantic_data_flows(chains_json: str) -> str:
     """
     Convert processor chains into semantic business data flows for migration planning.

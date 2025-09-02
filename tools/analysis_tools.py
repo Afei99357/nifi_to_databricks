@@ -5,15 +5,15 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from langchain_core.tools import tool
-
 from utils.workflow_summary import print_workflow_summary_from_data
 
 # Import the sophisticated analysis functions
 from .nifi_processor_classifier_tool import analyze_workflow_patterns
 
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
-@tool
+
+# Removed @tool decorator - direct function call approach
 def analyze_nifi_workflow_detailed(xml_path: str, save_markdown: bool = True) -> str:
     """
     Perform comprehensive NiFi workflow analysis with detailed processor classification.
@@ -145,7 +145,7 @@ def analyze_nifi_workflow_detailed(xml_path: str, save_markdown: bool = True) ->
         )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def classify_processor_types(xml_path: str) -> str:
     """
     Classify all processors in a NiFi workflow using hybrid rule-based + LLM analysis.

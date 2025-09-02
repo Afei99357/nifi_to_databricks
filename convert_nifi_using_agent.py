@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %pip install -U -qqqq backoff databricks-langchain langgraph==0.5.3 uv databricks-agents mlflow-skinny[databricks] json-repair
+# MAGIC %pip install -U -qqqq backoff uv json-repair
 
 # COMMAND ----------
 
@@ -12,23 +12,23 @@ import json
 # Import all required modules at the top for cleaner code
 from datetime import datetime
 
-from mlflow.types.responses import ResponsesAgentRequest
-
-from agents import AGENT
 from tools.nifi_processor_classifier_tool import analyze_workflow_patterns
-from utils.response_utils import display_agent_response, save_agent_summary_to_markdown
+from tools.simplified_migration import (
+    analyze_nifi_workflow_only,
+    migrate_nifi_to_databricks_simplified,
+)
 from utils.workflow_summary import print_and_save_workflow_summary
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 🧠 Intelligent NiFi Analysis & Migration
+# MAGIC ## 🚀 Simplified NiFi to Databricks Migration
 # MAGIC
-# MAGIC This notebook demonstrates the new LLM-powered NiFi intelligence system that:
-# MAGIC - **Analyzes** what your NiFi workflows actually do in business terms
-# MAGIC - **Distinguishes** between data transformation vs infrastructure processors
-# MAGIC - **Recommends** optimal Databricks architecture patterns
-# MAGIC - **Migrates** intelligently based on workflow understanding
+# MAGIC This notebook demonstrates the direct function approach for NiFi migration:
+# MAGIC - **Direct Function Calls**: No agent complexity or multi-round orchestration
+# MAGIC - **Linear Pipeline**: analyze → prune → chain → migrate
+# MAGIC - **Fast Execution**: No conversation state or agent overhead
+# MAGIC - **Same Intelligence**: All analysis capabilities without agent wrapper
 
 # COMMAND ----------
 
@@ -59,43 +59,32 @@ print(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Option B: Agent-Based Analysis (Interactive)
-# MAGIC Uses the LangGraph agent for interactive complex workflow analysis.
+# MAGIC #### Option B: Detailed Analysis with Reports
+# MAGIC Uses direct analysis functions for comprehensive workflow understanding.
 
 # COMMAND ----------
 
-# Using imports from top cell
+print("🔍 DETAILED WORKFLOW ANALYSIS WITH REPORTS")
 
-print("🧠 AGENT-BASED WORKFLOW ANALYSIS")
-
-# Analyze the complex ICN8_BRS_Feedback workflow using file path
-req = ResponsesAgentRequest(
-    input=[
-        {
-            "role": "user",
-            "content": "Use analyze_nifi_workflow_intelligence to analyze the complex NiFi workflow at /Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml with 58+ processors. Help me understand what it actually does for the business and which processors do real data processing vs infrastructure work like logging and routing.",
-        }
-    ]
+# Direct detailed analysis with automatic markdown export
+detailed_analysis = analyze_workflow_patterns(
+    xml_path="/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml",
+    save_markdown=True,
+    output_dir="/tmp/detailed_analysis",
 )
 
-complex_analysis_resp = AGENT.predict(req)
-print("✅ Agent-based complex workflow analysis complete!")
+print("✅ Detailed analysis complete!")
 
-# Display the complex analysis results using utilities
-print("\n📋 COMPLEX ANALYSIS RESULTS:")
+# Display the analysis results
+print("\n📋 DETAILED ANALYSIS RESULTS:")
 print("=" * 60)
-
-# Use utility functions from top imports
-
-# Save complex workflow formatted analysis summary to markdown
-markdown_file = save_agent_summary_to_markdown(
-    complex_analysis_resp,
-    "/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_analysis_summary.md",
+print(
+    f"📊 Total processors: {detailed_analysis['analysis_summary']['total_processors']}"
 )
-
-
-# Display in clean format
-display_agent_response(complex_analysis_resp)
+print(
+    f"💡 Data processing ratio: {detailed_analysis['analysis_summary']['data_processing_ratio']:.1f}%"
+)
+print(f"📄 Markdown report generated in /tmp/detailed_analysis/")
 
 print("=" * 60)
 
@@ -111,11 +100,7 @@ print("=" * 60)
 print("🧪 TESTING SIMPLIFIED MIGRATION PIPELINE")
 print("=" * 60)
 
-# Import the new simplified migration functions
-from tools.simplified_migration import (
-    analyze_nifi_workflow_only,
-    migrate_nifi_to_databricks_simplified,
-)
+# Functions already imported at top - using them directly
 
 # Option A: Analysis only (fast, no migration)
 print("🔍 Option A: Analysis-only workflow understanding...")
@@ -337,9 +322,9 @@ else:
 # MAGIC )
 # MAGIC ```
 # MAGIC
-# MAGIC ### **Option 2: Simplified Direct Migration (Recommended for Complete Migrations)**
+# MAGIC ### **Option 2: Complete Migration (Recommended)**
 # MAGIC
-# MAGIC **NEW Direct Function Pipeline - Complete End-to-End Migration:**
+# MAGIC **Direct Function Pipeline - Complete End-to-End Migration:**
 # MAGIC ```python
 # MAGIC from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 # MAGIC
@@ -381,8 +366,8 @@ else:
 # MAGIC ### **Try Your Own Workflows:**
 # MAGIC Replace the file paths above with your NiFi XML files and run the cells!
 # MAGIC
-# MAGIC ### **Key Benefits of the New Analysis System:**
-# MAGIC - **Faster Development**: Direct analysis functions for rapid workflow understanding
-# MAGIC - **Better Documentation**: Automatic markdown report generation with professional formatting
-# MAGIC - **Smarter Classification**: Type-first approach with SQL operation detection
-# MAGIC - **Migration Guidance**: Clear recommendations for Databricks architecture choices
+# MAGIC ### **Key Benefits of Simplified Migration:**
+# MAGIC - **Direct Functions**: No agent complexity or multi-round orchestration
+# MAGIC - **Fast Execution**: Linear pipeline without conversation state overhead
+# MAGIC - **Same Intelligence**: All analysis capabilities without agent wrapper
+# MAGIC - **Predictable Results**: Deterministic execution flow, no agent decisions

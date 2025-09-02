@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
-from langchain_core.tools import tool
 
 from utils.workflow_summary import (
     print_and_save_workflow_summary,
@@ -16,6 +15,9 @@ from utils.workflow_summary import (
 )
 
 from .xml_tools import parse_nifi_template
+
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
+
 
 # Hybrid approach: Rule-based + LLM intelligence
 
@@ -744,7 +746,7 @@ Return ONLY a JSON object:
         }
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def analyze_processors_batch(
     processors: List[Dict[str, Any]], max_batch_size: int = None
 ) -> str:
@@ -1191,7 +1193,7 @@ Be specific about what happens to the actual data content, not just metadata or 
             return results
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def analyze_workflow_patterns(
     xml_path: str, save_markdown: bool = True, output_dir: str = None
 ) -> str:

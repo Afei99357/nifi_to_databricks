@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from langchain_core.tools import tool
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 __all__ = [
     "chunk_nifi_xml_by_process_groups",
@@ -53,7 +53,7 @@ def _estimate_processor_size(processor: Dict[str, Any]) -> int:
     return base_size + name_size + type_size + props_size
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def estimate_chunk_size(
     processors: List[Dict[str, Any]], connections: List[Dict[str, Any]]
 ) -> str:
@@ -76,7 +76,7 @@ def estimate_chunk_size(
     )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def extract_complete_workflow_map(xml_content: str) -> str:
     """
     Extract and save the complete NiFi workflow structure including all processors,
@@ -333,7 +333,7 @@ def _group_by_process_groups(root: ET.Element) -> Dict[str, List[str]]:
     return process_groups
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def chunk_nifi_xml_by_process_groups(
     xml_content: str, max_processors_per_chunk: int = 25
 ) -> str:
@@ -510,7 +510,7 @@ def _split_large_group(
     return chunks
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def chunk_large_process_group(
     processors: List[Dict[str, Any]],
     connections: List[Dict[str, Any]],
@@ -567,7 +567,7 @@ def chunk_large_process_group(
         return json.dumps({"error": f"Error chunking processors: {str(e)}"})
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def reconstruct_full_workflow(
     chunk_results_json: str,
     cross_chunk_links_json: str,

@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-from langchain_core.tools import tool
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 __all__ = ["evaluate_pipeline_outputs"]
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def evaluate_pipeline_outputs(
     src_path: str, dst_path: str, key_cols_csv: str = "", float_tol: float = 1e-6
 ) -> str:

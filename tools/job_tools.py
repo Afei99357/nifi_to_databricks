@@ -9,9 +9,11 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import requests
-from langchain_core.tools import tool
 
 from utils.file_ops import safe_name as _safe_name
+
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
+
 
 __all__ = [
     "create_job_config",
@@ -21,7 +23,7 @@ __all__ = [
 ]
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def create_job_config(
     job_name: str,
     notebook_path: str,
@@ -90,7 +92,7 @@ def create_job_config(
     return json.dumps(job_config, indent=2)
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def create_job_config_from_plan(
     job_name: str,
     notebook_path: str,
@@ -173,7 +175,7 @@ def create_job_config_from_plan(
     return json.dumps(job_cfg, indent=2)
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def deploy_and_run_job(job_config_json: str, run_now: bool = True) -> str:
     """
     Create a Databricks Job via REST 2.1. If run_now=True, also trigger a run.
@@ -327,7 +329,7 @@ def check_job_run_status(job_id: int, run_id: int, max_wait_seconds: int = 45) -
     }
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def scaffold_asset_bundle(
     project_name: str,
     job_name: str,

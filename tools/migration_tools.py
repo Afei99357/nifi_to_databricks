@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 
 from databricks_langchain import ChatDatabricks
 from json_repair import repair_json
-from langchain_core.tools import tool
 
 from config import DATABRICKS_HOSTNAME, logger
 
@@ -22,6 +21,8 @@ from config import DATABRICKS_HOSTNAME, logger
 from utils import read_text as _read_text
 from utils import safe_name as _safe_name
 from utils import write_text as _write_text
+
+# Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 
 def _unescape_code(code: str) -> str:
@@ -492,7 +493,7 @@ __all__ = [
 ]
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def build_migration_plan(xml_content: str) -> str:
     """
     Produce a topologically sorted DAG of NiFi processors based on Connections.
@@ -571,7 +572,7 @@ def build_migration_plan(xml_content: str) -> str:
         return f"Failed building plan: {e}"
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def process_nifi_chunk(chunk_data: str, project: str, chunk_index: int = 0) -> str:
     """
     Process a single NiFi chunk and generate Databricks code for its processors.
@@ -635,7 +636,7 @@ def process_nifi_chunk(chunk_data: str, project: str, chunk_index: int = 0) -> s
         )
 
 
-@tool
+# Removed @tool decorator - direct function call approach
 def orchestrate_chunked_nifi_migration(
     xml_path: str,
     out_dir: str,
