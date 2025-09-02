@@ -56,7 +56,10 @@ def summarize_workflow_analysis_from_data(
         Dictionary with clear summary statistics and insights
     """
 
+    # Try both possible key names for processor data
     processors = analysis_data.get("processors_analysis", [])
+    if not processors:
+        processors = analysis_data.get("classification_results", [])
 
     # Categorize processors
     data_transformers = []
