@@ -783,6 +783,13 @@ def analyze_processors_batch(
         )
 
         # Check if we can classify with rules (with smart exceptions for infrastructure)
+        print(f"🔍 [DEBUG] {name} ({short_type}) - checking classification...")
+        print(f"    DATA_MOVEMENT: {short_type in DATA_MOVEMENT_PROCESSORS}")
+        print(
+            f"    DATA_TRANSFORMATION: {short_type in DATA_TRANSFORMATION_PROCESSORS}"
+        )
+        print(f"    INFRASTRUCTURE: {short_type in INFRASTRUCTURE_PROCESSORS}")
+
         if (
             short_type in DATA_MOVEMENT_PROCESSORS
             or short_type in DATA_TRANSFORMATION_PROCESSORS
