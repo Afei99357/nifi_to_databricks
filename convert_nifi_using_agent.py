@@ -114,6 +114,18 @@ print(f"✂️  Pruning Results: Infrastructure processors removed")
 print(f"🔗 Data Flow Chains: Semantic chains detected")
 print(f"🌊 Semantic Flows: Business flows created")
 
+# Display asset discovery results
+if "asset_discovery" in migration_result:
+    assets = migration_result["asset_discovery"]
+    stats = assets.get("summary_stats", {})
+    print(f"\n📋 ASSET DISCOVERY RESULTS:")
+    print(f"   • Script Files: {stats.get('script_files', 0)} found")
+    print(f"   • HDFS Paths: {stats.get('hdfs_paths', 0)} found")
+    print(f"   • Table References: {stats.get('table_references', 0)} found")
+    print(f"   • SQL Statements: {stats.get('sql_statements', 0)} found")
+    print(f"   📋 Asset Catalog: {assets.get('asset_catalog_path', 'Generated')}")
+    print(f"   📄 Asset Summary: {assets.get('asset_summary_path', 'Generated')}")
+
 print(f"\n📁 Generated Assets:")
 print(f"   • src/steps/ - Individual processor Python files")
 print(f"   • notebooks/ - Orchestrator notebook")
