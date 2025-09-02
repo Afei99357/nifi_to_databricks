@@ -778,6 +778,12 @@ def analyze_processors_batch(
         name = proc.get("name", "")
         proc_id = proc.get("id", "")
 
+        # DEBUG: Show actual processor data structure
+        print(f"🔍 [PROCESSOR DATA] {name}")
+        print(f"    Raw keys: {list(proc.keys())}")
+        print(f"    processor_type: '{processor_type}'")
+        print(f"    type field: '{proc.get('type', 'MISSING')}'")
+
         short_type = (
             processor_type.split(".")[-1] if "." in processor_type else processor_type
         )
