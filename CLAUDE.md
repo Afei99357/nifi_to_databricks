@@ -156,28 +156,7 @@ print("Recommendation:", recommendation)
 ```
 
 #### Manual Migration (Legacy)
-```python
-from tools.migration_tools import convert_flow, orchestrate_chunked_nifi_migration
-
-# Standard migration for smaller files
-result = convert_flow(
-    xml_path="nifi_pipeline_file/example.xml",
-    out_dir="output_results/project_name",
-    project="my_project",
-    job="my_job",
-    notebook_path="/Workspace/Users/me@company.com/project/main"
-)
-
-# Chunked migration for large files
-result = orchestrate_chunked_nifi_migration(
-    xml_path="nifi_pipeline_file/large_example.xml",
-    out_dir="output_results/large_project",
-    project="my_large_project",
-    job="my_large_job",
-    max_processors_per_chunk=25,
-    notebook_path="/Workspace/Users/me@company.com/large_project/main"
-)
-```
+The legacy chunked migration approach has been deprecated in favor of the intelligent batching system. The new batch size limits handle large workflows automatically.
 
 # Pattern Registry Operations removed - generates fresh code each time
 
@@ -255,7 +234,7 @@ The migration system now provides comprehensive progress tracking:
 
 **Agent Level:**
 ```
-🔧 [TOOL REQUEST] orchestrate_chunked_nifi_migration
+🔧 [TOOL REQUEST] orchestrate_focused_nifi_migration
 🔄 [AGENT ROUND 1/5] Model requested tool call
 ✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
 ```
