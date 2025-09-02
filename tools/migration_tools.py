@@ -77,9 +77,17 @@ def _generate_batch_processor_code(
         processor_types = []
 
         for idx, processor in enumerate(processors):
-            proc_type = processor.get("type", "Unknown")
+            # Get processor identification - prefer original type, fallback to classification info
+            proc_type = processor.get(
+                "type", processor.get("processor_type", "Unknown")
+            )
             proc_name = processor.get("name", f"processor_{idx}")
             props = processor.get("properties", {})
+
+            # Include business context from analysis for better code generation
+            classification = processor.get("classification", "unknown")
+            reasoning = processor.get("reasoning", "")
+            business_purpose = processor.get("business_purpose", "")
 
             # Build workflow context for this processor
             workflow_context = {
@@ -122,6 +130,9 @@ def _generate_batch_processor_code(
                         "name": proc_name,
                         "properties": props,
                         "id": processor.get("id", f"{chunk_id}_task_{idx}"),
+                        "classification": classification,
+                        "business_purpose": business_purpose or reasoning,
+                        "analysis_reasoning": reasoning,
                         "workflow_context": workflow_context,
                     }
                 )
@@ -150,25 +161,28 @@ def _generate_batch_processor_code(
         batch_prompt = f"""You are a NiFi to Databricks migration expert. Generate PySpark code for multiple NiFi processors in a single response.
 
 For each processor below, generate the equivalent PySpark/Databricks code that performs the same function.
+IMPORTANT: Use the business_purpose and analysis_reasoning fields to understand what each processor actually does - don't just rely on the type field.
 
 PROCESSORS TO CONVERT:
 {json.dumps(processor_specs, indent=2)}
 
 REQUIREMENTS:
 1. Return ONLY a valid JSON object with processor index as key and generated code as value
-2. Use Databricks BATCH patterns (Delta Lake, regular DataFrame operations - NO streaming)
-3. Handle the specific properties for each processor appropriately
-4. Include comments explaining the logic
-5. Make the code functional and ready to use
-6. For GetFile/ListFile: use spark.read (NOT Auto Loader) for batch file processing
-7. For PutFile/PutHDFS: use Delta Lake writes
-8. For ConsumeKafka: use Structured Streaming (only exception)
-9. For JSON processors: use PySpark JSON functions
-10. CONTEXT-AWARE DATAFRAMES: Use the workflow_context to determine proper DataFrame variable names:
+2. Include a header comment for each processor with: NiFi Processor: [name], Type: [type], Purpose: [business_purpose]
+3. Use the business_purpose and analysis_reasoning to understand the processor's actual function
+4. Use Databricks BATCH patterns (Delta Lake, regular DataFrame operations - NO streaming)
+5. Handle the specific properties for each processor appropriately
+6. Include comments explaining the logic based on business purpose
+7. Make the code functional and ready to use
+8. For GetFile/ListFile: use spark.read (NOT Auto Loader) for batch file processing
+9. For PutFile/PutHDFS: use Delta Lake writes
+10. For ConsumeKafka: use Structured Streaming (only exception)
+11. For JSON processors: use PySpark JSON functions
+12. CONTEXT-AWARE DATAFRAMES: Use the workflow_context to determine proper DataFrame variable names:
     - For source processors (GetFile, ListFile): Create df_[processor_name] as output
     - For processing processors: Read from previous processor's output DataFrame
     - Never use undefined 'df' variable - always reference the actual DataFrame from previous steps
-11. LEGACY HDFS PATH CONVERSION (CRITICAL):
+13. LEGACY HDFS PATH CONVERSION (CRITICAL):
     - Detect legacy paths in PutFile/PutHDFS: /user/, /hdfs/, /tmp/, /data/, /var/
     - Convert to Unity Catalog: target_table = 'main.default.converted_table'
     - Use .saveAsTable() instead of .save('/legacy/path')
