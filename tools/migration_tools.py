@@ -1153,9 +1153,9 @@ def orchestrate_focused_nifi_migration(
                 f"🧠 [LLM GENERATION] Processing {len(llm_processors)} data processors with intelligence..."
             )
 
-            # Use chunked processing for LLM generation
-            llm_tasks = _process_processors_with_llm(
-                llm_processors, project, max_processors_per_chunk
+            # Use batched processing for efficient LLM generation
+            llm_tasks = _generate_batch_processor_code(
+                llm_processors, "focused_migration", project
             )
             all_tasks.extend(llm_tasks)
 
@@ -1263,46 +1263,6 @@ def orchestrate_focused_nifi_migration(
 
     except Exception as e:
         return json.dumps({"error": f"Focused migration failed: {str(e)}"})
-
-
-def _process_processors_with_llm(
-    processors: List[Dict[str, Any]], project: str, max_per_chunk: int
-) -> List[Dict[str, Any]]:
-    """Generate tasks using LLM for data transformation processors."""
-    tasks = []
-
-    for i, proc in enumerate(processors):
-        proc_type = proc.get("processor_type", "Unknown")
-        proc_name = proc.get("name", f"processor_{i}")
-        props = proc.get("properties", {})
-
-        try:
-            # Use LLM generation for complex data processing
-            code = generate_databricks_code(
-                processor_type=proc_type,
-                properties=json.dumps(props),
-            )
-        except Exception:
-            # Fallback template for LLM failures
-            code = f"""# {proc_type} → Data Processing Template
-# Properties: {json.dumps(props, indent=2)}
-
-df = spark.read.format('delta').load('/path/to/input')
-# TODO: Implement {proc_type} data transformation logic
-df.write.format('delta').mode('append').save('/path/to/output')
-"""
-
-        task = {
-            "id": proc.get("id", f"data_proc_{i}"),
-            "name": proc_name,
-            "type": proc_type,
-            "code": code,
-            "classification": proc.get("data_manipulation_type", "unknown"),
-            "business_purpose": proc.get("business_purpose", "Data processing"),
-        }
-        tasks.append(task)
-
-    return tasks
 
 
 def _process_processors_with_templates(
