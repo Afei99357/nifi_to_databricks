@@ -508,8 +508,14 @@ def generate_asset_summary_report(
             hdfs_by_processor[path_str].append(f"{proc_name} ({proc_type})")
 
     for path in sorted(hdfs_by_processor.keys()):
-        processors = ", ".join(hdfs_by_processor[path])
-        report += f"- `{path}` ← Used by: {processors}\n"
+        processors = hdfs_by_processor[path]
+        if len(processors) > 3:
+            # Too many processors - show count only to avoid redundancy
+            report += f"- `{path}` ← Used by: {len(processors)} processors\n"
+        else:
+            # Few processors - show specific names
+            processors_str = ", ".join(processors)
+            report += f"- `{path}` ← Used by: {processors_str}\n"
 
     report += "\n## Table References for Schema Mapping\n"
 
@@ -529,8 +535,14 @@ def generate_asset_summary_report(
             table_by_processor[table_str].append(f"{proc_name} ({proc_type})")
 
     for table in sorted(table_by_processor.keys()):
-        processors = ", ".join(table_by_processor[table])
-        report += f"- `{table}` ← Used by: {processors}\n"
+        processors = table_by_processor[table]
+        if len(processors) > 3:
+            # Too many processors - show count only to avoid redundancy
+            report += f"- `{table}` ← Used by: {len(processors)} processors\n"
+        else:
+            # Few processors - show specific names
+            processors_str = ", ".join(processors)
+            report += f"- `{table}` ← Used by: {processors_str}\n"
 
     report += "\n## Working Directories\n"
 
