@@ -1242,7 +1242,7 @@ def analyze_workflow_patterns(
             "total_processors": len(processors),
             "analysis_timestamp": f"{datetime.now().isoformat()}",
         },
-        # "classification_results": analysis_results,  # Comment out to reduce verbose output
+        "classification_results": analysis_results,  # Needed for downstream processing
         "total_processors": len(analysis_results),
         "workflow_characteristics": {
             "classification_breakdown": _get_classification_breakdown(analysis_results),
@@ -1250,9 +1250,7 @@ def analyze_workflow_patterns(
         },
     }
 
-    # Save detailed results to JSON file only (not for console output)
-    detailed_analysis = workflow_analysis.copy()
-    detailed_analysis["classification_results"] = analysis_results
+    # workflow_analysis now contains all data needed for both processing and file output
 
     # Determine output paths
     if output_dir is None:
@@ -1264,9 +1262,9 @@ def analyze_workflow_patterns(
     base_filename = os.path.splitext(os.path.basename(xml_path))[0]
     json_path = os.path.join(output_dir, f"{base_filename}_workflow_analysis.json")
 
-    # Save detailed JSON analysis (with full processor data)
+    # Save JSON analysis
     with open(json_path, "w") as f:
-        json.dump(detailed_analysis, f, indent=2)
+        json.dump(workflow_analysis, f, indent=2)
     print(f"💾 [WORKFLOW ANALYSIS] Analysis saved to: {json_path}")
 
     # Print summary to console and save markdown if requested
@@ -1280,7 +1278,10 @@ def analyze_workflow_patterns(
         # Just print to console
         print_workflow_summary_from_data(workflow_analysis)
 
-    return json.dumps(workflow_analysis, indent=2)
+    # Return summary data only (without detailed processor data for console)
+    summary_data = workflow_analysis.copy()
+    summary_data.pop("classification_results", None)  # Remove detailed data from return
+    return json.dumps(summary_data, indent=2)
 
 
 def _get_classification_breakdown(
