@@ -66,11 +66,7 @@ def _unescape_code(code: str) -> str:
     return unescaped
 
 
-from tools.chunking_tools import (
-    chunk_nifi_xml_by_process_groups,
-    extract_complete_workflow_map,
-    reconstruct_full_workflow,
-)
+# Chunking tools removed - no longer needed with intelligent batching
 from tools.generator_tools import generate_databricks_code
 from tools.job_tools import (
     check_job_run_status,

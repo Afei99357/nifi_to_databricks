@@ -23,13 +23,10 @@ The system provides programmatic APIs for automating the migration process.
   - `convert_nifi_using_agent.py`: Databricks notebook interface for direct function usage
 
 - **Migration Tools**: Modular tools for different aspects of NiFi conversion
-  - `tools/xml_tools.py`: NiFi XML parsing, template extraction, and intelligent architecture analysis
+  - `tools/xml_tools.py`: NiFi XML parsing and template extraction
   - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks with intelligent migration orchestration
-  - `tools/chunking_tools.py`: Large NiFi XML file chunking and reconstruction utilities
   - `tools/job_tools.py`: Databricks Jobs API integration and job creation
   - `tools/generator_tools.py`: Code generation utilities with LLM-powered PySpark code creation
-  - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
-  - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
 # Migration approaches removed - use simplified_migration.py for direct function calls
 
@@ -45,12 +42,12 @@ The system provides programmatic APIs for automating the migration process.
 3. **Job Creation**: Generates Databricks Jobs with DAG-aware task dependencies
 4. **Asset Bundling**: Creates complete Databricks project with notebooks and configurations
 
-#### Chunked Migration (large files >50 processors)
-1. **XML Chunking**: Splits NiFi workflow by process groups while preserving graph relationships
-2. **Chunk Processing**: Processes each chunk individually to avoid context limits
-3. **Code Generation**: Creates PySpark code for processors within each chunk using builtin templates and LLM generation
-4. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job
-5. **Asset Bundling**: Creates enhanced project structure with chunk analysis and dependencies
+#### Batch Processing (large workflows)
+1. **Processor Batching**: Splits large processor lists into configurable batch sizes for LLM generation
+2. **Batch Processing**: Processes each batch individually to avoid JSON parsing issues
+3. **Code Generation**: Creates PySpark code for processors within each batch using builtin templates and LLM generation
+4. **Fallback Strategy**: Automatically retries failed batches with smaller batch sizes
+5. **Asset Bundling**: Creates complete Databricks project with notebooks and configurations
 
 ## Common Development Tasks
 
@@ -93,7 +90,6 @@ For when you need granular control over specific migration steps:
 ```python
 # Individual migration tools
 from tools.migration_tools import orchestrate_intelligent_nifi_migration
-from tools.xml_tools import analyze_nifi_architecture_requirements
 
 # Direct tool usage
 result = orchestrate_intelligent_nifi_migration(
@@ -138,22 +134,6 @@ result = orchestrate_intelligent_nifi_migration(
 )
 ```
 
-#### Architecture Analysis Tools
-```python
-from tools.xml_tools import analyze_nifi_architecture_requirements, recommend_databricks_architecture
-
-# Analyze architecture requirements
-with open("nifi_pipeline_file/example.xml", 'r') as f:
-    xml_content = f.read()
-
-# Get feature analysis
-analysis = analyze_nifi_architecture_requirements.func(xml_content)
-print("Architecture Analysis:", analysis)
-
-# Get architecture recommendation
-recommendation = recommend_databricks_architecture.func(xml_content)
-print("Recommendation:", recommendation)
-```
 
 #### Manual Migration (Legacy)
 The legacy chunked migration approach has been deprecated in favor of the intelligent batching system. The new batch size limits handle large workflows automatically.
@@ -211,22 +191,6 @@ output_results/project_name/
 └── README.md           # Project documentation
 ```
 
-### Chunked Migration Output
-```
-output_results/project_name/
-├── src/steps/           # Processor conversions grouped by chunks (e.g., 00_processor.py, 01_processor.py)
-├── chunks/              # Individual chunk processing results and analysis
-├── notebooks/           # Enhanced orchestrator with chunk-aware execution
-├── jobs/                # Multi-task job configurations with cross-chunk dependencies
-│   ├── job.json         # Standard single-task job
-│   └── job.chunked.json # Multi-task job with proper dependencies
-├── conf/                # Migration plans, chunking analysis, and reconstructed workflow
-│   ├── chunking_result.json      # Original chunking analysis
-│   ├── reconstructed_workflow.json # Final merged workflow
-│   └── parameter_contexts.json   # NiFi parameters and controller services
-├── databricks.yml       # Asset bundle configuration
-└── README.md           # Enhanced documentation with chunking statistics
-```
 
 ## Progress Tracking (v2.0)
 
@@ -241,19 +205,19 @@ The migration system now provides comprehensive progress tracking:
 
 **Migration Level:**
 ```
-📋 [MIGRATION] Processing 4 chunks with 87 total processors
-📦 [CHUNK 1/4] Processing 25 processors...
-🎉 [MIGRATION COMPLETE] 87 processors → 87 tasks
+📋 [MIGRATION] Processing 87 total processors in batches
+📦 [BATCH 1/4] Processing 25 processors...
+🎉 [MIGRATION COMPLETE] 87 processors → 45 semantic tasks
 ```
 
 **LLM Batch Level:**
 ```
-🧠 [LLM BATCH] Generating code for 25 processors in chunk_0
+🧠 [LLM BATCH] Generating code for 15 processors in batch_0
 🔍 [LLM BATCH] Processor types: GetFile, EvaluateJsonPath, RouteOnAttribute
 🚀 [LLM BATCH] Sending batch request to databricks-meta-llama-3-3-70b-instruct...
 ✅ [LLM BATCH] Received response, parsing generated code...
-🎯 [LLM BATCH] Successfully parsed 20 code snippets
-✨ [LLM BATCH] Generated 25 processor tasks for chunk_0
+🎯 [LLM BATCH] Successfully parsed 15 code snippets
+✨ [LLM BATCH] Generated 15 processor tasks for batch_0
 ```
 
 **JSON Parsing Recovery (v2.1):**
@@ -264,8 +228,6 @@ The migration system now provides comprehensive progress tracking:
 ```
 
 ## Testing and Validation
-
-The system generates comparison utilities in `tools/eval_tools.py` for validating migration results against original NiFi outputs.
 
 **Performance Monitoring**: Track API call efficiency with the new progress indicators to ensure optimal resource usage.
 

@@ -18,8 +18,6 @@ from databricks_langchain import ChatDatabricks
 
 __all__ = [
     "generate_databricks_code",
-    "get_migration_pattern",
-    "suggest_autoloader_options",
 ]
 
 
@@ -626,81 +624,3 @@ def _track_fallback_processor(
 
 
 # Removed @tool decorator - direct function call approach
-def get_migration_pattern(nifi_component: str, properties: str = "{}") -> str:
-    """
-    Return a human-readable description of the migration pattern for a NiFi component.
-    Includes best practices and a code template when available.
-    """
-    if isinstance(properties, str):
-        try:
-            properties = json.loads(properties)
-        except Exception:
-            properties = {}
-
-    rendered = _get_builtin_pattern(nifi_component, properties)
-    if rendered["equivalent"] != "Unknown":
-        out = [
-            f"**Migration Pattern: {nifi_component} → {rendered['equivalent']}**",
-            "",
-            rendered["description"],
-        ]
-        if rendered["best_practices"]:
-            out += ["", "Best Practices:"]
-            out += [f"- {bp}" for bp in rendered["best_practices"]]
-        if rendered["code"]:
-            out += ["", "Code Template:", "```python", rendered["code"], "```"]
-        return "\n".join(out)
-
-    return (
-        f"**General Migration Guidelines for {nifi_component}**\n"
-        "1. Identify the data flow pattern\n"
-        "2. Map to equivalent Databricks components\n"
-        "3. Implement error handling and monitoring\n"
-        "4. Test with sample data\n"
-        "5. Optimize for performance\n"
-        "6. Document the migration approach\n"
-    )
-
-
-# Removed @tool decorator - direct function call approach
-def suggest_autoloader_options(properties: str = "{}") -> str:
-    """
-    Given NiFi GetFile/ListFile-like properties, suggest Auto Loader code & tips.
-    Returns JSON with keys: code, tips.
-    """
-    try:
-        props = json.loads(properties) if properties else {}
-    except Exception:
-        props = {}
-
-    path = props.get("Input Directory") or props.get("Directory") or "/mnt/raw"
-    fmt_guess = (props.get("File Filter") or "*.json").split(".")[-1].lower()
-    if fmt_guess in ["csv"]:
-        fmt = "csv"
-    elif fmt_guess in ["json"]:
-        fmt = "json"
-    else:
-        fmt = "parquet"
-
-    code = (
-        "from pyspark.sql.functions import *\n"
-        "df = (spark.readStream\n"
-        '      .format("cloudFiles")\n'
-        f'      .option("cloudFiles.format", "{fmt}")\n'
-        '      .option("cloudFiles.inferColumnTypes", "true")\n'
-        '      .option("cloudFiles.schemaEvolutionMode", "addNewColumns")\n'
-        f'      .load("{path}"))'
-    )
-    tips = [
-        "Use cloudFiles.schemaLocation for checkpoint/schema tracking.",
-        "Use cloudFiles.includeExistingFiles=true to backfill once.",
-        "Set cloudFiles.validateOptions for strictness; cleanSource MOVE/DELETE for hygiene.",
-    ]
-
-    result = {
-        "code": code,
-        "tips": tips,
-        "continue_required": False,
-        "tool_name": "suggest_autoloader_options",
-    }
-    return json.dumps(result, indent=2)
