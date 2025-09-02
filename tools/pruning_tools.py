@@ -198,11 +198,11 @@ def detect_data_flow_chains(xml_content: str, pruned_processors_json: str) -> st
             )
 
         # Use existing tools for parsing and DAG construction
-        template_data = json.loads(parse_nifi_template.func(xml_content))
+        template_data = json.loads(parse_nifi_template(xml_content))
         connections = template_data.get("connections", [])
 
         # Build DAG using existing topological sorting
-        dag_result = json.loads(build_migration_plan.func(xml_content))
+        dag_result = json.loads(build_migration_plan(xml_content))
         all_tasks = dag_result.get("tasks", [])
         all_edges = dag_result.get("edges", [])
 

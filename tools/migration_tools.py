@@ -403,7 +403,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                         proc_name = processor.get("name", f"processor_{start+idx}")
                         props = processor.get("properties", {})
                         try:
-                            code = generate_databricks_code.func(
+                            code = generate_databricks_code(
                                 processor_type=proc_type,
                                 properties=json.dumps(props),
                             )
@@ -435,7 +435,7 @@ df.write.format('delta').mode('append').save('/path/to/output')
                 props = processor.get("properties", {})
 
                 try:
-                    code = generate_databricks_code.func(
+                    code = generate_databricks_code(
                         processor_type=proc_type,
                         properties=json.dumps(props),
                     )
@@ -691,7 +691,7 @@ def orchestrate_chunked_nifi_migration(
         xml_text = _read_text(xml_path)
 
         # Step 0: Extract complete workflow structure for connectivity restoration
-        workflow_map_result = json.loads(extract_complete_workflow_map.func(xml_text))
+        workflow_map_result = json.loads(extract_complete_workflow_map(xml_text))
         if "error" in workflow_map_result:
             return json.dumps(
                 {
@@ -707,7 +707,7 @@ def orchestrate_chunked_nifi_migration(
 
         # Step 1: Chunk the XML by process groups
         chunking_result = json.loads(
-            chunk_nifi_xml_by_process_groups.func(
+            chunk_nifi_xml_by_process_groups(
                 xml_content=xml_text, max_processors_per_chunk=effective_max
             )
         )
@@ -743,7 +743,7 @@ def orchestrate_chunked_nifi_migration(
 
             # Process this chunk
             chunk_result = json.loads(
-                process_nifi_chunk.func(
+                process_nifi_chunk(
                     chunk_data=chunk_data, project=project, chunk_index=i
                 )
             )
@@ -777,7 +777,7 @@ def orchestrate_chunked_nifi_migration(
 
         # Step 3: Reconstruct the full workflow with complete connectivity map
         workflow_result = json.loads(
-            reconstruct_full_workflow.func(
+            reconstruct_full_workflow(
                 chunk_results_json=json.dumps(chunk_results),
                 cross_chunk_links_json=json.dumps(cross_chunk_links),
                 workflow_map_json=json.dumps(workflow_map_result),
@@ -833,7 +833,7 @@ def orchestrate_chunked_nifi_migration(
 
         # Step 6: Generate project artifacts
         # Bundle + README
-        bundle_yaml = scaffold_asset_bundle.func(project, job, notebook_path)
+        bundle_yaml = scaffold_asset_bundle(project, job, notebook_path)
         _write_text(out / "databricks.yml", bundle_yaml)
 
         readme = [
@@ -932,7 +932,7 @@ def orchestrate_chunked_nifi_migration(
         print(f"\n🚀 [DEPLOY] Creating Databricks job...")
 
         try:
-            deploy_result = deploy_and_run_job.func(
+            deploy_result = deploy_and_run_job(
                 json.dumps(final_job_config), run_now=run_now
             )
 

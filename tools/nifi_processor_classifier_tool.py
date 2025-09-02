@@ -1215,13 +1215,13 @@ def analyze_workflow_patterns(
         xml_content = f.read()
 
     # Extract processors
-    template_data = json.loads(parse_nifi_template.func(xml_content))
+    template_data = json.loads(parse_nifi_template(xml_content))
     processors = template_data["processors"]
     print(f"📊 [WORKFLOW ANALYSIS] Found {len(processors)} processors")
 
     # Analyze processors using hybrid approach
     analysis_results = json.loads(
-        analyze_processors_batch.func(processors, max_batch_size=20)
+        analyze_processors_batch(processors, max_batch_size=20)
     )
 
     # Create complete analysis data
