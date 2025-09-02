@@ -782,7 +782,7 @@ def analyze_processors_batch(
             processor_type.split(".")[-1] if "." in processor_type else processor_type
         )
 
-        # Check if we can classify with rules (with smart exceptions)
+        # Check if we can classify with rules (with smart exceptions for infrastructure)
         if (
             short_type in DATA_MOVEMENT_PROCESSORS
             or short_type in DATA_TRANSFORMATION_PROCESSORS
@@ -795,9 +795,8 @@ def analyze_processors_batch(
             print(
                 f"📋 [RULE-BASED] {name} ({short_type}) → {result['data_manipulation_type']}"
             )
-
         elif short_type in INFRASTRUCTURE_PROCESSORS:
-            # Smart handling for UpdateAttribute and GenerateFlowFile
+            # Smart handling for infrastructure processors (most are rule-based, some need LLM)
             if short_type == "UpdateAttribute" and _is_sql_generating_updateattribute(
                 properties, name
             ):
@@ -812,7 +811,7 @@ def analyze_processors_batch(
                 print(f"🔍 [SMART DETECTION] {name} generates data - sending to LLM")
                 llm_needed_processors.append(proc)
             else:
-                # Normal case: Infrastructure processor
+                # Normal case: Most infrastructure processors use rules
                 result = classify_processor_hybrid(
                     processor_type, properties, name, proc_id
                 )
