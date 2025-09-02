@@ -105,6 +105,18 @@ def migrate_nifi_to_databricks_simplified(
 
     # Step 4: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
+
+    # Debug: Check what we're passing to pruning
+    try:
+        debug_data = json.loads(processor_classifications)
+        if "processor_classifications" in debug_data:
+            debug_count = len(debug_data["processor_classifications"])
+            print(f"🔍 PRUNING DEBUG: Found {debug_count} processor classifications")
+        else:
+            print(f"🔍 PRUNING DEBUG: Keys in data: {list(debug_data.keys())}")
+    except:
+        print(f"🔍 PRUNING DEBUG: Could not parse processor_classifications JSON")
+
     pruned_result = prune_infrastructure_processors(processor_classifications)
     # print(f"🎯 Pruned Result: {pruned_result}")  # Comment out detailed JSON output
 
