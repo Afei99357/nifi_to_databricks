@@ -104,3 +104,8 @@ derby.log
 *.csv
 *.json.gz
 *.avro
+
+# Local planning and documentation files
+*_plan.md
+*_notes.md
+planning/
