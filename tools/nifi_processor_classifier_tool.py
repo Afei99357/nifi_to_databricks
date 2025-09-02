@@ -93,6 +93,76 @@ LLM_ANALYSIS_NEEDED = {
 }
 
 
+def _is_script_containing_updateattribute(
+    properties: Dict[str, Any], name: str
+) -> bool:
+    """
+    Check if UpdateAttribute contains script assets that need migration.
+    These processors configure script paths, commands, and arguments for execution.
+    """
+    # Check for script-related property keys
+    script_property_keys = [
+        "script",
+        "command",
+        "executable",
+        "shell",
+        "bash",
+        "ssh",
+        "alternative_load_script",
+        "load_script",
+        "script_path",
+        "command_path",
+        "executable_path",
+        "shell_script",
+    ]
+
+    script_indicators = [
+        ".sh",
+        ".bash",
+        ".py",
+        ".pl",
+        ".sql",
+        "~/scripts/",
+        "/scripts/",
+        "/bin/",
+        "/usr/bin/",
+        "ssh ",
+        "bash ",
+        "python ",
+        "perl ",
+        "sh ",
+    ]
+
+    # Check property keys and values for script content
+    for key, value in properties.items():
+        key_lower = key.lower().replace("_", "").replace("-", "")
+
+        # Check if property key suggests script content
+        for script_key in script_property_keys:
+            if script_key.replace("_", "") in key_lower:
+                return True
+
+        # Check property values for script indicators
+        if value:
+            value_str = str(value).lower()
+            for indicator in script_indicators:
+                if indicator in value_str:
+                    return True
+
+    # Check name for script-related terms (secondary indicator)
+    name_lower = name.lower()
+    name_script_terms = ["script", "command", "load", "batch", "configuration", "setup"]
+    if any(term in name_lower for term in name_script_terms):
+        # Only return True for name match if there's also property evidence
+        for value in properties.values():
+            if value and any(
+                indicator in str(value).lower() for indicator in script_indicators
+            ):
+                return True
+
+    return False
+
+
 def _is_sql_generating_updateattribute(properties: Dict[str, Any], name: str) -> bool:
     """
     Check if UpdateAttribute generates SQL or processing logic (rare case).
@@ -797,11 +867,12 @@ def analyze_processors_batch(
             )
         elif short_type in INFRASTRUCTURE_PROCESSORS:
             # Smart handling for infrastructure processors (most are rule-based, some need LLM)
-            if short_type == "UpdateAttribute" and _is_sql_generating_updateattribute(
-                properties, name
+            if short_type == "UpdateAttribute" and (
+                _is_sql_generating_updateattribute(properties, name)
+                or _is_script_containing_updateattribute(properties, name)
             ):
-                # Rare case: UpdateAttribute generates SQL - needs LLM analysis
-                # SQL processor detected
+                # Rare case: UpdateAttribute generates SQL or contains scripts - needs LLM analysis
+                # Special UpdateAttribute processor detected
                 llm_needed_processors.append(proc)
             elif (
                 short_type == "GenerateFlowFile"
