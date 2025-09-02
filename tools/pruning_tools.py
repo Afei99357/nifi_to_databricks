@@ -53,6 +53,9 @@ def prune_infrastructure_processors(classification_results_json: str) -> str:
                 classifications = classification_data.get(
                     "classification_breakdown", []
                 )
+            elif "processor_classifications" in classification_data:
+                # Handle classify_processor_types format
+                classifications = classification_data["processor_classifications"]
             else:
                 # Direct classification results
                 classifications = (
