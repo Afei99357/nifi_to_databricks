@@ -201,14 +201,31 @@ def classify_processor_types(xml_path: str, _reuse_analysis: str = None) -> str:
         # Format for agent consumption with migration guidance
         detailed_classifications = []
         for processor in classification_results:
+            # Map the actual data keys from analysis result
+            processor_type = processor.get("processor_type", "Unknown")
+            # Extract just the class name from full Java class path
+            if "." in processor_type:
+                type_name = processor_type.split(".")[-1]
+            else:
+                type_name = processor_type
+
+            # Map data_manipulation_type to classification
+            classification = processor.get("data_manipulation_type", "unknown")
+
             detailed_classifications.append(
                 {
                     "name": processor.get("name", "Unknown"),
-                    "type": processor.get("type", "Unknown"),
-                    "classification": processor.get("classification", "unknown"),
-                    "reasoning": processor.get("reasoning", "No reasoning provided"),
-                    "migration_action": _get_migration_action(processor),
-                    "priority": _get_migration_priority(processor),
+                    "type": type_name,
+                    "classification": classification,
+                    "reasoning": processor.get(
+                        "actual_data_processing", "No reasoning provided"
+                    ),
+                    "migration_action": _get_migration_action(
+                        {"classification": classification}
+                    ),
+                    "priority": _get_migration_priority(
+                        {"classification": classification, "type": type_name}
+                    ),
                 }
             )
 

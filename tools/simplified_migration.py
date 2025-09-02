@@ -72,22 +72,6 @@ def migrate_nifi_to_databricks_simplified(
         xml_path=xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
     )
 
-    # DEBUG: Show what the analysis returned
-    print(f"DEBUG: Raw analysis result type: {type(analysis_result)}")
-    if isinstance(analysis_result, str):
-        print(f"DEBUG: Analysis result length: {len(analysis_result)} characters")
-        try:
-            parsed = json.loads(analysis_result)
-            print(
-                f"DEBUG: Parsed analysis contains {len(parsed.get('classification_results', []))} classification results"
-            )
-        except Exception as e:
-            print(f"DEBUG: Failed to parse raw analysis: {e}")
-    else:
-        print(
-            f"DEBUG: Analysis result is dict with keys: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'not a dict'}"
-        )
-
     # Create workflow analysis summary from the single analysis
     workflow_analysis = analyze_nifi_workflow_detailed(
         xml_path,
@@ -97,20 +81,6 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"📊 Workflow Analysis: {workflow_analysis}")
 
-    # DEBUG: Parse and show workflow analysis
-    try:
-        workflow_data = json.loads(workflow_analysis)
-        processor_counts = workflow_data.get("processor_counts", {})
-        print(f"DEBUG: Workflow processor counts: {processor_counts}")
-        print(f"DEBUG: Total processors found: {processor_counts.get('total', 0)}")
-        print(
-            f"DEBUG: Data transformation: {processor_counts.get('data_transformation', 0)}"
-        )
-        print(f"DEBUG: Data movement: {processor_counts.get('data_movement', 0)}")
-        print(f"DEBUG: Infrastructure: {processor_counts.get('infrastructure', 0)}")
-    except Exception as e:
-        print(f"DEBUG: Failed to parse workflow analysis: {e}")
-
     # Create processor classifications from the same analysis
     processor_classifications = classify_processor_types(
         xml_path,
@@ -118,54 +88,10 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"🏷️  Processor Classifications: {processor_classifications}")
 
-    # DEBUG: Parse and show classification summary
-    import json
-
-    try:
-        classifications_data = json.loads(processor_classifications)
-        print(
-            f"DEBUG: Classification summary: {classifications_data.get('summary', {})}"
-        )
-        classifications_list = classifications_data.get("processor_classifications", [])
-        print(f"DEBUG: Found {len(classifications_list)} classified processors")
-        for i, proc in enumerate(classifications_list[:3]):  # Show first 3
-            print(
-                f"  {i+1}. {proc.get('name', 'Unknown')} ({proc.get('type', 'Unknown')}) -> {proc.get('classification', 'unknown')}"
-            )
-        if len(classifications_list) > 3:
-            print(f"  ... and {len(classifications_list) - 3} more processors")
-    except Exception as e:
-        print(f"DEBUG: Failed to parse classifications: {e}")
-
     # Step 4: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
     pruned_result = prune_infrastructure_processors(processor_classifications)
     print(f"🎯 Pruned Result: {pruned_result}")
-
-    # DEBUG: Parse and show pruning results
-    try:
-        pruned_data = (
-            json.loads(pruned_result)
-            if isinstance(pruned_result, str)
-            else pruned_result
-        )
-        print(f"DEBUG: Pruning summary:")
-        print(f"  Original count: {pruned_data.get('original_count', 'unknown')}")
-        print(f"  Pruned count: {pruned_data.get('pruned_count', 'unknown')}")
-        print(
-            f"  Essential processors: {len(pruned_data.get('pruned_processors', []))}"
-        )
-        essential_processors = pruned_data.get("pruned_processors", [])
-        for i, proc in enumerate(essential_processors[:3]):  # Show first 3 essential
-            print(
-                f"    {i+1}. {proc.get('name', 'Unknown')} ({proc.get('type', 'Unknown')}) -> {proc.get('classification', 'unknown')}"
-            )
-        if len(essential_processors) > 3:
-            print(
-                f"    ... and {len(essential_processors) - 3} more essential processors"
-            )
-    except Exception as e:
-        print(f"DEBUG: Failed to parse pruning results: {e}")
 
     # Step 5: Detect data flow chains
     print("🔗 Detecting semantic data flow chains...")
