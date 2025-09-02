@@ -732,7 +732,7 @@ def orchestrate_focused_nifi_migration(
 
         total_complex = len(data_transformation_procs) + len(external_processing_procs)
         print(
-            f"📊 [PROCESSOR BREAKDOWN] {len(essential_processors)} essential processors ({total_complex} complex, {len(data_movement_procs)} simple)"
+            f"📊 [PROCESSOR BREAKDOWN] {len(pruned_processors)} essential processors ({total_complex} complex, {len(data_movement_procs)} simple)"
         )
 
         # Setup output directory
