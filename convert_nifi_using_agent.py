@@ -102,93 +102,75 @@ print("=" * 60)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 🔬 Step 3.5: Test New Agent Analysis Tools
+# MAGIC ### 🔬 Step 3.5: Test Simplified Migration Pipeline
 # MAGIC
-# MAGIC **NEW**: Test the agent's new detailed workflow analysis capabilities that provide exact processor breakdown.
+# MAGIC **NEW**: Test the simplified direct function call approach without agent complexity.
 
 # COMMAND ----------
 
-print("🧪 TESTING NEW AGENT ANALYSIS TOOLS")
+print("🧪 TESTING SIMPLIFIED MIGRATION PIPELINE")
 print("=" * 60)
 
-# Test the new analyze_nifi_workflow_detailed tool directly
-req_analysis = ResponsesAgentRequest(
-    input=[
-        {
-            "role": "user",
-            "content": (
-                "Please use analyze_nifi_workflow_detailed to analyze the workflow at "
-                "/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml. "
-                "I need to see the exact breakdown of how many processors are DATA_TRANSFORMATION_PROCESSORS, "
-                "DATA_MOVEMENT_PROCESSORS, and INFRASTRUCTURE_PROCESSORS."
-            ),
-        }
-    ]
+# Import the new simplified migration functions
+from tools.simplified_migration import (
+    analyze_nifi_workflow_only,
+    migrate_nifi_to_databricks_simplified,
 )
 
-print("🔍 Requesting detailed processor classification analysis...")
-analysis_resp = AGENT.predict(req_analysis)
+# Option A: Analysis only (fast, no migration)
+print("🔍 Option A: Analysis-only workflow understanding...")
+analysis_result = analyze_nifi_workflow_only(
+    xml_path="/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml"
+)
 
 print("✅ Analysis complete!")
-print("\n📊 PROCESSOR BREAKDOWN RESULTS:")
+print("\n📊 ANALYSIS RESULTS SUMMARY:")
 print("=" * 60)
-
-# Display the analysis results
-display_agent_response(analysis_resp)
-
+print(f"🔍 Workflow Analysis: {analysis_result.get('workflow_analysis', 'N/A')}")
+print(
+    f"🏷️  Processor Classifications: {analysis_result.get('processor_classifications', 'N/A')}"
+)
+print(f"✂️  Pruned Processors: {analysis_result.get('pruned_processors', 'N/A')}")
 print("=" * 60)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 🚀 Step 4: Intelligent Multi-Round Agent Migration
+# MAGIC ### 🚀 Step 4: Simplified Complete Migration
 # MAGIC
-# MAGIC **NEW**: The agent now intelligently orchestrates complete migrations through multiple tool calls!
+# MAGIC **NEW**: Direct function call approach - complete migration without agent complexity!
 
 # COMMAND ----------
 
 # Using imports from top cell
 current = datetime.now().strftime("%Y%m%d%H%M%S")
 
-print("🤖 INTELLIGENT AGENT MIGRATION")
-print("🧠 Agent will analyze → decide → migrate → complete automatically")
+print("🚀 SIMPLIFIED COMPLETE MIGRATION")
+print("🎯 Direct function calls: analyze → prune → chain → migrate")
 
-# Let the intelligent agent handle the complete migration workflow
-req = ResponsesAgentRequest(
-    input=[
-        {
-            "role": "user",
-            "content": (
-                f"I have a complex NiFi workflow with 58+ processors at "
-                f"/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml. "
-                f"Please analyze it and then perform a complete migration to Databricks. "
-                f"Use output directory /Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results "
-                f"with project name intelligent_feedback_{current}. "
-                f"The notebook path should be /Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/intelligent_feedback_{current}/main "
-                f"and use existing cluster 0722-181403-vd3u4c6r but don't run it yet (run_now=false)."
-            ),
-        }
-    ]
+# Option B: Complete migration with semantic analysis
+print("\n🔍 Option B: Complete migration with analysis pipeline...")
+complete_result = migrate_nifi_to_databricks_simplified(
+    xml_path="/Volumes/eliao/nifi_to_databricks/nifi_files/ICN8_BRS_Feedback.xml",
+    out_dir="/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results",
+    project=f"simplified_feedback_{current}",
+    notebook_path=f"/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/simplified_feedback_{current}/main",
+    deploy=False,  # Don't auto-deploy, just create
 )
 
-print("🚀 Starting intelligent agent migration...")
-resp = AGENT.predict(req)
-print("✅ Intelligent multi-round migration complete!")
+print("✅ Simplified migration complete!")
 
-# Display the complex migration results using utilities
-print("\n📋 COMPLEX MIGRATION RESULTS:")
+# Display the migration results
+print("\n📋 MIGRATION RESULTS SUMMARY:")
 print("=" * 60)
-
-# Use utility functions from top imports
-
-# Save complex migration response to markdown
-markdown_file = save_agent_summary_to_markdown(
-    resp,
-    f"/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/complex_workflow_migration_{current}.md",
+print(
+    f"✅ Migration Result: {complete_result['migration_result'].get('status', 'N/A')}"
 )
-
-# Display in clean format
-display_agent_response(resp)
+print(f"📁 Output Directory: {complete_result['configuration']['out_dir']}")
+print(f"🏷️  Project Name: {complete_result['configuration']['project']}")
+print(
+    f"🔍 Analysis Summary: {complete_result['analysis'].get('workflow_analysis', 'N/A')}"
+)
 
 print("=" * 60)
 
@@ -244,21 +226,21 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 🆚 Comparison: Intelligent vs Legacy Migration Methods
+# MAGIC ## 🆚 Comparison: Agent vs Simplified Migration Methods
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 🎯 What's Different About Intelligent Migration?
+# MAGIC ### 🎯 What's Different About Simplified Migration?
 # MAGIC
-# MAGIC | **Legacy Method** | **Intelligent Method** |
+# MAGIC | **Agent Method** | **Simplified Method** |
 # MAGIC |-------------------|-------------------------|
-# MAGIC | Hardcoded processor templates | LLM analyzes what each processor actually does |
-# MAGIC | Generic "data processing" jobs | Understands business purpose of workflows |
-# MAGIC | All workflows treated the same | Distinguishes data transformation vs infrastructure |
-# MAGIC | No workflow understanding | Explains workflow in business terms first |
-# MAGIC | Manual architecture decisions | AI-recommended architecture patterns |
-# MAGIC | Basic text output | Rich markdown reports with insights and recommendations |
+# MAGIC | Multi-round agent orchestration | Direct function pipeline |
+# MAGIC | LangGraph complexity | Simple Python function calls |
+# MAGIC | Agent decides next steps | Pre-defined linear workflow |
+# MAGIC | Complex conversation state | Stateless function execution |
+# MAGIC | Multi-round tool calls | Single execution path |
+# MAGIC | Agent reasoning overhead | Direct workflow execution |
 # MAGIC
 # MAGIC ### 🧠 New Intelligence Features:
 # MAGIC
@@ -355,45 +337,46 @@ else:
 # MAGIC )
 # MAGIC ```
 # MAGIC
-# MAGIC ### **Option 2: Intelligent Agent Orchestration (Recommended for Complete Migrations)**
+# MAGIC ### **Option 2: Simplified Direct Migration (Recommended for Complete Migrations)**
 # MAGIC
-# MAGIC **NEW Multi-Round Agent - Complete End-to-End Migration:**
+# MAGIC **NEW Direct Function Pipeline - Complete End-to-End Migration:**
 # MAGIC ```python
-# MAGIC req = ResponsesAgentRequest(input=[{
-# MAGIC     "role": "user",
-# MAGIC     "content": "I have a NiFi workflow at /path/to/workflow.xml with 75+ processors. Please analyze it and perform a complete migration to Databricks using output directory /output and project name my_project."
-# MAGIC }])
-# MAGIC resp = AGENT.predict(req)
+# MAGIC from tools.simplified_migration import migrate_nifi_to_databricks_simplified
+# MAGIC
+# MAGIC # Complete migration in one function call
+# MAGIC result = migrate_nifi_to_databricks_simplified(
+# MAGIC     xml_path="/path/to/workflow.xml",
+# MAGIC     out_dir="/output",
+# MAGIC     project="my_project",
+# MAGIC     deploy=False
+# MAGIC )
 # MAGIC ```
 # MAGIC
 # MAGIC **What Happens Automatically:**
-# MAGIC - 🔄 **Round 1**: Agent analyzes workflow with `analyze_nifi_workflow_intelligence`
-# MAGIC - 🧠 **Decision**: Agent determines workflow has 75 processors → needs chunked migration
-# MAGIC - 🔄 **Round 2**: Agent calls `orchestrate_chunked_nifi_migration`
-# MAGIC - ✅ **Complete**: Agent detects migration success and stops
+# MAGIC - 🔍 **Step 1**: Analyze workflow and classify processors
+# MAGIC - ✂️ **Step 2**: Prune infrastructure-only processors
+# MAGIC - 🔗 **Step 3**: Detect semantic data flow chains
+# MAGIC - 🌊 **Step 4**: Create semantic data flows
+# MAGIC - 🧠 **Step 5**: Execute intelligent migration
+# MAGIC - ✅ **Complete**: Return comprehensive results
 # MAGIC
-# MAGIC **Alternative - Step by Step Control:**
+# MAGIC **Alternative - Analysis Only:**
 # MAGIC ```python
-# MAGIC # Step 1: Analysis only
-# MAGIC req = ResponsesAgentRequest(input=[{
-# MAGIC     "role": "user",
-# MAGIC     "content": "Analyze the NiFi workflow at /path/to/workflow.xml and tell me about its complexity."
-# MAGIC }])
-# MAGIC analysis_resp = AGENT.predict(req)
+# MAGIC from tools.simplified_migration import analyze_nifi_workflow_only
 # MAGIC
-# MAGIC # Step 2: Migration based on analysis
-# MAGIC req = ResponsesAgentRequest(input=[{
-# MAGIC     "role": "user",
-# MAGIC     "content": "Based on the analysis, migrate this workflow using the appropriate approach."
-# MAGIC }])
-# MAGIC migration_resp = AGENT.predict(req)
+# MAGIC # Analysis only (fast, no migration)
+# MAGIC analysis = analyze_nifi_workflow_only("/path/to/workflow.xml")
+# MAGIC print(analysis['workflow_analysis'])
+# MAGIC print(analysis['processor_classifications'])
+# MAGIC print(analysis['semantic_flows'])
 # MAGIC ```
 # MAGIC
 # MAGIC ### **Key Benefits:**
-# MAGIC - 🤖 **Smart Agent**: Analyzes workflow and chooses the right migration approach automatically
-# MAGIC - 🔄 **Complete Migration**: Handles everything from analysis to deployment in one request
+# MAGIC - 🚀 **Simplified Pipeline**: Linear function calls without agent complexity
+# MAGIC - 🔄 **Complete Migration**: Handles everything from analysis to deployment in one function
 # MAGIC - 📊 **Business Understanding**: Explains what your workflow actually does
 # MAGIC - 🎯 **Best Architecture**: Recommends optimal Databricks patterns for your data
+# MAGIC - ⚡ **Fast Execution**: No multi-round agent overhead or conversation state
 # MAGIC
 # MAGIC ### **Try Your Own Workflows:**
 # MAGIC Replace the file paths above with your NiFi XML files and run the cells!

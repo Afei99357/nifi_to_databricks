@@ -31,7 +31,7 @@ The system provides both programmatic APIs and an agent-based interface for auto
   - `tools/dlt_tools.py`: Delta Live Tables pipeline generation
   - `tools/eval_tools.py`: Pipeline validation and comparison utilities
 
-# Pattern Registry removed - generates fresh code each time
+# Migration approaches removed - use simplified_migration.py for direct function calls
 
 - **Configuration**: Environment and settings management
   - `config/settings.py`: Environment variable loading and logging setup
@@ -54,32 +54,38 @@ The system provides both programmatic APIs and an agent-based interface for auto
 
 ## Common Development Tasks
 
-### Testing the Migration Agent
+### Testing the Migration System
 
-#### Intelligent Migration (Recommended)
-The agent automatically analyzes your NiFi workflow and chooses the optimal Databricks architecture:
+#### Simplified Migration (Recommended)
+Direct function call approach without agent complexity:
 
 ```python
-# In Databricks notebook - Intelligent Architecture Decision
-from agents import AGENT
-from mlflow.types.responses import ResponsesAgentRequest
+# In Databricks notebook - Direct Function Pipeline
+from tools.simplified_migration import migrate_nifi_to_databricks_simplified, analyze_nifi_workflow_only
 
-req = ResponsesAgentRequest(input=[{
-    "role": "user",
-    "content": "Run orchestrate_intelligent_nifi_migration with xml_path=<path> out_dir=<dir> project=<name>"
-}])
+# Complete migration with semantic analysis
+result = migrate_nifi_to_databricks_simplified(
+    xml_path="<path>",
+    out_dir="<dir>",
+    project="<name>",
+    notebook_path="<notebook_path>",
+    deploy=False
+)
 
-resp = AGENT.predict(req)
+# Or analysis only (fast, no migration)
+analysis = analyze_nifi_workflow_only("<path>")
 ```
 
 This will:
-1. Analyze the NiFi XML for processor types and patterns
-2. Recommend optimal architecture (Databricks Jobs, DLT Pipeline, or Structured Streaming)
-3. Execute the appropriate migration strategy
-4. Save architecture analysis results
+1. Analyze the NiFi XML and classify processors
+2. Prune infrastructure-only processors
+3. Detect semantic data flow chains
+4. Create optimized semantic flows
+5. Execute intelligent migration
+6. Return comprehensive results
 
-#### Manual Migration (Legacy)
-For when you want to specify the approach manually:
+#### Agent Migration (Legacy)
+For when you prefer agent orchestration (adds complexity):
 
 ```python
 # In Databricks notebook
@@ -103,11 +109,30 @@ resp = AGENT.predict(req)
 
 ### Running Migrations Programmatically
 
-#### Intelligent Migration (Recommended)
+#### Simplified Migration (Recommended)
+```python
+from tools.simplified_migration import migrate_nifi_to_databricks_simplified
+
+# Complete migration with semantic analysis pipeline
+result = migrate_nifi_to_databricks_simplified(
+    xml_path="nifi_pipeline_file/example.xml",
+    out_dir="output_results/simplified_project",
+    project="my_simplified_project",
+    notebook_path="/Workspace/Users/me@company.com/project/main",
+    deploy=False  # Set to True to deploy automatically
+)
+
+# Access all results
+print("Migration:", result['migration_result'])
+print("Analysis:", result['analysis'])
+print("Configuration:", result['configuration'])
+```
+
+#### Legacy Intelligent Migration
 ```python
 from tools.migration_tools import orchestrate_intelligent_nifi_migration
 
-# Intelligent migration - automatically chooses best architecture
+# Legacy agent-based migration - automatically chooses best architecture
 result = orchestrate_intelligent_nifi_migration(
     xml_path="nifi_pipeline_file/example.xml",
     out_dir="output_results/intelligent_project",
