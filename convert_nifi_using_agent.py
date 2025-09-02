@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %pip install -U -qqqq backoff uv json-repair
+# MAGIC %pip install -U -qqqq backoff databricks-langchain uv json-repair
 
 # COMMAND ----------
 
