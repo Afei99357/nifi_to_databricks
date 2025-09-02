@@ -840,7 +840,7 @@ def orchestrate_focused_nifi_migration(
 
         # Deploy if requested
         deploy_result = "Not deployed"
-        if run_now and existing_cluster_id:
+        if run_now:
             try:
                 print(f"🚀 [DEPLOY] Deploying focused migration job...")
                 deploy_result = deploy_and_run_job(
