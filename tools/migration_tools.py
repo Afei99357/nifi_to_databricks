@@ -21,12 +21,12 @@ from utils import write_text as _write_text
 # ChatDatabricks and json_repair will be imported at runtime when needed
 
 
-def __repair_json_if_available_if_available(content: str) -> str:
+def _repair_json_if_available(content: str) -> str:
     """Try to repair JSON using json_repair if available, otherwise return as-is."""
     try:
-        from json_repair import _repair_json_if_available
+        from json_repair import repair_json
 
-        return _repair_json_if_available(content)
+        return repair_json(content)
     except ImportError:
         # Fallback: return content as-is if json_repair not available
         return content
