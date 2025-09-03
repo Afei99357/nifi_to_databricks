@@ -590,10 +590,97 @@ def classify_processor_hybrid(
             "analysis_method": "rule_based_transformation",
         }
 
-    # 4. LLM ANALYSIS: For ambiguous processors or unknown types
+    # 4. RULE-BASED: Check for simple file operations before LLM analysis
+    if short_type == "ExecuteStreamCommand" and _is_simple_file_operation(properties):
+        manipulation_type = "infrastructure_only"
+        return {
+            "processor_type": processor_type,
+            "properties": properties,
+            "id": proc_id,
+            "name": name,
+            "data_manipulation_type": manipulation_type,
+            "actual_data_processing": f"Simple file operation: {_get_file_operation_description(properties)}",
+            "transforms_data_content": False,
+            "business_purpose": f"File management: {name}",
+            "data_impact_level": _determine_impact_level(
+                processor_type, manipulation_type, name, properties
+            ),
+            "key_operations": [_get_file_operation(properties)],
+            "analysis_method": "rule_based_file_operation",
+        }
+
+    # 5. LLM ANALYSIS: For truly ambiguous processors or unknown types
     return _analyze_with_enhanced_llm(
         processor_type, properties, name, proc_id, short_type
     )
+
+
+def _is_simple_file_operation(properties: Dict[str, Any]) -> bool:
+    """
+    Check if ExecuteStreamCommand is a simple file operation (mv, cp, rm, mkdir, etc).
+    These are basic file system operations that should be classified as infrastructure.
+    """
+    command_path = properties.get("Command Path", "")
+    if not command_path:
+        return False
+
+    # Simple file operations that are infrastructure
+    simple_file_commands = [
+        "/bin/mv",  # move files
+        "/bin/cp",  # copy files
+        "/bin/rm",  # remove files
+        "/bin/mkdir",  # create directories
+        "/bin/rmdir",  # remove directories
+        "/usr/bin/mv",
+        "/usr/bin/cp",
+        "/usr/bin/rm",
+        "/usr/bin/mkdir",
+        "/usr/bin/rmdir",
+        "mv",  # without full path
+        "cp",
+        "rm",
+        "mkdir",
+        "rmdir",
+    ]
+
+    return command_path in simple_file_commands
+
+
+def _get_file_operation_description(properties: Dict[str, Any]) -> str:
+    """Get description for file operation based on command."""
+    command_path = properties.get("Command Path", "")
+    command_args = properties.get("Command Arguments", "")
+
+    if "/mv" in command_path or command_path == "mv":
+        return f"moving files ({command_args})"
+    elif "/cp" in command_path or command_path == "cp":
+        return f"copying files ({command_args})"
+    elif "/rm" in command_path or command_path == "rm":
+        return f"removing files ({command_args})"
+    elif "/mkdir" in command_path or command_path == "mkdir":
+        return f"creating directories ({command_args})"
+    elif "/rmdir" in command_path or command_path == "rmdir":
+        return f"removing directories ({command_args})"
+    else:
+        return f"file system operation ({command_path})"
+
+
+def _get_file_operation(properties: Dict[str, Any]) -> str:
+    """Get key operation name for file operations."""
+    command_path = properties.get("Command Path", "")
+
+    if "/mv" in command_path or command_path == "mv":
+        return "file_move"
+    elif "/cp" in command_path or command_path == "cp":
+        return "file_copy"
+    elif "/rm" in command_path or command_path == "rm":
+        return "file_remove"
+    elif "/mkdir" in command_path or command_path == "mkdir":
+        return "directory_create"
+    elif "/rmdir" in command_path or command_path == "rmdir":
+        return "directory_remove"
+    else:
+        return "file_operation"
 
 
 def _get_infrastructure_description(short_type: str) -> str:
