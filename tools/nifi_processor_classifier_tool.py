@@ -1397,6 +1397,10 @@ def analyze_workflow_patterns(
     base_filename = os.path.splitext(os.path.basename(xml_path))[0]
     json_path = os.path.join(output_dir, f"{base_filename}_workflow_analysis.json")
 
+    # Ensure the directory containing the json file exists
+    json_dir = os.path.dirname(json_path)
+    os.makedirs(json_dir, exist_ok=True)
+
     # Save JSON analysis
     with open(json_path, "w") as f:
         json.dump(workflow_analysis, f, indent=2)
