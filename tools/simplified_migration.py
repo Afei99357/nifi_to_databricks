@@ -10,11 +10,8 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
-from tools.asset_discovery_tools import (
-    extract_workflow_assets,
-    generate_asset_summary_report,
-    save_asset_catalog,
-)
+
+# Asset discovery removed - focus on business migration guide only
 from tools.migration_tools import orchestrate_focused_nifi_migration
 from tools.nifi_processor_classifier_tool import (
     analyze_processors_batch,
@@ -159,32 +156,13 @@ def migrate_nifi_to_databricks_simplified(
     else:
         analysis_data = analysis_result
 
-    # Extract comprehensive asset catalog
-    workflow_assets = extract_workflow_assets(analysis_data)
+    print("📋 Asset discovery skipped - focusing on business migration guide")
 
-    # Save asset catalog and summary
-    asset_catalog_path = save_asset_catalog(workflow_assets, f"{out_dir}/{project}")
-    asset_summary_path = generate_asset_summary_report(
-        workflow_assets, f"{out_dir}/{project}"
+    # Generate essential processors report for manual review
+    essential_report_path = _generate_essential_processors_report(
+        pruned_result, f"{out_dir}/{project}"
     )
-
-    print(f"📋 Asset catalog saved: {asset_catalog_path}")
-    print(f"📄 Asset summary saved: {asset_summary_path}")
-
-    # Show key findings
-    asset_summary = workflow_assets.get("asset_summary", {})
-    if asset_summary.get("total_script_files", 0) > 0:
-        print(
-            f"🔍 Found {asset_summary['total_script_files']} script files requiring manual migration"
-        )
-    if asset_summary.get("total_hdfs_paths", 0) > 0:
-        print(
-            f"🔍 Found {asset_summary['total_hdfs_paths']} HDFS paths needing Unity Catalog migration"
-        )
-    if asset_summary.get("total_table_references", 0) > 0:
-        print(
-            f"🔍 Found {asset_summary['total_table_references']} table references for schema mapping"
-        )
+    print(f"📋 Essential processors report: {essential_report_path}")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
     print(
@@ -224,17 +202,7 @@ def migrate_nifi_to_databricks_simplified(
             "data_flow_chains": chains_result,
             "semantic_flows": semantic_flows,
         },
-        "asset_discovery": {
-            "workflow_assets": workflow_assets,
-            "asset_catalog_path": asset_catalog_path,
-            "asset_summary_path": asset_summary_path,
-            "summary_stats": {
-                "script_files": asset_summary.get("total_script_files", 0),
-                "hdfs_paths": asset_summary.get("total_hdfs_paths", 0),
-                "table_references": asset_summary.get("total_table_references", 0),
-                "sql_statements": asset_summary.get("total_sql_statements", 0),
-            },
-        },
+        # Asset discovery removed - business migration guide focus
         "configuration": {
             "xml_path": xml_path,
             "out_dir": out_dir,
@@ -306,3 +274,149 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
 
     print("✅ Analysis completed!")
     return analysis_result
+
+
+def _generate_essential_processors_report(pruned_result, output_dir: str) -> str:
+    """Generate a clean, focused report of essential processors for manual review."""
+
+    # Parse pruned result
+    if isinstance(pruned_result, str):
+        pruned_data = json.loads(pruned_result)
+    else:
+        pruned_data = pruned_result
+
+    processors = pruned_data.get("pruned_processors", [])
+
+    # Group by classification for organization
+    by_classification = {}
+    for proc in processors:
+        classification = proc.get("classification", "unknown")
+        if classification not in by_classification:
+            by_classification[classification] = []
+        by_classification[classification].append(proc)
+
+    # Generate the report
+    report_lines = [
+        "# Essential Processors - Manual Review",
+        "",
+        "## Summary",
+        f"- **Total Essential Processors**: {len(processors)} (after infrastructure pruning)",
+    ]
+
+    # Add classification breakdown
+    for classification, procs in by_classification.items():
+        count = len(procs)
+        class_name = classification.replace("_", " ").title()
+        report_lines.append(
+            f"- **{class_name}**: {count} processor{'s' if count != 1 else ''}"
+        )
+
+    report_lines.extend(["", "---", ""])
+
+    # Detail sections by classification
+    classification_order = [
+        "data_movement",
+        "data_transformation",
+        "external_processing",
+        "unknown",
+    ]
+
+    for classification in classification_order:
+        if classification not in by_classification:
+            continue
+
+        processors_list = by_classification[classification]
+        class_name = classification.replace("_", " ").title()
+
+        report_lines.extend([f"## {class_name} Processors", ""])
+
+        for proc in processors_list:
+            name = proc.get("name", "Unknown")
+            proc_type = proc.get("type", "Unknown")
+            properties = proc.get("properties", {})
+
+            report_lines.append(f'### {proc_type} - "{name}"')
+
+            # Extract key details based on processor type
+            key_details = _extract_processor_key_details(proc_type, name, properties)
+            if key_details:
+                report_lines.extend(key_details)
+
+            # Add migration suggestion
+            migration_hint = _get_migration_hint(classification, proc_type)
+            if migration_hint:
+                report_lines.extend([f"- **Migration**: {migration_hint}", ""])
+            else:
+                report_lines.append("")
+
+    # Write to file
+    report_path = f"{output_dir}/essential_processors.md"
+    with open(report_path, "w") as f:
+        f.write("\n".join(report_lines))
+
+    return report_path
+
+
+def _extract_processor_key_details(proc_type: str, name: str, properties: dict) -> list:
+    """Extract the most important details for manual review."""
+    details = []
+
+    if proc_type == "ListFile":
+        input_dir = properties.get("Input Directory", "")
+        file_filter = properties.get("File Filter", "")
+        if input_dir:
+            details.append(f"- **Directory**: `{input_dir}`")
+        if file_filter and file_filter != ".*":
+            details.append(f"- **File Pattern**: `{file_filter}`")
+
+    elif proc_type == "ExecuteStreamCommand":
+        command = properties.get("Command Path", "")
+        args = properties.get("Command Arguments", "")
+        if command:
+            details.append(f"- **Command**: `{command}`")
+        if args and len(args) < 100:  # Only show short args
+            details.append(f"- **Arguments**: `{args}`")
+        elif "impala" in args.lower() or "sql" in args.lower():
+            details.append("- **Purpose**: Database/SQL operations")
+        elif "script" in args.lower():
+            details.append("- **Purpose**: Custom script execution")
+
+    elif proc_type == "PutHDFS":
+        directory = properties.get("Directory", "")
+        if directory:
+            details.append(f"- **Output Directory**: `{directory}`")
+
+    elif proc_type == "PutSFTP":
+        hostname = properties.get("Hostname", "")
+        remote_path = properties.get("Remote Path", "")
+        if hostname:
+            details.append(f"- **Host**: `{hostname}`")
+        if remote_path:
+            details.append(f"- **Remote Path**: `{remote_path}`")
+
+    return details
+
+
+def _get_migration_hint(classification: str, proc_type: str) -> str:
+    """Provide concise migration suggestions."""
+
+    if classification == "data_movement":
+        if proc_type == "ListFile":
+            return "→ Auto Loader with cloud storage monitoring"
+        elif proc_type in ["PutHDFS", "PutFile"]:
+            return "→ Write to Delta Lake tables"
+        elif proc_type == "PutSFTP":
+            return "→ Write to cloud storage with appropriate access"
+        else:
+            return "→ Replace with cloud-native data movement"
+
+    elif classification == "data_transformation":
+        if proc_type == "ExecuteStreamCommand":
+            return "→ Convert to Databricks SQL or PySpark"
+        else:
+            return "→ Implement in PySpark DataFrame operations"
+
+    elif classification == "external_processing":
+        return "→ Review and convert custom logic to Databricks"
+
+    return "→ Review migration approach based on business logic"

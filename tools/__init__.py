@@ -3,7 +3,6 @@
 
 from . import (
     analysis_tools,
-    asset_discovery_tools,
     migration_guide_generator,
     migration_tools,
     nifi_processor_classifier_tool,
