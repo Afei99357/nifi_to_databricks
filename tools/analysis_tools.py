@@ -215,6 +215,9 @@ def classify_processor_types(xml_path: str, _reuse_analysis: str = None) -> str:
                     "name": processor.get("name", "Unknown"),
                     "type": type_name,
                     "classification": classification,
+                    "properties": processor.get(
+                        "properties", {}
+                    ),  # PRESERVE PROPERTIES
                     "reasoning": processor.get(
                         "actual_data_processing", "No reasoning provided"
                     ),
@@ -224,6 +227,9 @@ def classify_processor_types(xml_path: str, _reuse_analysis: str = None) -> str:
                     "priority": _get_migration_priority(
                         {"classification": classification, "type": type_name}
                     ),
+                    # Also preserve full processor type and ID for completeness
+                    "full_type": processor.get("processor_type", "Unknown"),
+                    "id": processor.get("id", ""),
                 }
             )
 

@@ -1,0 +1,12 @@
+{
+  "original_xml": "nifi_pipeline_file/ICN8_BRS_Feedback.xml",
+  "processors_processed": 9,
+  "breakdown": {
+    "data_transformation": 7,
+    "external_processing": 0,
+    "data_movement": 2,
+    "infrastructure_skipped": "All infrastructure processors skipped"
+  },
+  "semantic_flows": "{\"error\": \"No data flow chains found\", \"semantic_data_flows\": [], \"migration_blueprint\": {\"recommended_architecture\": \"unknown\", \"implementation_approach\": \"processor_based_fallback\", \"complexity_assessment\": \"unknown\"}}",
+  "migration_approach": "focused_essential_only"
+}

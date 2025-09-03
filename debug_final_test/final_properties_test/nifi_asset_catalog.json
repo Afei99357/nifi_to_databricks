@@ -1,0 +1,1657 @@
+{
+  "workflow_metadata": {
+    "total_processors": 58,
+    "analysis_timestamp": "unknown",
+    "source_file": "unknown"
+  },
+  "asset_summary": {
+    "total_script_files": 8,
+    "total_hdfs_paths": 6,
+    "total_table_references": 87,
+    "total_sql_statements": 6,
+    "unique_working_directories": [
+      "/users/hadoop_nifi_svc/scripts/icn8/"
+    ],
+    "unique_hosts": [
+      "00:00",
+      "nardc02hdpnp011.na-rdc02.nxp.com",
+      "nardc02prod-impala.na-rdc02.nxp.com",
+      "06:30",
+      "nbq.com"
+    ]
+  },
+  "processor_assets": [
+    {
+      "processor_name": "Run refresh statement",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/bin/impala-shell"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Arguments",
+          "table": "nxp.com",
+          "type": "schema.table"
+        },
+        {
+          "property": "Command Arguments",
+          "table": "impala.na",
+          "type": "schema.table"
+        }
+      ],
+      "host_references": [
+        {
+          "property": "Command Arguments",
+          "host": "nardc02prod-impala.na-rdc02.nxp.com"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/bin/impala-shell",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "-B;-k;-i;nardc02prod-impala.na-rdc02.nxp.com;-q;\"${refresh_statement}\"",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Log error on stats query",
+      "processor_type": "org.apache.nifi.processors.standard.LogMessage",
+      "table_references": [
+        {
+          "property": "log-message",
+          "table": "execution.error",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "log-level": "warn",
+        "log-prefix": "icn8: ",
+        "log-message": "Failed attempt ${attempts} executing statistics query for period ${start_ts} - ${end_ts}.\nError details:\n${execution.error}"
+      }
+    },
+    {
+      "processor_name": "Route on error type",
+      "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+      "table_references": [
+        {
+          "property": "hdfs_read_fail",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "kerberos_ticket_expired",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "memory_limit_exceeded",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "memory_oversubscribed",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "query_admission_timeout",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "unreachable_impala_deamon",
+          "table": "execution.error",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Routing Strategy": "Route to Property name",
+        "hdfs_read_fail": "${execution.error:toLower():contains('failed to open hdfs file')}",
+        "kerberos_ticket_expired": "${execution.error:toLower():contains('-k requires a valid kerberos ticket but no valid kerberos ticket found')}",
+        "memory_limit_exceeded": "${execution.error:toLower():contains('memory limit exceeded')}",
+        "memory_oversubscribed": "${execution.error:toLower():contains('memory is likely oversubscribed.')}",
+        "query_admission_timeout": "${execution.error:toLower():contains('admission for query exceeded timeout')}",
+        "unreachable_impala_deamon": "${execution.error:toLower():contains('cancelled due to unreachable impalad(s)')}"
+      }
+    },
+    {
+      "processor_name": "Clear not_in_stats folder",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh"
+      ],
+      "working_directories": [
+        {
+          "property": "Working Directory",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/"
+        }
+      ],
+      "file_paths": [
+        {
+          "property": "Working Directory",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/"
+        },
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "clear_not_in_stats_folder.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": "/users/hadoop_nifi_svc/scripts/icn8/",
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": null,
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "true",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Run Impala check query - PMI-View",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "Impala_Check.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "PMI_View",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Get cross check request files",
+      "processor_type": "org.apache.nifi.processors.standard.ListFile",
+      "file_paths": [
+        {
+          "property": "Input Directory",
+          "path": "/etl/dropzone/icn8/incoming"
+        }
+      ],
+      "raw_properties": {
+        "Input Directory": "/etl/dropzone/icn8/incoming",
+        "listing-strategy": "entities",
+        "Recurse Subdirectories": "false",
+        "record-writer": null,
+        "Input Directory Location": "Remote",
+        "File Filter": "^HDP_.*[0-9]{14}_[0-9]{14}_([0-9]{14})\\.*(ccr)$",
+        "Path Filter": null,
+        "Include File Attributes": "false",
+        "Minimum File Age": "0 sec",
+        "Maximum File Age": null,
+        "Minimum File Size": "0 B",
+        "Maximum File Size": null,
+        "Ignore Hidden Files": "true",
+        "target-system-timestamp-precision": "auto-detect",
+        "et-state-cache": "9cd607eb-3e75-32ee-0000-000000000000",
+        "et-time-window": "3 hours",
+        "et-initial-listing-target": "all",
+        "et-node-identifier": "same",
+        "track-performance": "false",
+        "max-performance-metrics": "100000",
+        "max-operation-time": "10 secs",
+        "max-listing-time": "3 mins"
+      }
+    },
+    {
+      "processor_name": "Determine time frame (custom period)",
+      "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "host_references": [
+        {
+          "property": "end_ts",
+          "host": "00:00"
+        },
+        {
+          "property": "start_ts",
+          "host": "00:00"
+        }
+      ],
+      "raw_properties": {
+        "File Size": "0B",
+        "Batch Size": "1",
+        "Data Format": "Text",
+        "Unique FlowFiles": "false",
+        "generate-ff-custom-text": null,
+        "character-set": "UTF-8",
+        "mime-type": null,
+        "end_ts": "2023-03-10 00:00:00",
+        "include_e3_bq_yn": "Y",
+        "include_temptation_bq_yn": "Y",
+        "start_ts": "2023-03-09 00:00:00"
+      }
+    },
+    {
+      "processor_name": "Execute Impala Query",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "run_impala_query.sh",
+          "type": "schema.table"
+        },
+        {
+          "property": "Command Arguments",
+          "table": "nxp.com",
+          "type": "schema.table"
+        },
+        {
+          "property": "Command Arguments",
+          "table": "root.default",
+          "type": "schema.table"
+        },
+        {
+          "property": "Command Arguments",
+          "table": "impala.na",
+          "type": "schema.table"
+        }
+      ],
+      "host_references": [
+        {
+          "property": "Command Arguments",
+          "host": "nardc02prod-impala.na-rdc02.nxp.com"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "-i;nardc02prod-impala.na-rdc02.nxp.com;-B;--query=\"\nset request_pool=root.default;\nset mem_limit=${impala_mem_limit}G;\n${query}\n\";--print_header;--output_delimiter=,",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Execute Hive Query",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/bin/beeline"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/bin/beeline",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "--outputformat=csv2;-e;\"${query}\"",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "PutSFTP",
+      "processor_type": "org.apache.nifi.processors.standard.PutSFTP",
+      "script_files": [
+        "/users/hadoop_nifi_svc/.ssh/id_rsa"
+      ],
+      "file_paths": [
+        {
+          "property": "Private Key Path",
+          "path": "/users/hadoop_nifi_svc/.ssh/id_rsa"
+        },
+        {
+          "property": "Remote Path",
+          "path": "/etl/dropzone/icn8/outgoing"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Hostname",
+          "table": "nxp.com",
+          "type": "schema.table"
+        }
+      ],
+      "host_references": [
+        {
+          "property": "Hostname",
+          "host": "nardc02hdpnp011.na-rdc02.nxp.com"
+        }
+      ],
+      "raw_properties": {
+        "Hostname": "nardc02hdpnp011.na-rdc02.nxp.com",
+        "Port": "22",
+        "Username": "hadoop_nifi_svc",
+        "Password": null,
+        "Private Key Path": "/users/hadoop_nifi_svc/.ssh/id_rsa",
+        "Private Key Passphrase": null,
+        "Remote Path": "/etl/dropzone/icn8/outgoing",
+        "Create Directory": "false",
+        "Disable Directory Listing": "false",
+        "Batch Size": "500",
+        "Connection Timeout": "30 sec",
+        "Data Timeout": "30 sec",
+        "Conflict Resolution": "NONE",
+        "Reject Zero-Byte Files": "true",
+        "Dot Rename": "false",
+        "Temporary Filename": "{$filename}tmp",
+        "Host Key File": null,
+        "Last Modified Time": null,
+        "Permissions": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Strict Host Key Checking": "false",
+        "Send Keep Alive On Timeout": "true",
+        "Use Compression": "false",
+        "proxy-configuration-service": null,
+        "Proxy Type": "DIRECT",
+        "Proxy Host": null,
+        "Proxy Port": null,
+        "Http Proxy Username": null,
+        "Http Proxy Password": null,
+        "Ciphers Allowed": null,
+        "Key Algorithms Allowed": null,
+        "Key Exchange Algorithms Allowed": null,
+        "Message Authentication Codes Allowed": null
+      }
+    },
+    {
+      "processor_name": "Determine time frame (2017-12-30 06:30)",
+      "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "host_references": [
+        {
+          "property": "start_ts",
+          "host": "06:30"
+        }
+      ],
+      "raw_properties": {
+        "File Size": "0B",
+        "Batch Size": "1",
+        "Data Format": "Text",
+        "Unique FlowFiles": "false",
+        "generate-ff-custom-text": null,
+        "character-set": "UTF-8",
+        "mime-type": null,
+        "end_ts": "${now():toNumber():format('yyyy-MM-dd HH:mm:ss', 'CET')}",
+        "start_ts": "2017-12-30 06:30:00"
+      }
+    },
+    {
+      "processor_name": "Run Impala check query - PMI DQ",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "Impala_Check.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "PMI_View_interactive_queue",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "PMI-View logging to table",
+      "processor_type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+      "host_references": [
+        {
+          "property": "end_ts",
+          "host": "00:00"
+        },
+        {
+          "property": "start_ts",
+          "host": "00:00"
+        }
+      ],
+      "raw_properties": {
+        "File Size": "0B",
+        "Batch Size": "1",
+        "Data Format": "Text",
+        "Unique FlowFiles": "false",
+        "generate-ff-custom-text": null,
+        "character-set": "UTF-8",
+        "mime-type": null,
+        "end_ts": "2021-01-19 00:00:00",
+        "start_ts": "2021-01-01 00:00:00"
+      }
+    },
+    {
+      "processor_name": "Remove cross check request file",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/bin/rm"
+        },
+        {
+          "property": "Command Arguments",
+          "path": "/etl/dropzone/icn8/incoming/${filename}"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/bin/rm",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "-f;/etl/dropzone/icn8/incoming/${filename}",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "true",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Run Impala check query - NiFi Loading",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "Impala_Check.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "NiFi_Loading",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Run Impala check query - PMI DQ",
+      "processor_type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "Impala_Check.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "PMI_View_default_queue",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Refresh Kerberos ticket (kinit)",
+      "processor_type": "",
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/bin/kinit"
+        },
+        {
+          "property": "Command Arguments",
+          "path": "/etc/security/keytab/hadoop_nifi_svc.keytab"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Arguments",
+          "table": "hadoop_nifi_svc.keytab",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/bin/kinit",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "-kt;/etc/security/keytab/hadoop_nifi_svc.keytab;hadoop_nifi_svc",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Derive refresh statement",
+      "processor_type": "",
+      "hdfs_paths": [
+        {
+          "property": "add_partition_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/",
+          "type": "hive_warehouse"
+        },
+        {
+          "property": "add_partition_statement",
+          "path": "/warehouse/mfg_icn8/",
+          "type": "other"
+        },
+        {
+          "property": "drop_partition_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/",
+          "type": "hive_warehouse"
+        },
+        {
+          "property": "drop_partition_statement",
+          "path": "/warehouse/mfg_icn8/",
+          "type": "other"
+        },
+        {
+          "property": "refresh_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/",
+          "type": "hive_warehouse"
+        },
+        {
+          "property": "refresh_statement",
+          "path": "/warehouse/mfg_icn8/",
+          "type": "other"
+        }
+      ],
+      "file_paths": [
+        {
+          "property": "add_partition_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/"
+        },
+        {
+          "property": "drop_partition_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/"
+        },
+        {
+          "property": "refresh_statement",
+          "path": "/user/hive/warehouse/mfg_icn8/"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "add_partition_statement",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "drop_partition_statement",
+          "table": "execution.error",
+          "type": "schema.table"
+        },
+        {
+          "property": "refresh_statement",
+          "table": "execution.error",
+          "type": "schema.table"
+        }
+      ],
+      "sql_statements": [
+        {
+          "property": "add_partition_statement",
+          "statement": "alter table \")\n  :append          (\"');",
+          "type": "ddl"
+        },
+        {
+          "property": "drop_partition_statement",
+          "statement": "drop if exists partition (\")\n  :replaceAll      (\"/\"                         , \"', \"                        )\n  :replaceAll      (\"=\"                         , \"='\"                         )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                           )\n  :replaceAll      (\"%3A\"                       , \":\"                          )\n  :prepend         (\"alter table \")\n  :append          (\"');",
+          "type": "ddl"
+        },
+        {
+          "property": "drop_partition_statement",
+          "statement": "alter table \")\n  :append          (\"');",
+          "type": "ddl"
+        },
+        {
+          "property": "refresh_statement",
+          "statement": "refresh \")\n  :append          (\"');",
+          "type": "maintenance"
+        }
+      ],
+      "raw_properties": {
+        "Delete Attributes Expression": null,
+        "Store State": "Do not store state",
+        "Stateful Variables Initial Value": null,
+        "canonical-value-lookup-cache-size": "100",
+        "add_partition_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"                )\n  :replaceFirst    (\"/\"                         , \".\"               )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"                )\n  :replaceFirst    (\"/\"                         , \" add partition (\")\n  :replaceAll      (\"/\"                         , \"', \"             )\n  :replaceAll      (\"=\"                         , \"='\"              )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                )\n  :replaceAll      (\"%3A\"                       , \":\"               )\n  :prepend         (\"alter table \")\n  :append          (\"');\")\n }",
+        "drop_partition_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"                           )\n  :replaceFirst    (\"/\"                         , \".\"                          )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"                           )\n  :replaceFirst    (\"/\"                         , \" drop if exists partition (\")\n  :replaceAll      (\"/\"                         , \"', \"                        )\n  :replaceAll      (\"=\"                         , \"='\"                         )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                           )\n  :replaceAll      (\"%3A\"                       , \":\"                          )\n  :prepend         (\"alter table \")\n  :append          (\"');\")\n }",
+        "refresh_statement": "${execution.error\n  :substringAfter  (\"/user/hive/warehouse/mfg_icn8/\")\n  :substringBefore (\".parq\"                         )\n  :replaceAll      (\"\\R\"                        , \"\"            )\n  :replaceFirst    (\"/\"                         , \".\"           )\n  :replaceFirst    (\"/[^/]*$\"                   , \"\"            )\n  :replaceFirst    (\"/\"                         , \" partition (\")\n  :replaceAll      (\"/\"                         , \"', \"         )\n  :replaceAll      (\"=\"                         , \"='\"          )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"            )\n  :replaceAll      (\"%3A\"                       , \":\"           )\n  :prepend         (\"refresh \")\n  :append          (\"');\")\n }"
+      }
+    },
+    {
+      "processor_name": "SWS FB - Determine query and filename",
+      "processor_type": "",
+      "file_paths": [
+        {
+          "property": "query",
+          "path": "/NiFi/BRSFeedback/SWS"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "query",
+          "table": "mfg_icn8_apps",
+          "type": "table_name"
+        }
+      ],
+      "sql_statements": [
+        {
+          "property": "query",
+          "statement": "select\n  lot\n, num_wafers\n, wafers\n, component\n, regexp_replace (object, '[^\\x00-\\xFF]', '')                      object\n, object_type\n, num_wafers_step\n, num_bad\n, num_good\n, outlier\n, min_bad\n, max_bad\n, min_good\n, max_good\n, distance\n, avg_good\n, std_good\n, state\n, proc_state\n, scrap_type\n, prod_period\n, scrap_cet_ts\n, terminate_cet_ts\n, admin_scrap_cet_ts\n, product\n, process\n, esort_scrap_code\n, maverick\n, scrap_suspect_technical_stage\n, scrap_suspect_flow_stage\n, regexp_replace (scrap_suspect_process_step, '[^\\x00-\\xFF]', '')  scrap_suspect_process_step\n, cause_contained\n, incident\n, scrap_code\n, proc_key\n, rec_owner\n, cause_code\n, section_cause_code\n, ccd_description\n, replace (detailed_description, ',', '')                          detailed_description\n, loh_trackout_cet_ts\n, loh_technical_stage\n, loh_flow_stage\n, loh_step\n, loh_equipment\n, scrap_key\n, total\n, scrap_correlate_type\n, good_wafers\nfrom\n  mfg_icn8_apps.nifi_single_wafer_scrap_hits\nwhere\n   scrap_cet_ts >= '${start_ts}'  /* 2020-03-17 FvH: To save on diskspace / BRS processing time, only sent 2020 (and later) data */\n                                  /* 2022-03-16 FvH: To save on diskspace / BRS processing time, only sent 2022 (and later) data */\n                                  /* 2023-02-06 FvH: To save on diskspace / BRS processing time, only sent 2023 (and later) data */\n                                  /* 2023-09-18 FvH: Permanent beep reduction: always only extract the last n days               */\n;",
+          "type": "query"
+        }
+      ],
+      "raw_properties": {
+        "Delete Attributes Expression": null,
+        "Store State": "Do not store state",
+        "Stateful Variables Initial Value": null,
+        "canonical-value-lookup-cache-size": "100",
+        "filename": "HDP_SINGLE_WAFER_SCRAP_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.sws",
+        "impala_mem_limit": "2",
+        "impala_mem_limit_increment": "5",
+        "query": "-- ICN8/NiFi/BRSFeedback/SWS\nselect\n  lot\n, num_wafers\n, wafers\n, component\n, regexp_replace (object, '[^\\x00-\\xFF]', '')                      object\n, object_type\n, num_wafers_step\n, num_bad\n, num_good\n, outlier\n, min_bad\n, max_bad\n, min_good\n, max_good\n, distance\n, avg_good\n, std_good\n, state\n, proc_state\n, scrap_type\n, prod_period\n, scrap_cet_ts\n, terminate_cet_ts\n, admin_scrap_cet_ts\n, product\n, process\n, esort_scrap_code\n, maverick\n, scrap_suspect_technical_stage\n, scrap_suspect_flow_stage\n, regexp_replace (scrap_suspect_process_step, '[^\\x00-\\xFF]', '')  scrap_suspect_process_step\n, cause_contained\n, incident\n, scrap_code\n, proc_key\n, rec_owner\n, cause_code\n, section_cause_code\n, ccd_description\n, replace (detailed_description, ',', '')                          detailed_description\n, loh_trackout_cet_ts\n, loh_technical_stage\n, loh_flow_stage\n, loh_step\n, loh_equipment\n, scrap_key\n, total\n, scrap_correlate_type\n, good_wafers\nfrom\n  mfg_icn8_apps.nifi_single_wafer_scrap_hits\nwhere\n   scrap_cet_ts >= '${start_ts}'  /* 2020-03-17 FvH: To save on diskspace / BRS processing time, only sent 2020 (and later) data */\n                                  /* 2022-03-16 FvH: To save on diskspace / BRS processing time, only sent 2022 (and later) data */\n                                  /* 2023-02-06 FvH: To save on diskspace / BRS processing time, only sent 2023 (and later) data */\n                                  /* 2023-09-18 FvH: Permanent beep reduction: always only extract the last n days               */\n;\n"
+      }
+    },
+    {
+      "processor_name": "PMI-View logging to table - shell script",
+      "processor_type": "",
+      "script_files": [
+        "/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh"
+      ],
+      "file_paths": [
+        {
+          "property": "Command Path",
+          "path": "/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Command Path",
+          "table": "View_logging_to_table.sh",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Working Directory": null,
+        "Command Path": "/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh",
+        "argumentsStrategy": "Command Arguments Property",
+        "Command Arguments": "NiFi_Loading",
+        "Argument Delimiter": ";",
+        "Ignore STDIN": "false",
+        "Output Destination Attribute": null,
+        "Max Attribute Length": "256"
+      }
+    },
+    {
+      "processor_name": "Determine query and filename",
+      "processor_type": "",
+      "file_paths": [
+        {
+          "property": "query",
+          "path": "/NiFi/BRSFeedback/CrossCheck"
+        }
+      ],
+      "table_references": [
+        {
+          "property": "query",
+          "table": "nsc.scrap_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.p_parameter_type",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nps.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.p_from_start_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.measured_value",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ne.experiment_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbw.trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.component",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "mfg_icn8_data",
+          "type": "table_name"
+        },
+        {
+          "property": "query",
+          "table": "nbw.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "npr.loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nsc.scrap_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "neu.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nls.lot_creation_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.ttn_recipe_process_step",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.run_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nmr.meas_loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nes.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "npr.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nts.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nor.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.program",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "mfg_icn8_apps",
+          "type": "table_name"
+        },
+        {
+          "property": "query",
+          "table": "nbq.lot",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nes.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ne.exp_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "neu.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbw.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nts.loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "npr.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbw.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nor.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nor.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.from_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nps.trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "neu.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.run_loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "npr.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "neu.loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nor.trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.event",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nmr.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.parameter",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nes.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nps.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nts.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nmr.meas_loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nts.p_to_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.ttn_sub_recipe",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.meas_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nps.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nes.loh_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "ndr.p_to_start_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "Temptation",
+          "type": "table_name"
+        },
+        {
+          "property": "query",
+          "table": "nbq.loh_key",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nmr.p_from_trackout_cet_ts",
+          "type": "schema.table"
+        },
+        {
+          "property": "query",
+          "table": "nbq.p_aggregation_type",
+          "type": "schema.table"
+        }
+      ],
+      "sql_statements": [
+        {
+          "property": "query",
+          "statement": "select\n    'nifi_diamond_raw'                        table_name\n  , substr (ndr.run_trackout_cet_ts, 1, 19)   trackout_cet_ts\n  , nvl (ndr.run_loh_key, 0)                  loh_key\n  , count (*)                                 num_records\n  from\n    mfg_icn8_data.nifi_diamond_raw  ndr\n  where\n        ndr.p_from_trackout_cet_ts  < '${end_ts}'\n    and ndr.p_to_trackout_cet_ts    > '${start_ts}'\n    and ndr.run_trackout_cet_ts    >= '${start_ts}'\n    and ndr.run_trackout_cet_ts     < '${end_ts}'\n    and ndr.run_trackout_cet_ts     > '2020-04-01'\n  group by\n    ndr.run_loh_key\n  , ndr.run_trackout_cet_ts\nunion all\n  select\n    'nifi_production_steps'  table_name\n  , nps.trackout_cet_ts\n  , nps.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_production_steps  nps\n  where\n        nps.p_from_trackout_cet_ts  < '${end_ts}'\n    and nps.p_to_trackout_cet_ts    > '${start_ts}'\n    and nps.trackout_cet_ts        >= '${start_ts}'\n    and nps.trackout_cet_ts         < '${end_ts}'\n  group by\n    nps.loh_key\n  , nps.trackout_cet_ts\nunion all\n  select\n    'nifi_metrology_raw'          table_name\n  , nmr.meas_loh_trackout_cet_ts  trackout_cet_ts\n  , nmr.meas_loh_key              loh_key\n  , count (*)                     num_records\n  from\n    mfg_icn8_data.nifi_metrology_raw  nmr\n  where\n        nmr.p_from_trackout_cet_ts    < '${end_ts}'\n    and nmr.p_to_trackout_cet_ts      > '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts >= '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts  < '${end_ts}'\n  group by\n    nmr.meas_loh_key\n  , nmr.meas_loh_trackout_cet_ts\nunion all\n  select\n    'nifi_pcm_raw'           table_name\n  , npr.loh_trackout_cet_ts  trackout_cet_ts\n  , npr.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_pcm_raw  npr\n  where\n        npr.p_from_trackout_cet_ts  < '${end_ts}'\n    and npr.p_to_trackout_cet_ts    > '${start_ts}'\n    and npr.loh_trackout_cet_ts    >= '${start_ts}'\n    and npr.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    npr.loh_trackout_cet_ts\n  , npr.loh_key\nunion all\n  select\n    'nifi_temptation_sum'    table_name\n  , nts.loh_trackout_cet_ts  trackout_cet_ts\n  , nts.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_temptation_sum  nts\n  where\n        nts.p_from_trackout_cet_ts  < '${end_ts}'\n    and nts.p_to_trackout_cet_ts    > '${start_ts}'\n    and nts.loh_trackout_cet_ts    >= '${start_ts}'\n    and nts.loh_trackout_cet_ts     < '${end_ts}'\n    and nts.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nts.loh_trackout_cet_ts\n  , nts.loh_key\nunion all\n  select\n    'nifi_e3_sum'            table_name\n  , nes.loh_trackout_cet_ts  trackout_cet_ts\n  , nes.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_sum  nes\n  where\n        nes.p_from_trackout_cet_ts  < '${end_ts}'\n    and nes.p_to_trackout_cet_ts    > '${start_ts}'\n    and nes.loh_trackout_cet_ts    >= '${start_ts}'\n    and nes.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nes.loh_trackout_cet_ts\n  , nes.loh_key\nunion all\n  select\n    'nifi_e3_uva'            table_name\n  , neu.loh_trackout_cet_ts  trackout_cet_ts\n  , neu.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_uva  neu\n  where\n        neu.p_from_trackout_cet_ts  < '${end_ts}'\n    and neu.p_to_trackout_cet_ts    > '${start_ts}'\n    and neu.loh_trackout_cet_ts    >= '${start_ts}'\n    and neu.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    neu.loh_trackout_cet_ts\n  , neu.loh_key\nunion all\n  select\n    'nifi_experiments'       table_name\n  , ne.exp_cet_ts            trackout_cet_ts\n  , ne.experiment_key        loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_experiments  ne\n  where\n        ne.exp_cet_ts >= '${start_ts}'\n    and ne.exp_cet_ts  < '${end_ts}'\n  group by\n    ne.exp_cet_ts\n  , ne.experiment_key\nunion all\n  select\n    'nifi_tool_overlay_raw'  table_name\n  , nor.trackout_cet_ts\n  , nor.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_tool_overlay_raw  nor\n  where\n        nor.p_from_trackout_cet_ts  < '${end_ts}'\n    and nor.p_to_trackout_cet_ts    > '${start_ts}'\n    and nor.trackout_cet_ts        >= '${start_ts}'\n    and nor.trackout_cet_ts         < '${end_ts}'\n  group by\n    nor.loh_key\n  , nor.trackout_cet_ts\nunion all\n  select\n    'nifi_diamond_components'  table_name\n  , '1900-01-01 00:00:00'      trackout_cet_ts\n  , -1                         loh_key\n  , count (*)                  num_records\n  from\n    mfg_icn8_data.nifi_diamond_components  ndc\nunion all\n  select\n    'nifi_process_runcards'  table_name\n  , '1900-01-01 00:00:00'    trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_process_runcards  npr\nunion all\n  select\n    'nifi_lotstatus'         table_name\n  , nls.lot_creation_cet_ts  trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_lot_status  nls\n  where\n        nls.lot_creation_cet_ts >= '${start_ts}'\n    and nls.lot_creation_cet_ts  < '${end_ts}'\n  group by\n    nls.lot_creation_cet_ts\nunion all\n  select\n    'nifi_scrap'      table_name\n  , nsc.scrap_cet_ts  trackout_cet_ts\n  , nsc.scrap_key     loh_key\n  , count (*)         num_records\n  from\n    mfg_icn8_data.nifi_scrap  nsc\n  where\n        nsc.scrap_cet_ts >= '${start_ts}'\n    and nsc.scrap_cet_ts  < '${end_ts}'\n    and nsc.scrap_key     > 0\n  group by\n    nsc.scrap_cet_ts\n  , nsc.scrap_key\nunion all\n  select \n    'nifi_xsite_states_raw'                 table_name\n  , substr (ndr.from_cet_ts, 1, 19)         trackout_cet_ts\n  , 1                                       loh_key\n  , count (*)                               num_records\n  from\n    mfg_icn8_data.nifi_xsite_states_raw  ndr\n  where\n        ndr.p_from_start_cet_ts  < '${end_ts}'\n    and ndr.p_to_start_cet_ts    > '${start_ts}'\n    and ndr.from_cet_ts          >= '${start_ts}'\n    and ndr.from_cet_ts          < '${end_ts}'\n  group by\n    substr (ndr.from_cet_ts, 1, 19) \nunion all\n  select\n    'nifi_base_wafer_production_steps'  table_name\n  , nbw.trackout_cet_ts                 trackout_cet_ts\n  , nbw.loh_key                         loh_key\n  , count (*)                           num_records\n  from\n    mfg_icn8_apps.nifi_base_wafer_production_steps  nbw\n  where\n        nbw.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbw.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbw.trackout_cet_ts        >= '${start_ts}'\n    and nbw.trackout_cet_ts         < '${end_ts}'\n  group by\n    nbw.trackout_cet_ts\n  , nbw.loh_key\nunion all\n  select\n    'nifi_base_qualifications (TEMPTATION)'        table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_temptation_bq_yn}' in ('', 'Y')\n    and nbq.p_parameter_type        = 'TEMPTATION'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n    and nbq.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that Temptation BQ data was sent (in case BQ happens to contain 0 Temptation records) */\n    'nifi_base_qualifications (TEMPTATION)'  table_name\n  , ''                                       trackout_cet_ts\n  , -1                                       loh_key\n  , -1                                       num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_temptation_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3)'                table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          ,      nbq.measured_value\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_e3_bq_yn}'      in ('', 'Y')\n    and nbq.p_parameter_type        = 'E3'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that E3 BQ data was sent (in case BQ happens to contain 0 E3 records) */\n    'nifi_base_qualifications (E3)'  table_name\n  , ''                               trackout_cet_ts\n  , -1                               loh_key\n  , -1                               num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_e3_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3_UVA)'  table_name\n  , nbq.loh_trackout_cet_ts              trackout_cet_ts\n  , nbq.loh_key                          loh_key\n  , count ( distinct\n            nvl (nbq.lot        , '')\n          , nvl (nbq.meas_cet_ts, '')\n          , nvl (nbq.program    , '')\n          , nvl (nbq.parameter  , '')\n          , nvl (nbq.event      , '')\n          )                              num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        nbq.p_parameter_type        = 'E3_UVA'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select\n    concat ('nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )                              table_name\n  , nbq.loh_trackout_cet_ts               trackout_cet_ts\n  , nbq.loh_key                           loh_key\n  , count (*)                             num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n            (     nbq.p_parameter_type         in ('EDC', 'Overlay', 'PCM', 'TRACING_EQP', 'TRACING_COMP', 'DIAMOND_TIMES')\n              or  nbq.p_parameter_type       like 'OQ%'\n            )\n    and           nbq.p_aggregation_type       in ('lot', 'waf', 'site')\n    and           nbq.p_from_trackout_cet_ts    < '${end_ts}'\n    and           nbq.p_to_trackout_cet_ts      > '${start_ts}'\n    and           nbq.loh_trackout_cet_ts      >= '${start_ts}'\n    and           nbq.loh_trackout_cet_ts       < '${end_ts}'\n    and not (     p_parameter_type             in ('TRACING_COMP', 'DIAMOND_TIMES')\n              and nbq.loh_trackout_cet_ts       < '2020-04-01'\n            )\n    and not (     p_parameter_type              = 'TRACING_COMP'\n              and program                       = 'TRACING_COMP_TTN'\n            )  /* 2022-08-01 FvH: Don't count the component tracing records from Temptation, otherwise we cannot compare to BRS */\n  group by\n    concat ( 'nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )\n  , nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\norder by\n  table_name\n, trackout_cet_ts\n, loh_key\n;",
+          "type": "query"
+        }
+      ],
+      "host_references": [
+        {
+          "property": "query",
+          "host": "nbq.com"
+        },
+        {
+          "property": "query",
+          "host": "00:00"
+        }
+      ],
+      "raw_properties": {
+        "Delete Attributes Expression": null,
+        "Store State": "Do not store state",
+        "Stateful Variables Initial Value": null,
+        "canonical-value-lookup-cache-size": "100",
+        "filename": "HDP_LOAD_STATS_${start_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}_${end_ts:replaceAll('[- :]','')}.hls",
+        "impala_mem_limit": "5",
+        "impala_mem_limit_increment": "5",
+        "query": "/* ICN8/NiFi/BRSFeedback/CrossCheck */\n  select\n    'nifi_diamond_raw'                        table_name\n  , substr (ndr.run_trackout_cet_ts, 1, 19)   trackout_cet_ts\n  , nvl (ndr.run_loh_key, 0)                  loh_key\n  , count (*)                                 num_records\n  from\n    mfg_icn8_data.nifi_diamond_raw  ndr\n  where\n        ndr.p_from_trackout_cet_ts  < '${end_ts}'\n    and ndr.p_to_trackout_cet_ts    > '${start_ts}'\n    and ndr.run_trackout_cet_ts    >= '${start_ts}'\n    and ndr.run_trackout_cet_ts     < '${end_ts}'\n    and ndr.run_trackout_cet_ts     > '2020-04-01'\n  group by\n    ndr.run_loh_key\n  , ndr.run_trackout_cet_ts\nunion all\n  select\n    'nifi_production_steps'  table_name\n  , nps.trackout_cet_ts\n  , nps.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_production_steps  nps\n  where\n        nps.p_from_trackout_cet_ts  < '${end_ts}'\n    and nps.p_to_trackout_cet_ts    > '${start_ts}'\n    and nps.trackout_cet_ts        >= '${start_ts}'\n    and nps.trackout_cet_ts         < '${end_ts}'\n  group by\n    nps.loh_key\n  , nps.trackout_cet_ts\nunion all\n  select\n    'nifi_metrology_raw'          table_name\n  , nmr.meas_loh_trackout_cet_ts  trackout_cet_ts\n  , nmr.meas_loh_key              loh_key\n  , count (*)                     num_records\n  from\n    mfg_icn8_data.nifi_metrology_raw  nmr\n  where\n        nmr.p_from_trackout_cet_ts    < '${end_ts}'\n    and nmr.p_to_trackout_cet_ts      > '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts >= '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts  < '${end_ts}'\n  group by\n    nmr.meas_loh_key\n  , nmr.meas_loh_trackout_cet_ts\nunion all\n  select\n    'nifi_pcm_raw'           table_name\n  , npr.loh_trackout_cet_ts  trackout_cet_ts\n  , npr.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_pcm_raw  npr\n  where\n        npr.p_from_trackout_cet_ts  < '${end_ts}'\n    and npr.p_to_trackout_cet_ts    > '${start_ts}'\n    and npr.loh_trackout_cet_ts    >= '${start_ts}'\n    and npr.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    npr.loh_trackout_cet_ts\n  , npr.loh_key\nunion all\n  select\n    'nifi_temptation_sum'    table_name\n  , nts.loh_trackout_cet_ts  trackout_cet_ts\n  , nts.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_temptation_sum  nts\n  where\n        nts.p_from_trackout_cet_ts  < '${end_ts}'\n    and nts.p_to_trackout_cet_ts    > '${start_ts}'\n    and nts.loh_trackout_cet_ts    >= '${start_ts}'\n    and nts.loh_trackout_cet_ts     < '${end_ts}'\n    and nts.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nts.loh_trackout_cet_ts\n  , nts.loh_key\nunion all\n  select\n    'nifi_e3_sum'            table_name\n  , nes.loh_trackout_cet_ts  trackout_cet_ts\n  , nes.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_sum  nes\n  where\n        nes.p_from_trackout_cet_ts  < '${end_ts}'\n    and nes.p_to_trackout_cet_ts    > '${start_ts}'\n    and nes.loh_trackout_cet_ts    >= '${start_ts}'\n    and nes.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nes.loh_trackout_cet_ts\n  , nes.loh_key\nunion all\n  select\n    'nifi_e3_uva'            table_name\n  , neu.loh_trackout_cet_ts  trackout_cet_ts\n  , neu.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_uva  neu\n  where\n        neu.p_from_trackout_cet_ts  < '${end_ts}'\n    and neu.p_to_trackout_cet_ts    > '${start_ts}'\n    and neu.loh_trackout_cet_ts    >= '${start_ts}'\n    and neu.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    neu.loh_trackout_cet_ts\n  , neu.loh_key\nunion all\n  select\n    'nifi_experiments'       table_name\n  , ne.exp_cet_ts            trackout_cet_ts\n  , ne.experiment_key        loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_experiments  ne\n  where\n        ne.exp_cet_ts >= '${start_ts}'\n    and ne.exp_cet_ts  < '${end_ts}'\n  group by\n    ne.exp_cet_ts\n  , ne.experiment_key\nunion all\n  select\n    'nifi_tool_overlay_raw'  table_name\n  , nor.trackout_cet_ts\n  , nor.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_tool_overlay_raw  nor\n  where\n        nor.p_from_trackout_cet_ts  < '${end_ts}'\n    and nor.p_to_trackout_cet_ts    > '${start_ts}'\n    and nor.trackout_cet_ts        >= '${start_ts}'\n    and nor.trackout_cet_ts         < '${end_ts}'\n  group by\n    nor.loh_key\n  , nor.trackout_cet_ts\nunion all\n  select\n    'nifi_diamond_components'  table_name\n  , '1900-01-01 00:00:00'      trackout_cet_ts\n  , -1                         loh_key\n  , count (*)                  num_records\n  from\n    mfg_icn8_data.nifi_diamond_components  ndc\nunion all\n  select\n    'nifi_process_runcards'  table_name\n  , '1900-01-01 00:00:00'    trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_process_runcards  npr\nunion all\n  select\n    'nifi_lotstatus'         table_name\n  , nls.lot_creation_cet_ts  trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_lot_status  nls\n  where\n        nls.lot_creation_cet_ts >= '${start_ts}'\n    and nls.lot_creation_cet_ts  < '${end_ts}'\n  group by\n    nls.lot_creation_cet_ts\nunion all\n  select\n    'nifi_scrap'      table_name\n  , nsc.scrap_cet_ts  trackout_cet_ts\n  , nsc.scrap_key     loh_key\n  , count (*)         num_records\n  from\n    mfg_icn8_data.nifi_scrap  nsc\n  where\n        nsc.scrap_cet_ts >= '${start_ts}'\n    and nsc.scrap_cet_ts  < '${end_ts}'\n    and nsc.scrap_key     > 0\n  group by\n    nsc.scrap_cet_ts\n  , nsc.scrap_key\nunion all\n  select \n    'nifi_xsite_states_raw'                 table_name\n  , substr (ndr.from_cet_ts, 1, 19)         trackout_cet_ts\n  , 1                                       loh_key\n  , count (*)                               num_records\n  from\n    mfg_icn8_data.nifi_xsite_states_raw  ndr\n  where\n        ndr.p_from_start_cet_ts  < '${end_ts}'\n    and ndr.p_to_start_cet_ts    > '${start_ts}'\n    and ndr.from_cet_ts          >= '${start_ts}'\n    and ndr.from_cet_ts          < '${end_ts}'\n  group by\n    substr (ndr.from_cet_ts, 1, 19) \nunion all\n  select\n    'nifi_base_wafer_production_steps'  table_name\n  , nbw.trackout_cet_ts                 trackout_cet_ts\n  , nbw.loh_key                         loh_key\n  , count (*)                           num_records\n  from\n    mfg_icn8_apps.nifi_base_wafer_production_steps  nbw\n  where\n        nbw.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbw.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbw.trackout_cet_ts        >= '${start_ts}'\n    and nbw.trackout_cet_ts         < '${end_ts}'\n  group by\n    nbw.trackout_cet_ts\n  , nbw.loh_key\nunion all\n  select\n    'nifi_base_qualifications (TEMPTATION)'        table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_temptation_bq_yn}' in ('', 'Y')\n    and nbq.p_parameter_type        = 'TEMPTATION'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n    and nbq.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that Temptation BQ data was sent (in case BQ happens to contain 0 Temptation records) */\n    'nifi_base_qualifications (TEMPTATION)'  table_name\n  , ''                                       trackout_cet_ts\n  , -1                                       loh_key\n  , -1                                       num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_temptation_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3)'                table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          ,      nbq.measured_value\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_e3_bq_yn}'      in ('', 'Y')\n    and nbq.p_parameter_type        = 'E3'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that E3 BQ data was sent (in case BQ happens to contain 0 E3 records) */\n    'nifi_base_qualifications (E3)'  table_name\n  , ''                               trackout_cet_ts\n  , -1                               loh_key\n  , -1                               num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_e3_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3_UVA)'  table_name\n  , nbq.loh_trackout_cet_ts              trackout_cet_ts\n  , nbq.loh_key                          loh_key\n  , count ( distinct\n            nvl (nbq.lot        , '')\n          , nvl (nbq.meas_cet_ts, '')\n          , nvl (nbq.program    , '')\n          , nvl (nbq.parameter  , '')\n          , nvl (nbq.event      , '')\n          )                              num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        nbq.p_parameter_type        = 'E3_UVA'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select\n    concat ('nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )                              table_name\n  , nbq.loh_trackout_cet_ts               trackout_cet_ts\n  , nbq.loh_key                           loh_key\n  , count (*)                             num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n            (     nbq.p_parameter_type         in ('EDC', 'Overlay', 'PCM', 'TRACING_EQP', 'TRACING_COMP', 'DIAMOND_TIMES')\n              or  nbq.p_parameter_type       like 'OQ%'\n            )\n    and           nbq.p_aggregation_type       in ('lot', 'waf', 'site')\n    and           nbq.p_from_trackout_cet_ts    < '${end_ts}'\n    and           nbq.p_to_trackout_cet_ts      > '${start_ts}'\n    and           nbq.loh_trackout_cet_ts      >= '${start_ts}'\n    and           nbq.loh_trackout_cet_ts       < '${end_ts}'\n    and not (     p_parameter_type             in ('TRACING_COMP', 'DIAMOND_TIMES')\n              and nbq.loh_trackout_cet_ts       < '2020-04-01'\n            )\n    and not (     p_parameter_type              = 'TRACING_COMP'\n              and program                       = 'TRACING_COMP_TTN'\n            )  /* 2022-08-01 FvH: Don't count the component tracing records from Temptation, otherwise we cannot compare to BRS */\n  group by\n    concat ( 'nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )\n  , nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\norder by\n  table_name\n, trackout_cet_ts\n, loh_key\n;",
+        "use_hive_yn": "Y"
+      }
+    }
+  ],
+  "consolidated_assets": {
+    "all_script_files": [
+      "/users/hadoop_nifi_svc/scripts/icn8/clear_not_in_stats_folder.sh",
+      "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+      "/users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh",
+      "/users/hadoop_nifi_svc/.ssh/id_rsa",
+      "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+      "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+      "/users/hadoop_nifi_svc/scripts/icn8/Impala_Check.sh",
+      "/users/hadoop_nifi_svc/scripts/icn8/PMI-View_logging_to_table.sh"
+    ],
+    "all_hdfs_paths": [
+      {
+        "property": "add_partition_statement",
+        "path": "/user/hive/warehouse/mfg_icn8/",
+        "type": "hive_warehouse"
+      },
+      {
+        "property": "add_partition_statement",
+        "path": "/warehouse/mfg_icn8/",
+        "type": "other"
+      },
+      {
+        "property": "drop_partition_statement",
+        "path": "/user/hive/warehouse/mfg_icn8/",
+        "type": "hive_warehouse"
+      },
+      {
+        "property": "drop_partition_statement",
+        "path": "/warehouse/mfg_icn8/",
+        "type": "other"
+      },
+      {
+        "property": "refresh_statement",
+        "path": "/user/hive/warehouse/mfg_icn8/",
+        "type": "hive_warehouse"
+      },
+      {
+        "property": "refresh_statement",
+        "path": "/warehouse/mfg_icn8/",
+        "type": "other"
+      }
+    ],
+    "all_table_references": [
+      {
+        "property": "Command Arguments",
+        "table": "nxp.com",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Arguments",
+        "table": "impala.na",
+        "type": "schema.table"
+      },
+      {
+        "property": "log-message",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "hdfs_read_fail",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "kerberos_ticket_expired",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "memory_limit_exceeded",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "memory_oversubscribed",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "query_admission_timeout",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "unreachable_impala_deamon",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "clear_not_in_stats_folder.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "Impala_Check.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "run_impala_query.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Arguments",
+        "table": "nxp.com",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Arguments",
+        "table": "root.default",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Arguments",
+        "table": "impala.na",
+        "type": "schema.table"
+      },
+      {
+        "property": "Hostname",
+        "table": "nxp.com",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "Impala_Check.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "Impala_Check.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Path",
+        "table": "Impala_Check.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "Command Arguments",
+        "table": "hadoop_nifi_svc.keytab",
+        "type": "schema.table"
+      },
+      {
+        "property": "add_partition_statement",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "drop_partition_statement",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "refresh_statement",
+        "table": "execution.error",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "mfg_icn8_apps",
+        "type": "table_name"
+      },
+      {
+        "property": "Command Path",
+        "table": "View_logging_to_table.sh",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nsc.scrap_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.p_parameter_type",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nps.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.p_from_start_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.measured_value",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ne.experiment_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbw.trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.component",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "mfg_icn8_data",
+        "type": "table_name"
+      },
+      {
+        "property": "query",
+        "table": "nbw.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "npr.loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nsc.scrap_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "neu.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nls.lot_creation_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.ttn_recipe_process_step",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.run_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nmr.meas_loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nes.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "npr.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nts.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nor.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.program",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "mfg_icn8_apps",
+        "type": "table_name"
+      },
+      {
+        "property": "query",
+        "table": "nbq.lot",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nes.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ne.exp_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "neu.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbw.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nts.loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "npr.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbw.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nor.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nor.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.from_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nps.trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "neu.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.run_loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "npr.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "neu.loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nor.trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.event",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nmr.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.parameter",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nes.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nps.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nts.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nmr.meas_loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nts.p_to_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.ttn_sub_recipe",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.meas_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nps.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nes.loh_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "ndr.p_to_start_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "Temptation",
+        "type": "table_name"
+      },
+      {
+        "property": "query",
+        "table": "nbq.loh_key",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nmr.p_from_trackout_cet_ts",
+        "type": "schema.table"
+      },
+      {
+        "property": "query",
+        "table": "nbq.p_aggregation_type",
+        "type": "schema.table"
+      }
+    ],
+    "all_sql_statements": [
+      {
+        "property": "add_partition_statement",
+        "statement": "alter table \")\n  :append          (\"');",
+        "type": "ddl"
+      },
+      {
+        "property": "drop_partition_statement",
+        "statement": "drop if exists partition (\")\n  :replaceAll      (\"/\"                         , \"', \"                        )\n  :replaceAll      (\"=\"                         , \"='\"                         )\n  :replaceAll      (\"__HIVE_DEFAULT_PARTITION__\", \"\"                           )\n  :replaceAll      (\"%3A\"                       , \":\"                          )\n  :prepend         (\"alter table \")\n  :append          (\"');",
+        "type": "ddl"
+      },
+      {
+        "property": "drop_partition_statement",
+        "statement": "alter table \")\n  :append          (\"');",
+        "type": "ddl"
+      },
+      {
+        "property": "refresh_statement",
+        "statement": "refresh \")\n  :append          (\"');",
+        "type": "maintenance"
+      },
+      {
+        "property": "query",
+        "statement": "select\n  lot\n, num_wafers\n, wafers\n, component\n, regexp_replace (object, '[^\\x00-\\xFF]', '')                      object\n, object_type\n, num_wafers_step\n, num_bad\n, num_good\n, outlier\n, min_bad\n, max_bad\n, min_good\n, max_good\n, distance\n, avg_good\n, std_good\n, state\n, proc_state\n, scrap_type\n, prod_period\n, scrap_cet_ts\n, terminate_cet_ts\n, admin_scrap_cet_ts\n, product\n, process\n, esort_scrap_code\n, maverick\n, scrap_suspect_technical_stage\n, scrap_suspect_flow_stage\n, regexp_replace (scrap_suspect_process_step, '[^\\x00-\\xFF]', '')  scrap_suspect_process_step\n, cause_contained\n, incident\n, scrap_code\n, proc_key\n, rec_owner\n, cause_code\n, section_cause_code\n, ccd_description\n, replace (detailed_description, ',', '')                          detailed_description\n, loh_trackout_cet_ts\n, loh_technical_stage\n, loh_flow_stage\n, loh_step\n, loh_equipment\n, scrap_key\n, total\n, scrap_correlate_type\n, good_wafers\nfrom\n  mfg_icn8_apps.nifi_single_wafer_scrap_hits\nwhere\n   scrap_cet_ts >= '${start_ts}'  /* 2020-03-17 FvH: To save on diskspace / BRS processing time, only sent 2020 (and later) data */\n                                  /* 2022-03-16 FvH: To save on diskspace / BRS processing time, only sent 2022 (and later) data */\n                                  /* 2023-02-06 FvH: To save on diskspace / BRS processing time, only sent 2023 (and later) data */\n                                  /* 2023-09-18 FvH: Permanent beep reduction: always only extract the last n days               */\n;",
+        "type": "query"
+      },
+      {
+        "property": "query",
+        "statement": "select\n    'nifi_diamond_raw'                        table_name\n  , substr (ndr.run_trackout_cet_ts, 1, 19)   trackout_cet_ts\n  , nvl (ndr.run_loh_key, 0)                  loh_key\n  , count (*)                                 num_records\n  from\n    mfg_icn8_data.nifi_diamond_raw  ndr\n  where\n        ndr.p_from_trackout_cet_ts  < '${end_ts}'\n    and ndr.p_to_trackout_cet_ts    > '${start_ts}'\n    and ndr.run_trackout_cet_ts    >= '${start_ts}'\n    and ndr.run_trackout_cet_ts     < '${end_ts}'\n    and ndr.run_trackout_cet_ts     > '2020-04-01'\n  group by\n    ndr.run_loh_key\n  , ndr.run_trackout_cet_ts\nunion all\n  select\n    'nifi_production_steps'  table_name\n  , nps.trackout_cet_ts\n  , nps.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_production_steps  nps\n  where\n        nps.p_from_trackout_cet_ts  < '${end_ts}'\n    and nps.p_to_trackout_cet_ts    > '${start_ts}'\n    and nps.trackout_cet_ts        >= '${start_ts}'\n    and nps.trackout_cet_ts         < '${end_ts}'\n  group by\n    nps.loh_key\n  , nps.trackout_cet_ts\nunion all\n  select\n    'nifi_metrology_raw'          table_name\n  , nmr.meas_loh_trackout_cet_ts  trackout_cet_ts\n  , nmr.meas_loh_key              loh_key\n  , count (*)                     num_records\n  from\n    mfg_icn8_data.nifi_metrology_raw  nmr\n  where\n        nmr.p_from_trackout_cet_ts    < '${end_ts}'\n    and nmr.p_to_trackout_cet_ts      > '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts >= '${start_ts}'\n    and nmr.meas_loh_trackout_cet_ts  < '${end_ts}'\n  group by\n    nmr.meas_loh_key\n  , nmr.meas_loh_trackout_cet_ts\nunion all\n  select\n    'nifi_pcm_raw'           table_name\n  , npr.loh_trackout_cet_ts  trackout_cet_ts\n  , npr.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_pcm_raw  npr\n  where\n        npr.p_from_trackout_cet_ts  < '${end_ts}'\n    and npr.p_to_trackout_cet_ts    > '${start_ts}'\n    and npr.loh_trackout_cet_ts    >= '${start_ts}'\n    and npr.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    npr.loh_trackout_cet_ts\n  , npr.loh_key\nunion all\n  select\n    'nifi_temptation_sum'    table_name\n  , nts.loh_trackout_cet_ts  trackout_cet_ts\n  , nts.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_temptation_sum  nts\n  where\n        nts.p_from_trackout_cet_ts  < '${end_ts}'\n    and nts.p_to_trackout_cet_ts    > '${start_ts}'\n    and nts.loh_trackout_cet_ts    >= '${start_ts}'\n    and nts.loh_trackout_cet_ts     < '${end_ts}'\n    and nts.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nts.loh_trackout_cet_ts\n  , nts.loh_key\nunion all\n  select\n    'nifi_e3_sum'            table_name\n  , nes.loh_trackout_cet_ts  trackout_cet_ts\n  , nes.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_sum  nes\n  where\n        nes.p_from_trackout_cet_ts  < '${end_ts}'\n    and nes.p_to_trackout_cet_ts    > '${start_ts}'\n    and nes.loh_trackout_cet_ts    >= '${start_ts}'\n    and nes.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nes.loh_trackout_cet_ts\n  , nes.loh_key\nunion all\n  select\n    'nifi_e3_uva'            table_name\n  , neu.loh_trackout_cet_ts  trackout_cet_ts\n  , neu.loh_key              loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_e3_uva  neu\n  where\n        neu.p_from_trackout_cet_ts  < '${end_ts}'\n    and neu.p_to_trackout_cet_ts    > '${start_ts}'\n    and neu.loh_trackout_cet_ts    >= '${start_ts}'\n    and neu.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    neu.loh_trackout_cet_ts\n  , neu.loh_key\nunion all\n  select\n    'nifi_experiments'       table_name\n  , ne.exp_cet_ts            trackout_cet_ts\n  , ne.experiment_key        loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_experiments  ne\n  where\n        ne.exp_cet_ts >= '${start_ts}'\n    and ne.exp_cet_ts  < '${end_ts}'\n  group by\n    ne.exp_cet_ts\n  , ne.experiment_key\nunion all\n  select\n    'nifi_tool_overlay_raw'  table_name\n  , nor.trackout_cet_ts\n  , nor.loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_tool_overlay_raw  nor\n  where\n        nor.p_from_trackout_cet_ts  < '${end_ts}'\n    and nor.p_to_trackout_cet_ts    > '${start_ts}'\n    and nor.trackout_cet_ts        >= '${start_ts}'\n    and nor.trackout_cet_ts         < '${end_ts}'\n  group by\n    nor.loh_key\n  , nor.trackout_cet_ts\nunion all\n  select\n    'nifi_diamond_components'  table_name\n  , '1900-01-01 00:00:00'      trackout_cet_ts\n  , -1                         loh_key\n  , count (*)                  num_records\n  from\n    mfg_icn8_data.nifi_diamond_components  ndc\nunion all\n  select\n    'nifi_process_runcards'  table_name\n  , '1900-01-01 00:00:00'    trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_process_runcards  npr\nunion all\n  select\n    'nifi_lotstatus'         table_name\n  , nls.lot_creation_cet_ts  trackout_cet_ts\n  , -1                       loh_key\n  , count (*)                num_records\n  from\n    mfg_icn8_data.nifi_lot_status  nls\n  where\n        nls.lot_creation_cet_ts >= '${start_ts}'\n    and nls.lot_creation_cet_ts  < '${end_ts}'\n  group by\n    nls.lot_creation_cet_ts\nunion all\n  select\n    'nifi_scrap'      table_name\n  , nsc.scrap_cet_ts  trackout_cet_ts\n  , nsc.scrap_key     loh_key\n  , count (*)         num_records\n  from\n    mfg_icn8_data.nifi_scrap  nsc\n  where\n        nsc.scrap_cet_ts >= '${start_ts}'\n    and nsc.scrap_cet_ts  < '${end_ts}'\n    and nsc.scrap_key     > 0\n  group by\n    nsc.scrap_cet_ts\n  , nsc.scrap_key\nunion all\n  select \n    'nifi_xsite_states_raw'                 table_name\n  , substr (ndr.from_cet_ts, 1, 19)         trackout_cet_ts\n  , 1                                       loh_key\n  , count (*)                               num_records\n  from\n    mfg_icn8_data.nifi_xsite_states_raw  ndr\n  where\n        ndr.p_from_start_cet_ts  < '${end_ts}'\n    and ndr.p_to_start_cet_ts    > '${start_ts}'\n    and ndr.from_cet_ts          >= '${start_ts}'\n    and ndr.from_cet_ts          < '${end_ts}'\n  group by\n    substr (ndr.from_cet_ts, 1, 19) \nunion all\n  select\n    'nifi_base_wafer_production_steps'  table_name\n  , nbw.trackout_cet_ts                 trackout_cet_ts\n  , nbw.loh_key                         loh_key\n  , count (*)                           num_records\n  from\n    mfg_icn8_apps.nifi_base_wafer_production_steps  nbw\n  where\n        nbw.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbw.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbw.trackout_cet_ts        >= '${start_ts}'\n    and nbw.trackout_cet_ts         < '${end_ts}'\n  group by\n    nbw.trackout_cet_ts\n  , nbw.loh_key\nunion all\n  select\n    'nifi_base_qualifications (TEMPTATION)'        table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_temptation_bq_yn}' in ('', 'Y')\n    and nbq.p_parameter_type        = 'TEMPTATION'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n    and nbq.loh_trackout_cet_ts    >= '2020-07-21'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that Temptation BQ data was sent (in case BQ happens to contain 0 Temptation records) */\n    'nifi_base_qualifications (TEMPTATION)'  table_name\n  , ''                                       trackout_cet_ts\n  , -1                                       loh_key\n  , -1                                       num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_temptation_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3)'                table_name\n  , nbq.loh_trackout_cet_ts                        trackout_cet_ts\n  , nbq.loh_key                                    loh_key\n  , count ( distinct\n            nvl (nbq.lot                    , '')\n          , nvl (nbq.meas_cet_ts            , '')\n          , nvl (nbq.program                , '')\n          , nvl (nbq.parameter              , '')\n          , nvl (nbq.component              , '')\n          , nvl (nbq.ttn_sub_recipe         , '')\n          , nvl (nbq.ttn_recipe_process_step, '')\n          , nvl (nbq.event                  , '')\n          ,      nbq.measured_value\n          )                                        num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        '${include_e3_bq_yn}'      in ('', 'Y')\n    and nbq.p_parameter_type        = 'E3'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select  /* Add a record to indicate that E3 BQ data was sent (in case BQ happens to contain 0 E3 records) */\n    'nifi_base_qualifications (E3)'  table_name\n  , ''                               trackout_cet_ts\n  , -1                               loh_key\n  , -1                               num_records\n  from\n    mfg_icn8_data.dual\n  where\n    '${include_e3_bq_yn}' in ('', 'Y')\nunion all\n  select\n    'nifi_base_qualifications (E3_UVA)'  table_name\n  , nbq.loh_trackout_cet_ts              trackout_cet_ts\n  , nbq.loh_key                          loh_key\n  , count ( distinct\n            nvl (nbq.lot        , '')\n          , nvl (nbq.meas_cet_ts, '')\n          , nvl (nbq.program    , '')\n          , nvl (nbq.parameter  , '')\n          , nvl (nbq.event      , '')\n          )                              num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n        nbq.p_parameter_type        = 'E3_UVA'\n    and nbq.p_aggregation_type     in ('lot', 'waf', 'site')\n    and nbq.p_from_trackout_cet_ts  < '${end_ts}'\n    and nbq.p_to_trackout_cet_ts    > '${start_ts}'\n    and nbq.loh_trackout_cet_ts    >= '${start_ts}'\n    and nbq.loh_trackout_cet_ts     < '${end_ts}'\n  group by\n    nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\nunion all\n  select\n    concat ('nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )                              table_name\n  , nbq.loh_trackout_cet_ts               trackout_cet_ts\n  , nbq.loh_key                           loh_key\n  , count (*)                             num_records\n  from\n    mfg_icn8_apps.nifi_base_qualifications  nbq\n  where\n            (     nbq.p_parameter_type         in ('EDC', 'Overlay', 'PCM', 'TRACING_EQP', 'TRACING_COMP', 'DIAMOND_TIMES')\n              or  nbq.p_parameter_type       like 'OQ%'\n            )\n    and           nbq.p_aggregation_type       in ('lot', 'waf', 'site')\n    and           nbq.p_from_trackout_cet_ts    < '${end_ts}'\n    and           nbq.p_to_trackout_cet_ts      > '${start_ts}'\n    and           nbq.loh_trackout_cet_ts      >= '${start_ts}'\n    and           nbq.loh_trackout_cet_ts       < '${end_ts}'\n    and not (     p_parameter_type             in ('TRACING_COMP', 'DIAMOND_TIMES')\n              and nbq.loh_trackout_cet_ts       < '2020-04-01'\n            )\n    and not (     p_parameter_type              = 'TRACING_COMP'\n              and program                       = 'TRACING_COMP_TTN'\n            )  /* 2022-08-01 FvH: Don't count the component tracing records from Temptation, otherwise we cannot compare to BRS */\n  group by\n    concat ( 'nifi_base_qualifications ('\n           , p_parameter_type\n           , ')'\n           )\n  , nbq.loh_trackout_cet_ts\n  , nbq.loh_key\n  , nbq.p_parameter_type\norder by\n  table_name\n, trackout_cet_ts\n, loh_key\n;",
+        "type": "query"
+      }
+    ],
+    "all_working_directories": [
+      {
+        "property": "Working Directory",
+        "path": "/users/hadoop_nifi_svc/scripts/icn8/"
+      }
+    ],
+    "all_host_references": [
+      {
+        "property": "Command Arguments",
+        "host": "nardc02prod-impala.na-rdc02.nxp.com"
+      },
+      {
+        "property": "end_ts",
+        "host": "00:00"
+      },
+      {
+        "property": "start_ts",
+        "host": "00:00"
+      },
+      {
+        "property": "Command Arguments",
+        "host": "nardc02prod-impala.na-rdc02.nxp.com"
+      },
+      {
+        "property": "Hostname",
+        "host": "nardc02hdpnp011.na-rdc02.nxp.com"
+      },
+      {
+        "property": "start_ts",
+        "host": "06:30"
+      },
+      {
+        "property": "end_ts",
+        "host": "00:00"
+      },
+      {
+        "property": "start_ts",
+        "host": "00:00"
+      },
+      {
+        "property": "query",
+        "host": "nbq.com"
+      },
+      {
+        "property": "query",
+        "host": "00:00"
+      }
+    ],
+    "all_database_connections": []
+  }
+}

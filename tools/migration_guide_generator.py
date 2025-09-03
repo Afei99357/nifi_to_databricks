@@ -124,6 +124,7 @@ def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str,
         proc_type = proc.get("type", "Unknown").split(".")[-1]
         proc_name = proc.get("name", "Unknown")
         proc_classification = proc.get("classification", "unknown")
+        proc_properties = proc.get("properties", {})
 
         if proc_type not in processor_types:
             processor_types[proc_type] = []
@@ -131,7 +132,10 @@ def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str,
             {
                 "name": proc_name,
                 "classification": proc_classification,
-                "properties": proc.get("properties", {}),
+                "properties": proc_properties,
+                "full_type": proc.get("type", "Unknown"),
+                "id": proc.get("id", ""),
+                "parent_group": proc.get("parentGroupName", "Root"),
             }
         )
 
@@ -149,6 +153,20 @@ def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str,
             detailed_analysis.append(
                 f"- **{instance['name']}** ({instance['classification']})"
             )
+
+            # Add specific processor details
+            props = instance["properties"]
+            if props:
+                key_props = _extract_key_properties(proc_type, props)
+                if key_props:
+                    detailed_analysis.append(f"  - **Key Properties**: {key_props}")
+
+            # Add parent group if not root
+            if instance["parent_group"] and instance["parent_group"] != "Root":
+                detailed_analysis.append(
+                    f"  - **Process Group**: {instance['parent_group']}"
+                )
+
         detailed_analysis.append("")
 
     # Create migration patterns
@@ -198,16 +216,133 @@ def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str,
     }
 
 
+def _extract_key_properties(proc_type: str, properties: Dict[str, Any]) -> str:
+    """Extract key properties for a processor type."""
+
+    key_mappings = {
+        "ListFile": [
+            "Input Directory",
+            "File Filter",
+            "Path Filter",
+            "Minimum File Age",
+        ],
+        "GetFile": [
+            "Input Directory",
+            "Keep Source File",
+            "File Filter",
+            "Path Filter",
+        ],
+        "PutFile": [
+            "Directory",
+            "Create Missing Directories",
+            "Conflict Resolution Strategy",
+        ],
+        "PutSFTP": ["Hostname", "Port", "Username", "Remote Path", "Create Directory"],
+        "ExecuteStreamCommand": [
+            "Command Path",
+            "Command Arguments",
+            "Command Environment",
+        ],
+        "ExecuteSQL": [
+            "Database Connection Pooling Service",
+            "SQL select query",
+            "Max Wait Time",
+        ],
+        "RouteOnAttribute": [
+            "Route Strategy",
+            "routing.condition",
+            "routing.success",
+            "routing.failure",
+        ],
+        "UpdateAttribute": [
+            "Delete Attributes Expression",
+            "Store State",
+            "Stateful Variables",
+        ],
+        "ConvertRecord": [
+            "Record Reader",
+            "Record Writer",
+            "Include Zero Record FlowFiles",
+        ],
+    }
+
+    relevant_keys = key_mappings.get(proc_type, [])
+    found_props = []
+
+    for key in relevant_keys:
+        if key in properties and properties[key]:
+            value = str(properties[key])[:100]  # Limit length
+            found_props.append(f"{key}: {value}")
+
+    # Also check for any properties that contain paths, SQL, or commands
+    for prop_name, prop_value in properties.items():
+        if prop_name not in [k for k in relevant_keys] and prop_value:
+            value_str = str(prop_value).lower()
+            if any(
+                keyword in value_str
+                for keyword in [
+                    "sql",
+                    "select",
+                    "insert",
+                    "update",
+                    "delete",
+                    "path",
+                    "directory",
+                    "command",
+                    "script",
+                ]
+            ):
+                if len(found_props) < 5:  # Limit to 5 props
+                    short_value = (
+                        str(prop_value)[:80] + "..."
+                        if len(str(prop_value)) > 80
+                        else str(prop_value)
+                    )
+                    found_props.append(f"{prop_name}: {short_value}")
+
+    return "; ".join(found_props) if found_props else "No key properties configured"
+
+
 def _get_migration_pattern(proc_type: str, instances: List[Dict]) -> str:
     """Get migration pattern for a processor type."""
 
-    patterns = {
-        "ListFile": """
+    # Get sample properties for context
+    sample_props = instances[0]["properties"] if instances else {}
+
+    if proc_type == "ListFile":
+        input_dir = sample_props.get("Input Directory", "/path/to/files")
+        file_filter = sample_props.get("File Filter", "*")
+        return f"""
 ### ListFile → Auto Loader
 **Pattern**: Replace with Databricks Auto Loader for incremental file processing
-- **Databricks Solution**: `cloudFiles` format in Auto Loader
+- **Current NiFi Config**: Directory: `{input_dir}`, Filter: `{file_filter}`
+- **Databricks Solution**: Auto Loader with cloudFiles format
 - **Benefits**: Built-in checkpointing, schema evolution, efficient incremental processing
-- **Implementation**: Use structured streaming with cloudFiles source""",
+- **Implementation**: Configure Auto Loader to monitor equivalent cloud storage path"""
+
+    elif proc_type == "ExecuteStreamCommand":
+        command_path = sample_props.get("Command Path", "shell command")
+        command_args = sample_props.get("Command Arguments", "")
+        return f"""
+### ExecuteStreamCommand → Databricks SQL/PySpark
+**Pattern**: Convert shell commands to distributed SQL or PySpark operations
+- **Current NiFi Config**: Command: `{command_path} {command_args}`
+- **Databricks Solution**: Rewrite as PySpark DataFrame operations or SQL queries
+- **Benefits**: Distributed processing, better resource management, native Spark optimization
+- **Implementation**: Analyze command logic and convert to equivalent Spark operations"""
+
+    elif proc_type == "PutSFTP":
+        hostname = sample_props.get("Hostname", "sftp-server")
+        remote_path = sample_props.get("Remote Path", "/remote/path")
+        return f"""
+### PutSFTP → External System Integration
+**Pattern**: Replace SFTP transfers with cloud-native data movement
+- **Current NiFi Config**: Host: `{hostname}`, Path: `{remote_path}`
+- **Databricks Solution**: Use Azure Data Factory, AWS Glue, or direct cloud storage
+- **Benefits**: Serverless, managed transfers with better monitoring
+- **Implementation**: Set up cloud-to-cloud data movement or use Databricks external tables"""
+
+    patterns = {
         "GetFile": """
 ### GetFile → Auto Loader
 **Pattern**: Replace with Databricks Auto Loader for file ingestion
@@ -307,25 +442,85 @@ def _get_code_example(proc_type: str, instances: List[Dict]) -> str:
     if not instances:
         return ""
 
-    first_instance = instances[0]["name"]
+    first_instance = instances[0]
+    instance_name = first_instance["name"]
+    props = first_instance["properties"]
 
-    examples = {
-        "ListFile": f"""
-### Auto Loader Example (replaces {first_instance})
+    if proc_type == "ListFile":
+        input_dir = props.get("Input Directory", "/path/to/source/files")
+        file_filter = props.get("File Filter", "*")
+        # Try to determine file format from filter
+        file_format = "json"
+        if ".csv" in file_filter or "csv" in file_filter.lower():
+            file_format = "csv"
+        elif ".parquet" in file_filter or "parquet" in file_filter.lower():
+            file_format = "parquet"
+
+        return f"""
+### Auto Loader Example (replaces {instance_name})
 ```python
 # Auto Loader for incremental file processing
+# Replaces NiFi ListFile with Input Directory: {input_dir}
 df = (spark.readStream
     .format("cloudFiles")
-    .option("cloudFiles.format", "json")  # or csv, parquet, etc.
+    .option("cloudFiles.format", "{file_format}")
     .option("cloudFiles.schemaLocation", "/path/to/schema")
-    .load("/path/to/source/files"))
+    .load("{input_dir}"))  # Use actual NiFi directory path
 
 # Write to Delta table
 (df.writeStream
     .format("delta")
     .option("checkpointLocation", "/path/to/checkpoint")
     .table("catalog.schema.target_table"))
-```""",
+```"""
+
+    elif proc_type == "ExecuteStreamCommand":
+        command_path = props.get("Command Path", "unknown")
+        command_args = props.get("Command Arguments", "")
+
+        # Try to determine what type of command this is
+        is_sql_command = any(
+            keyword in command_path.lower()
+            for keyword in ["impala", "hive", "sql", "beeline"]
+        )
+
+        if is_sql_command:
+            return f"""
+### SQL Command Migration (replaces {instance_name})
+```python
+# Original NiFi command: {command_path} {command_args}
+# Migrate to Databricks SQL
+
+# If this was running SQL queries, replace with:
+spark.sql(\"\"\"
+    -- Insert your SQL logic here
+    -- Original command was: {command_path} {command_args}
+    SELECT * FROM source_table
+    WHERE condition = 'value'
+\"\"\")
+
+# For Impala/Hive queries, use Spark SQL equivalent:
+result_df = spark.sql("YOUR_ORIGINAL_SQL_HERE")
+result_df.write.mode("overwrite").table("catalog.schema.target_table")
+```"""
+        else:
+            return f"""
+### Custom Logic Migration (replaces {instance_name})
+```python
+# Original NiFi command: {command_path} {command_args}
+# Convert shell command logic to PySpark
+
+# Analyze what the command does and implement equivalent logic:
+# Example: If command processes files, use DataFrame operations
+from pyspark.sql import functions as F
+
+# Replace with appropriate DataFrame transformations
+df = spark.table("catalog.schema.source_table")
+processed_df = df.withColumn("processed", F.current_timestamp())
+processed_df.write.mode("append").table("catalog.schema.target_table")
+```"""
+
+    examples = {
         "ExecuteSQL": f"""
 ### SQL Migration Example (replaces {first_instance})
 ```sql
