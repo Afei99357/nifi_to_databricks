@@ -84,7 +84,7 @@ migration_result = migrate_nifi_to_databricks_simplified(
     out_dir=output_dir,
     project=project_name,
     notebook_path=f"{output_dir}/{project_name}/main",
-    deploy=False,  # Set to True to automatically deploy the job
+    # Note: Now generates comprehensive migration guide instead of deployable jobs
 )
 
 print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
@@ -214,20 +214,15 @@ if discover_assets_only:
 # MAGIC %md
 # MAGIC ## 🎓 Next Steps
 # MAGIC
-# MAGIC 1. **Review Generated Assets**: Check the output directory for all created files
-# MAGIC 2. **Test the Migration**: Run the generated notebook to verify functionality
-# MAGIC 3. **Deploy to Production**: Use `deploy=True` or follow README.md instructions
-# MAGIC 4. **Customize as Needed**: Modify generated PySpark code for your specific requirements
+# MAGIC 1. **Review Migration Guide**: Check `MIGRATION_GUIDE.md` for comprehensive migration recommendations
+# MAGIC 2. **Review Analysis Results**: Examine the workflow analysis and processor classifications
+# MAGIC 3. **Follow Migration Guide**: Use the LLM-generated guide to manually implement your Databricks solution
+# MAGIC 4. **Leverage Asset Discovery**: Use the asset catalog to identify scripts, paths, and tables requiring migration
 # MAGIC
-# MAGIC ### 🔧 To Deploy Automatically:
-# MAGIC ```python
-# MAGIC # Re-run with deployment enabled
-# MAGIC migrate_nifi_to_databricks_simplified(
-# MAGIC     xml_path=xml_path,
-# MAGIC     out_dir=output_dir,
-# MAGIC     project=project_name,
-# MAGIC     deploy=True  # This will create and run the Databricks job
-# MAGIC )
-# MAGIC ```
+# MAGIC ### 📋 Key Generated Files:
+# MAGIC - **`MIGRATION_GUIDE.md`**: Comprehensive migration recommendations and code patterns
+# MAGIC - **`workflow_analysis.json`**: Detailed processor analysis and classification
+# MAGIC - **`asset_catalog.json`**: Complete inventory of scripts, paths, and external dependencies
+# MAGIC - **`asset_summary_report.md`**: Human-readable summary of migration requirements
 # MAGIC
-# MAGIC **That's it! Your NiFi workflow is now a production-ready Databricks pipeline! 🚀**
+# MAGIC **The migration guide provides intelligent, context-aware recommendations for your specific NiFi workflow! 🚀**

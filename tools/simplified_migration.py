@@ -32,7 +32,6 @@ def migrate_nifi_to_databricks_simplified(
     out_dir: str,
     project: str,
     notebook_path: Optional[str] = None,
-    deploy: bool = False,
     max_processors_per_chunk: int = 25,
 ) -> Dict[str, Any]:
     """
@@ -42,18 +41,17 @@ def migrate_nifi_to_databricks_simplified(
     1. Analyze NiFi workflow and classify processors
     2. Prune infrastructure-only processors
     3. Detect semantic data flow chains
-    4. Create optimized Databricks migration
+    4. Generate comprehensive migration guide with recommendations
 
     Args:
         xml_path: Path to NiFi XML template file
         out_dir: Output directory for migration artifacts
         project: Project name for generated assets
-        notebook_path: Optional notebook path for deployment
-        deploy: Whether to deploy the generated job
+        notebook_path: Optional notebook path (for reference in guide)
         max_processors_per_chunk: Max processors per chunk for large workflows
 
     Returns:
-        Dictionary containing migration results and analysis
+        Dictionary containing migration guide and analysis results
     """
 
     print("🚀 Starting simplified NiFi to Databricks migration...")
@@ -188,8 +186,10 @@ def migrate_nifi_to_databricks_simplified(
             f"🔍 Found {asset_summary['total_table_references']} table references for schema mapping"
         )
 
-    # Step 8: Execute FOCUSED migration (only essential processors)
-    print("🎯 Executing focused migration on essential data processors only...")
+    # Step 8: Generate comprehensive migration guide (essential processors only)
+    print(
+        "📋 Generating comprehensive migration guide for essential data processors..."
+    )
 
     # Parse pruned_result to get the list of essential processors
 
@@ -211,7 +211,7 @@ def migrate_nifi_to_databricks_simplified(
         project=project,
         job=f"{project}_job",
         notebook_path=notebook_path or "",
-        run_now=deploy,
+        run_now=False,  # No deployment - migration guide approach
     )
 
     # Compile complete results
@@ -240,13 +240,14 @@ def migrate_nifi_to_databricks_simplified(
             "out_dir": out_dir,
             "project": project,
             "notebook_path": notebook_path,
-            "deploy": deploy,
+            "approach": "migration_guide_generation",
             "max_processors_per_chunk": max_processors_per_chunk,
         },
     }
 
-    print("✅ Migration completed successfully!")
-    print(f"📁 Results saved to: {out_dir}")
+    print("✅ Migration guide generation completed successfully!")
+    print(f"📁 Migration guide and analysis saved to: {out_dir}")
+    print(f"📋 Check MIGRATION_GUIDE.md for comprehensive migration recommendations")
 
     return complete_result
 
