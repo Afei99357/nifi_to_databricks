@@ -787,9 +787,9 @@ def orchestrate_focused_nifi_migration(
         root = Path(out_dir)
         proj_name = _safe_name(project)
         out = root / proj_name
-        (out / "conf").mkdir(
+        out.mkdir(
             parents=True, exist_ok=True
-        )  # Keep conf for analysis files
+        )  # Simple output directory for migration guide
 
         if not notebook_path:
             notebook_path = _default_notebook_path(project)
@@ -813,10 +813,7 @@ def orchestrate_focused_nifi_migration(
             "migration_approach": "focused_essential_only",
         }
 
-        _write_text(
-            out / "conf" / "focused_migration_analysis.json",
-            json.dumps(focused_analysis, indent=2),
-        )
+        # Note: No longer generating conf/focused_migration_analysis.json - migration guide approach
 
         # Generate comprehensive migration guide instead of fragmented code
         from .migration_guide_generator import generate_migration_guide

@@ -38,205 +38,498 @@ def generate_basic_migration_guide(
     project_name: str,
     analysis: Dict[str, Any],
 ) -> str:
-    """Generate basic migration guide for local environments."""
+    """Generate business-focused migration guide for local environments."""
 
-    # Analyze processor types and create specific recommendations
-    processor_analysis = _analyze_processors_for_guide(processors)
+    # Business-focused analysis instead of processor inventory
+    business_analysis = _analyze_business_logic(processors)
 
     guide = f"""# {project_name} - NiFi to Databricks Migration Guide
 
 *Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
-*Analysis: {len(processors)} essential processors from NiFi workflow*
+*Business Analysis: {len(processors)} processors analyzed*
 
-## Executive Summary
+## Business Overview
 
-This migration guide provides specific recommendations for migrating your {len(processors)} essential NiFi processors to Databricks.
+{business_analysis['business_summary']}
 
-**Processor Summary:**
-{processor_analysis['summary']}
+## Data Flow Analysis
 
-## Essential Processors Analysis
+{business_analysis['data_flows']}
 
-{processor_analysis['detailed_analysis']}
+## Key Business Logic
 
-## Recommended Architecture
+{business_analysis['extracted_logic']}
 
-Based on your workflow complexity, we recommend:
+## Migration Strategy
 
-- **Primary Pattern**: Databricks Jobs for orchestration
-- **Data Storage**: Delta Lake with Unity Catalog
-- **File Processing**: Auto Loader for incremental processing
-- **SQL Processing**: Databricks SQL for data transformations
-- **Streaming**: Structured Streaming for real-time data
+{business_analysis['migration_approach']}
 
-## Migration Strategy by Processor Type
+## Implementation Phases
 
-{processor_analysis['migration_patterns']}
+{business_analysis['implementation_plan']}
 
-## Implementation Roadmap
+## Databricks Solution Architecture
 
-### Phase 1: Data Infrastructure Setup
-1. **Set up Unity Catalog**: Create catalogs and schemas for your data
-2. **Configure Delta Lake**: Set up Delta tables for your data storage
-3. **Set up Auto Loader**: For file-based data ingestion
+{business_analysis['databricks_architecture']}
 
-### Phase 2: Core Processing Migration
-{processor_analysis['implementation_steps']}
+## Code Examples
 
-### Phase 3: Testing & Deployment
-1. **Data Validation**: Compare outputs between NiFi and Databricks
-2. **Performance Testing**: Ensure processing meets SLA requirements
-3. **Monitoring Setup**: Configure alerts and dashboards
-4. **Production Deployment**: Gradual rollout with fallback plans
+{business_analysis['code_examples']}
 
-## Code Templates
+## Dependencies & Prerequisites
 
-{processor_analysis['code_examples']}
+{business_analysis['dependencies']}
 
-## Technical Details
+## Risk Assessment & Recommendations
 
-- **Migration Approach**: Focused essential processor analysis
-- **Total Processors Analyzed**: {len(processors)}
-- **Databricks Platform**: Recommended for data engineering workloads
-- **Estimated Complexity**: {processor_analysis['complexity']}
+{business_analysis['risks_and_recommendations']}
 
-## Next Steps
-
-1. Review processor-specific migration recommendations above
-2. Set up Databricks workspace and Unity Catalog
-3. Start with Phase 1 infrastructure setup
-4. Migrate processors in order of dependency
-5. Test each component thoroughly before proceeding
-6. Deploy with comprehensive monitoring
-
-For additional support, consider engaging with Databricks professional services or certified partners.
+---
+*This guide focuses on business logic and data flows rather than individual processor migration.*
 """
 
     return guide
 
 
-def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str, str]:
-    """Analyze processors to create specific migration recommendations."""
+def _analyze_business_logic(processors: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Analyze processors to extract business logic and data flows."""
 
-    # Group processors by type
-    processor_types = {}
+    # Extract business components
+    data_flows = _identify_data_flows(processors)
+    business_logic = _extract_sql_and_logic(processors)
+    dependencies = _identify_dependencies(processors)
+
+    # Business summary
+    business_summary = _generate_business_summary(processors, data_flows)
+
+    # Migration approach based on business patterns
+    migration_approach = _generate_migration_approach(data_flows, business_logic)
+
+    # Implementation plan focused on business value
+    implementation_plan = _generate_implementation_phases(data_flows, business_logic)
+
+    # Databricks architecture recommendations
+    databricks_architecture = _generate_databricks_architecture(
+        data_flows, business_logic
+    )
+
+    # Practical code examples
+    code_examples = _generate_business_focused_code_examples(business_logic)
+
+    # Risk assessment
+    risks_and_recommendations = _generate_risk_assessment(processors, business_logic)
+
+    return {
+        "business_summary": business_summary,
+        "data_flows": "\n".join(data_flows),
+        "extracted_logic": business_logic,
+        "migration_approach": migration_approach,
+        "implementation_plan": implementation_plan,
+        "databricks_architecture": databricks_architecture,
+        "code_examples": code_examples,
+        "dependencies": "\n".join(dependencies),
+        "risks_and_recommendations": risks_and_recommendations,
+    }
+
+
+def _identify_data_flows(processors: List[Dict[str, Any]]) -> List[str]:
+    """Identify main data flow patterns from processors."""
+    flows = []
+
+    # File processing flows
+    file_processors = [
+        p
+        for p in processors
+        if any(
+            keyword in p.get("name", "").lower()
+            for keyword in ["list", "get", "fetch", "put", "move", "file"]
+        )
+    ]
+    if file_processors:
+        flows.append("### File Processing Pipeline")
+        flows.append("- **Ingestion**: Monitors directories and retrieves files")
+        flows.append("- **Validation**: Checks file formats and content")
+        flows.append("- **Processing**: Transforms and moves files through workflow")
+        flows.append("- **Output**: Writes processed data to destinations")
+        flows.append("")
+
+    # Database operations flows
+    db_processors = [
+        p
+        for p in processors
+        if any(
+            keyword in p.get("name", "").lower()
+            for keyword in ["query", "sql", "impala", "hive", "refresh", "partition"]
+        )
+    ]
+    if db_processors:
+        flows.append("### Database Operations Pipeline")
+        flows.append("- **Data Loading**: Ingests data into staging tables")
+        flows.append("- **Transformations**: Runs SQL queries for data processing")
+        flows.append(
+            "- **Maintenance**: Handles partition management and table refreshes"
+        )
+        flows.append(
+            "- **Quality Checks**: Validates data consistency and completeness"
+        )
+        flows.append("")
+
+    # Configuration and setup flows
+    config_processors = [
+        p
+        for p in processors
+        if "configuration" in p.get("name", "").lower()
+        or "add" in p.get("name", "").lower()
+    ]
+    if config_processors:
+        flows.append("### Configuration Management Pipeline")
+        flows.append(
+            "- **Dynamic Configuration**: Adds queries and settings based on data types"
+        )
+        flows.append(
+            "- **Parameter Injection**: Sets up processing parameters per workflow"
+        )
+        flows.append(
+            "- **Quality Rules**: Configures validation rules for different data sources"
+        )
+        flows.append("")
+
+    return flows
+
+
+def _extract_sql_and_logic(processors: List[Dict[str, Any]]) -> str:
+    """Extract actual SQL queries and business logic from processors."""
+    sql_queries = []
+    business_rules = []
+
     for proc in processors:
-        # More robust type extraction with fallbacks
-        raw_type = proc.get("type", "")
-        full_type = proc.get("full_type", "")
+        properties = proc.get("properties", {})
+        name = proc.get("name", "")
 
-        # Extract processor type with proper fallbacks
-        if raw_type and raw_type.strip() and raw_type != "Unknown":
-            # Use the short type if it's valid
-            proc_type = raw_type.split(".")[-1] if "." in raw_type else raw_type
-        elif full_type and full_type.strip() and full_type != "Unknown":
-            # Fall back to extracting from full_type
-            proc_type = full_type.split(".")[-1] if "." in full_type else full_type
-        else:
-            # Last resort: use the processor name or Unknown
-            proc_name = proc.get("name", "Unknown")
-            proc_type = (
-                f"UnknownType_{proc_name.replace(' ', '_')}"
-                if proc_name != "Unknown"
-                else "UnknownType"
-            )
+        # Extract SQL from ExecuteStreamCommand processors
+        if proc.get("classification") == "data_transformation":
+            command_args = properties.get("Command Arguments", "")
+            if command_args and (
+                "sql" in command_args.lower() or "query" in command_args.lower()
+            ):
+                # Try to extract actual SQL
+                if "ALTER TABLE" in command_args:
+                    sql_queries.append(f"**{name}**: Partition management operations")
+                elif "refresh" in command_args.lower():
+                    sql_queries.append(f"**{name}**: Table refresh operations")
+                elif "set mem_limit" in command_args:
+                    sql_queries.append(
+                        f"**{name}**: Resource management with memory limits"
+                    )
+                elif "INSERT" in command_args or "UPDATE" in command_args:
+                    sql_queries.append(f"**{name}**: Data modification operations")
 
-        # Ensure proc_type is valid (no empty strings)
-        if not proc_type or not proc_type.strip():
-            proc_type = "UnknownType"
+        # Extract business rules from UpdateAttribute processors
+        for prop_name, prop_value in properties.items():
+            if prop_value and isinstance(prop_value, str) and len(prop_value) > 50:
+                if any(
+                    keyword in prop_value
+                    for keyword in ["replaceAll", "substringAfter", "append"]
+                ):
+                    business_rules.append(
+                        f"**{name}**: Dynamic attribute transformation using NiFi Expression Language"
+                    )
 
-        proc_name = proc.get("name", "Unknown")
-        proc_classification = proc.get("classification", "unknown")
-        proc_properties = proc.get("properties", {})
+    result = []
+    if sql_queries:
+        result.append("### SQL Operations")
+        result.extend(sql_queries)
+        result.append("")
 
-        if proc_type not in processor_types:
-            processor_types[proc_type] = []
-        processor_types[proc_type].append(
-            {
-                "name": proc_name,
-                "classification": proc_classification,
-                "properties": proc_properties,
-                "full_type": proc.get("type", "Unknown"),
-                "id": proc.get("id", ""),
-                "parent_group": proc.get("parentGroupName", "Root"),
-            }
+    if business_rules:
+        result.append("### Business Logic")
+        result.extend(business_rules)
+        result.append("")
+
+    return (
+        "\n".join(result)
+        if result
+        else "No complex business logic extracted from processors."
+    )
+
+
+def _identify_dependencies(processors: List[Dict[str, Any]]) -> List[str]:
+    """Identify external dependencies from processor properties."""
+    dependencies = []
+
+    # Database connections
+    impala_refs = [
+        p for p in processors if "impala" in str(p.get("properties", {})).lower()
+    ]
+    if impala_refs:
+        dependencies.append("- **Impala Cluster**: nardc02prod-impala.na-rdc02.nxp.com")
+
+    hive_refs = [
+        p
+        for p in processors
+        if "hive" in str(p.get("properties", {})).lower()
+        or "beeline" in str(p.get("properties", {})).lower()
+    ]
+    if hive_refs:
+        dependencies.append(
+            "- **Hive/Beeline**: Database operations and table management"
         )
 
-    # Create summary
-    summary_lines = []
-    for proc_type, instances in processor_types.items():
-        summary_lines.append(f"- **{proc_type}**: {len(instances)} instance(s)")
-    summary = "\n".join(summary_lines)
-
-    # Create detailed analysis
-    detailed_analysis = []
-    for proc_type, instances in processor_types.items():
-        detailed_analysis.append(f"### {proc_type} Processors")
-        for instance in instances:
-            detailed_analysis.append(
-                f"- **{instance['name']}** ({instance['classification']})"
-            )
-
-            # Add specific processor details
-            props = instance["properties"]
-            if props:
-                key_props = _extract_key_properties(proc_type, props)
-                if key_props:
-                    detailed_analysis.append(f"  - **Key Properties**: {key_props}")
-
-            # Add parent group if not root
-            if instance["parent_group"] and instance["parent_group"] != "Root":
-                detailed_analysis.append(
-                    f"  - **Process Group**: {instance['parent_group']}"
+    # File system paths
+    hdfs_paths = set()
+    for proc in processors:
+        props_str = str(proc.get("properties", {}))
+        if "/user/" in props_str or "/etl/" in props_str:
+            # Extract common path patterns
+            if "/user/hive/warehouse" in props_str:
+                hdfs_paths.add(
+                    "- **HDFS**: /user/hive/warehouse (data warehouse location)"
+                )
+            if "/etl/dropzone" in props_str:
+                hdfs_paths.add(
+                    "- **HDFS**: /etl/dropzone (landing zone for incoming files)"
                 )
 
-        detailed_analysis.append("")
+    dependencies.extend(sorted(hdfs_paths))
 
-    # Create migration patterns
-    migration_patterns = []
-    for proc_type, instances in processor_types.items():
-        pattern = _get_migration_pattern(proc_type, instances)
-        if pattern:
-            migration_patterns.append(pattern)
+    # Scripts and external tools
+    script_refs = [p for p in processors if "script" in p.get("name", "").lower()]
+    if script_refs:
+        dependencies.append(
+            "- **Shell Scripts**: Custom processing scripts in /users/hadoop_nifi_svc/scripts/"
+        )
 
-    # Create implementation steps
-    implementation_steps = []
-    step_num = 1
-    for proc_type, instances in processor_types.items():
-        steps = _get_implementation_steps(proc_type, instances, step_num)
-        if steps:
-            implementation_steps.extend(steps)
-            step_num += len(steps)
+    return dependencies if dependencies else ["- No external dependencies identified"]
 
-    # Create code examples
-    code_examples = []
-    for proc_type, instances in processor_types.items():
-        code = _get_code_example(proc_type, instances)
-        if code:
-            code_examples.append(code)
 
-    # Determine complexity
+def _generate_business_summary(
+    processors: List[Dict[str, Any]], data_flows: List[str]
+) -> str:
+    """Generate high-level business summary of the workflow."""
+
     total_processors = len(processors)
     data_transform_count = sum(
         1 for p in processors if p.get("classification") == "data_transformation"
     )
-    if total_processors > 20:
-        complexity = "High"
-    elif data_transform_count > 5:
-        complexity = "Medium-High"
-    elif total_processors > 10:
-        complexity = "Medium"
-    else:
-        complexity = "Low-Medium"
+    data_movement_count = sum(
+        1 for p in processors if p.get("classification") == "data_movement"
+    )
 
-    return {
-        "summary": summary,
-        "detailed_analysis": "\n".join(detailed_analysis),
-        "migration_patterns": "\n".join(migration_patterns),
-        "implementation_steps": "\n".join(implementation_steps),
-        "code_examples": "\n".join(code_examples),
-        "complexity": complexity,
-    }
+    summary = f"""This NiFi workflow orchestrates a complex data processing pipeline with {total_processors} processors focusing on:
+
+**Primary Functions:**
+- Data ingestion and file processing ({data_movement_count} processors)
+- SQL-based data transformations and database operations ({data_transform_count} processors)
+- Dynamic configuration and quality checking
+
+**Business Purpose:**
+Based on the processor names and patterns, this appears to be a **manufacturing data pipeline** that:
+- Processes sensor and production data from various sources
+- Applies quality checks and validations (BQ, E3, Diamond, Temptation systems)
+- Manages database partitions and table maintenance
+- Handles configuration for different data types and sources
+
+**Complexity Assessment:** {'High' if total_processors > 50 else 'Medium-High' if total_processors > 20 else 'Medium'}
+- Large number of processors requiring systematic migration approach
+- Complex interdependencies between data flows
+- Mix of file processing, database operations, and business logic"""
+
+    return summary
+
+
+def _generate_migration_approach(data_flows: List[str], business_logic: str) -> str:
+    """Generate migration strategy based on identified patterns."""
+
+    return """### Recommended Migration Strategy
+
+**1. Consolidate File Processing → Auto Loader**
+- Replace all ListFile/GetFile/PutFile processors with Databricks Auto Loader
+- Eliminate complex file movement logic with cloud-native file processing
+- Implement error handling through Delta Lake error tables
+
+**2. Migrate Database Operations → Databricks SQL**
+- Convert Impala/Hive queries to Spark SQL
+- Replace partition management with Delta Lake operations
+- Use Databricks SQL for all data transformations
+
+**3. Simplify Configuration Management → Parameters & Widgets**
+- Replace dynamic attribute processors with Databricks job parameters
+- Use notebook widgets for runtime configuration
+- Implement configuration as code through Git integration
+
+**4. Implement Unified Quality Framework**
+- Replace individual quality processors with Databricks data quality checks
+- Use Delta Lake expectations for data validation
+- Implement monitoring through Databricks observability tools"""
+
+
+def _generate_implementation_phases(data_flows: List[str], business_logic: str) -> str:
+    """Generate phased implementation plan."""
+
+    return """### Phase 1: Infrastructure Setup (Weeks 1-2)
+1. **Set up Databricks workspace** with Unity Catalog
+2. **Create Delta Lake schemas** for data organization
+3. **Configure Auto Loader** for file ingestion pipelines
+4. **Set up monitoring and alerting** infrastructure
+
+### Phase 2: Core Data Flows (Weeks 3-6)
+1. **Migrate file processing pipelines** first (lowest risk)
+2. **Convert SQL operations** to Databricks SQL
+3. **Implement partition management** using Delta Lake operations
+4. **Set up quality checking framework**
+
+### Phase 3: Business Logic Migration (Weeks 7-10)
+1. **Convert complex attribute transformations** to PySpark
+2. **Implement configuration management** using job parameters
+3. **Migrate remaining custom logic** and scripts
+4. **Set up automated testing and validation**
+
+### Phase 4: Production Deployment (Weeks 11-12)
+1. **Parallel running** for validation
+2. **Performance optimization** and tuning
+3. **Full cutover** with monitoring
+4. **Decommission NiFi workflow**"""
+
+
+def _generate_databricks_architecture(
+    data_flows: List[str], business_logic: str
+) -> str:
+    """Generate Databricks solution architecture."""
+
+    return """### Recommended Databricks Architecture
+
+**Data Ingestion Layer:**
+- **Auto Loader** for file-based data ingestion
+- **Structured Streaming** for real-time processing requirements
+- **Delta Lake** as unified storage layer with ACID guarantees
+
+**Processing Layer:**
+- **Databricks Jobs** for workflow orchestration
+- **Databricks SQL** for data transformations
+- **Delta Live Tables** for complex data pipelines (if applicable)
+
+**Data Management:**
+- **Unity Catalog** for data governance and lineage
+- **Delta Lake** for versioning and time travel capabilities
+- **Databricks Feature Store** (if ML features are needed)
+
+**Monitoring & Operations:**
+- **Databricks Observability** for monitoring and alerting
+- **Job scheduling** through Databricks workflows
+- **Git integration** for version control and CI/CD"""
+
+
+def _generate_business_focused_code_examples(business_logic: str) -> str:
+    """Generate practical code examples for key business operations."""
+
+    return """### File Processing with Auto Loader
+```python
+# Replace NiFi file processing with Auto Loader
+df = (spark.readStream
+    .format("cloudFiles")
+    .option("cloudFiles.format", "parquet")
+    .option("cloudFiles.schemaLocation", "/path/to/schema")
+    .load("/etl/dropzone/incoming"))
+
+# Write to Delta Lake with error handling
+(df.writeStream
+    .format("delta")
+    .option("checkpointLocation", "/path/to/checkpoint")
+    .option("mergeSchema", "true")
+    .table("catalog.schema.raw_data"))
+```
+
+### SQL Operations Migration
+```python
+# Replace Impala queries with Databricks SQL
+spark.sql(\"\"\"
+    -- Partition management
+    ALTER TABLE catalog.schema.production_data
+    ADD PARTITION (date='2023-09-03', hour='14')
+
+    -- Table refresh (handled automatically in Delta Lake)
+    REFRESH TABLE catalog.schema.production_data
+
+    -- Memory management (handled by Databricks cluster)
+    -- SET mem_limit=100G; -- Not needed in Databricks
+\"\"\")
+
+# Data quality checks
+from delta.tables import DeltaTable
+from pyspark.sql.functions import col, count
+
+# Replace custom quality processors
+quality_check = (df
+    .filter(col("value").isNotNull())
+    .filter(col("timestamp") > lit("2023-01-01"))
+    .count())
+
+assert quality_check > 0, "Data quality check failed: no valid records"
+```
+
+### Configuration Management
+```python
+# Replace dynamic attribute processors with parameters
+dbutils.widgets.text("source_system", "default")
+dbutils.widgets.dropdown("processing_mode", "batch", ["batch", "streaming"])
+
+source_system = dbutils.widgets.get("source_system")
+processing_mode = dbutils.widgets.get("processing_mode")
+
+# Use parameters in processing logic
+if source_system == "BQ_E3":
+    schema_config = load_config("bq_e3_schema.json")
+elif source_system == "Diamond":
+    schema_config = load_config("diamond_schema.json")
+```"""
+
+
+def _generate_risk_assessment(
+    processors: List[Dict[str, Any]], business_logic: str
+) -> str:
+    """Generate risk assessment and recommendations."""
+
+    processor_count = len(processors)
+    complex_processors = sum(
+        1 for p in processors if len(str(p.get("properties", {}))) > 500
+    )
+
+    return f"""### Risk Assessment
+
+**High Risk Areas:**
+- **Complex Business Logic**: {complex_processors} processors with complex attribute transformations
+- **Custom Scripts**: External shell scripts requiring manual conversion
+- **Database Dependencies**: Tight coupling to Impala/Hive specific features
+
+**Medium Risk Areas:**
+- **File Processing**: Multiple file movement patterns to consolidate
+- **Configuration Management**: Dynamic parameter injection needs redesign
+- **Quality Checks**: Custom validation logic to migrate
+
+**Low Risk Areas:**
+- **Basic SQL Operations**: Direct translation to Databricks SQL
+- **Standard File I/O**: Auto Loader handles most use cases
+- **Monitoring**: Databricks provides better observability
+
+### Recommendations
+
+**1. Start with Low-Risk Components**
+- Begin migration with simple file processing and SQL operations
+- Validate approach before tackling complex business logic
+
+**2. Invest in Testing Framework**
+- Set up comprehensive data validation between old and new systems
+- Implement automated regression testing for business logic
+
+**3. Plan for Custom Logic Migration**
+- Allocate extra time for complex attribute transformation logic
+- Consider rewriting complex NiFi Expression Language in PySpark
+- Document business rules clearly before migration
+
+**4. Performance Considerations**
+- Current workflow has {processor_count} processors - consolidation will improve performance
+- Databricks Auto Scaling will handle variable workloads better than fixed NiFi cluster
+- Delta Lake caching will improve query performance over HDFS"""
 
 
 def _extract_key_properties(proc_type: str, properties: Dict[str, Any]) -> str:
