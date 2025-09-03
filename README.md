@@ -8,6 +8,7 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 
 - **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and recommends optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming)
 - **🔍 Smart Workflow Analysis**: Advanced processor classification system that accurately identifies data transformations vs infrastructure operations
+- **🗂️ Intelligent Asset Discovery**: Comprehensive scanning of all processors to identify migration dependencies including scripts, databases, file systems, and external services
 - **🚀 Simplified Pipeline**: Direct function calls without agent complexity - linear execution path
 - **✂️ Semantic Migration**: Prune → Chain → Flow approach for business-meaningful migrations
 - **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
@@ -64,6 +65,98 @@ The tool automatically analyzes NiFi workflows and recommends the optimal Databr
 - **Code Generation** (`tools/generator_tools.py`): LLM-powered PySpark code generation with builtin templates
 - **Configuration** (`config/`): Environment management and logging
 - **Utilities** (`utils/`): File operations, XML processing, and helper functions
+
+## 🗂️ Intelligent Asset Discovery
+
+The migration tool includes a sophisticated asset discovery system that automatically identifies all external dependencies and resources that need to be migrated alongside your NiFi workflows.
+
+### 🎯 What It Discovers
+
+**Script Files & Executables (11 types supported):**
+- Shell scripts (`.sh`)
+- Python scripts (`.py`)
+- SQL files (`.sql`)
+- Java JARs (`.jar`)
+- Perl scripts (`.pl`)
+- R scripts (`.r`)
+- Ruby scripts (`.rb`)
+- JavaScript (`.js`)
+- Scala scripts (`.scala`)
+- Groovy scripts (`.groovy`)
+- Windows executables (`.exe`, `.bat`)
+
+**Database Connections:**
+- Impala/Hive clusters
+- MySQL, PostgreSQL, Oracle
+- MongoDB, Cassandra
+- SQL Server
+- Custom JDBC connections
+
+**File System Paths:**
+- HDFS paths (`/user/`, `/etl/`, `/warehouse/`)
+- Data warehouse locations
+- Staging directories
+- Temporary processing paths
+- Landing zones
+
+**Working Directories:**
+- Script execution directories
+- Processing workspaces
+- Configuration paths
+- Log directories
+
+### 🔧 How It Works
+
+**Pattern-Based Intelligence:**
+```python
+# Multi-method detection for comprehensive coverage
+asset_discovery = {
+    "script_detection": "Regex patterns + file extensions + semantic analysis",
+    "path_discovery": "HDFS patterns + directory structures + content analysis",
+    "database_extraction": "JDBC parsing + hostname patterns + connection strings",
+    "directory_identification": "Property name semantics + path structure analysis"
+}
+```
+
+**Real Example Output:**
+```bash
+# NiFi Asset Summary
+- Script Files Found: 11
+- HDFS Paths Found: 98
+- Database Hosts Found: 1
+- Working Directories: 13
+
+## Script Files Requiring Migration
+- /users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh
+- /users/hadoop_nifi_svc/scripts/icn8/backup_data.py
+- /scripts/icn8/process_results.sql
+
+## Database Connections
+- **Impala**: nardc02prod-impala.na-rdc02.nxp.com
+
+## HDFS Paths for Unity Catalog Migration
+- /user/hive/warehouse/mfg_data/staging_tables
+- /etl/dropzone/incoming/daily_files
+- /warehouse/prod/analytics_tables
+```
+
+### 🚀 Migration Planning Benefits
+
+**Complete Dependency Map:**
+- Identifies ALL external dependencies before migration starts
+- Prevents "discovered during migration" surprises
+- Enables accurate effort estimation
+
+**Risk Assessment:**
+- High-risk external scripts requiring manual conversion
+- Database connection changes needed
+- File system restructuring requirements
+
+**Asset Migration Strategy:**
+- Scripts → Convert to PySpark/Databricks SQL
+- Database hosts → Databricks SQL compute clusters
+- HDFS paths → Unity Catalog managed tables
+- Working directories → Databricks workspace paths
 
 ## 🚀 Quick Start
 
@@ -155,6 +248,7 @@ print("Analysis complete - ready for migration")
 **What you get:**
 - **📊 Processor breakdown**: Data transformation vs infrastructure vs movement
 - **🎯 Critical processors**: High-impact operations requiring careful migration
+- **🗂️ Asset discovery**: Complete inventory of scripts, databases, file systems, and dependencies
 - **🏗️ Architecture recommendation**: Optimal Databricks architecture (Jobs/DLT/Streaming)
 - **⚡ Migration insights**: Focus areas and automation opportunities
 - **📈 Complexity analysis**: Workflow size and interconnection patterns
@@ -177,7 +271,7 @@ result = migrate_nifi_to_databricks_simplified(
 print("Migration complete! Check output_results/ for generated assets")
 ```
 
-**Result:** Production-ready Databricks **batch job** pipeline with job configurations and documentation.
+**Result:** Production-ready Databricks **batch job** pipeline with job configurations, comprehensive asset inventory, and migration guide with external file dependencies.
 
 > **📋 Current Limitation**: The simplified migration currently generates **Databricks Jobs (batch processing)** for all workflows. Even if the LLM analysis recommends DLT Pipeline or Structured Streaming, the system will create a batch job implementation. Architecture decision integration is planned for future releases.
 
