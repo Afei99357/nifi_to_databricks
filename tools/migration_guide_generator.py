@@ -198,58 +198,106 @@ def _identify_data_flows(processors: List[Dict[str, Any]]) -> List[str]:
 
 
 def _extract_sql_and_logic(processors: List[Dict[str, Any]]) -> str:
-    """Extract actual SQL queries and business logic from processors."""
-    sql_queries = []
-    business_rules = []
+    """Extract references to external files and business logic that need manual review."""
+    external_files = []
+    sql_variables = []
+    business_logic_files = []
 
     for proc in processors:
         properties = proc.get("properties", {})
         name = proc.get("name", "")
 
-        # Extract SQL from ExecuteStreamCommand processors
-        if proc.get("classification") == "data_transformation":
-            command_args = properties.get("Command Arguments", "")
-            if command_args and (
-                "sql" in command_args.lower() or "query" in command_args.lower()
-            ):
-                # Try to extract actual SQL
-                if "ALTER TABLE" in command_args:
-                    sql_queries.append(f"**{name}**: Partition management operations")
-                elif "refresh" in command_args.lower():
-                    sql_queries.append(f"**{name}**: Table refresh operations")
-                elif "set mem_limit" in command_args:
-                    sql_queries.append(
-                        f"**{name}**: Resource management with memory limits"
-                    )
-                elif "INSERT" in command_args or "UPDATE" in command_args:
-                    sql_queries.append(f"**{name}**: Data modification operations")
+        # Check for external script files
+        command_args = properties.get("Command Arguments", "")
+        command_path = properties.get("Command Path", "")
 
-        # Extract business rules from UpdateAttribute processors
+        # Extract script file paths
         for prop_name, prop_value in properties.items():
-            if prop_value and isinstance(prop_value, str) and len(prop_value) > 50:
-                if any(
-                    keyword in prop_value
-                    for keyword in ["replaceAll", "substringAfter", "append"]
-                ):
-                    business_rules.append(
-                        f"**{name}**: Dynamic attribute transformation using NiFi Expression Language"
-                    )
+            if prop_value and isinstance(prop_value, str):
+                # Look for shell script files
+                if ".sh" in prop_value and "/scripts/" in prop_value:
+                    script_file = prop_value.strip()
+                    if script_file not in external_files:
+                        external_files.append(f"**{script_file}** (used by: {name})")
+
+                # Look for SQL variable references like ${query_*}
+                import re
+
+                sql_vars = re.findall(r"\$\{query_[^}]+\}", prop_value)
+                for var in sql_vars:
+                    if var not in [item.split(" ")[0] for item in sql_variables]:
+                        sql_variables.append(f"**{var}** (referenced in: {name})")
+
+        # Check command arguments and paths for external dependencies
+        if command_args:
+            # Extract script paths from command arguments
+            if "/users/hadoop_nifi_svc/scripts/" in command_args:
+                # Extract the script path
+                import re
+
+                script_matches = re.findall(
+                    r'/users/hadoop_nifi_svc/scripts/[^\s;"\']+\.sh', command_args
+                )
+                for script_path in script_matches:
+                    if script_path not in [
+                        item.split(" ")[0].strip("*") for item in external_files
+                    ]:
+                        external_files.append(
+                            f"**{script_path}** (executed by: {name})"
+                        )
+
+        if command_path and command_path.endswith(".sh"):
+            if command_path not in [
+                item.split(" ")[0].strip("*") for item in external_files
+            ]:
+                external_files.append(f"**{command_path}** (script for: {name})")
 
     result = []
-    if sql_queries:
-        result.append("### SQL Operations")
-        result.extend(sql_queries)
+
+    if external_files:
+        result.append("## External Files Requiring Manual Review")
+        result.append("")
+        result.append(
+            "The following external files contain the actual business logic and SQL queries that need to be manually reviewed and migrated:"
+        )
+        result.append("")
+        result.extend(external_files)
         result.append("")
 
-    if business_rules:
-        result.append("### Business Logic")
-        result.extend(business_rules)
+    if sql_variables:
+        result.append("## SQL Variables Needing Resolution")
+        result.append("")
+        result.append(
+            "These NiFi variables contain SQL queries or table names that are defined externally:"
+        )
+        result.append("")
+        result.extend(sql_variables)
+        result.append("")
+
+    if not external_files and not sql_variables:
+        result.append("## Business Logic")
+        result.append("")
+        result.append(
+            "No external script files or SQL variables detected. Business logic may be embedded directly in processor properties or defined elsewhere in the system."
+        )
+        result.append("")
+
+    if external_files or sql_variables:
+        result.append("## Migration Action Items")
+        result.append("")
+        result.append(
+            "**Critical**: The files listed above contain the core business logic for this NiFi workflow. These files must be:"
+        )
+        result.append("1. **Located and reviewed** in the source system")
+        result.append("2. **Analyzed for SQL queries** and business rules")
+        result.append("3. **Converted to PySpark/Databricks SQL** equivalents")
+        result.append("4. **Tested thoroughly** to ensure business logic preservation")
         result.append("")
 
     return (
         "\n".join(result)
         if result
-        else "No complex business logic extracted from processors."
+        else "No external dependencies detected in processor properties."
     )
 
 
