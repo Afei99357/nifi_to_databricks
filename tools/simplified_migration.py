@@ -556,49 +556,136 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
         properties = proc.get("properties", {})
         proc_name = proc.get("name", "")
 
-        # Comprehensive script file extraction from all properties
+        # Intelligent asset extraction from all properties
         for prop_name, prop_value in properties.items():
             if prop_value and isinstance(prop_value, str):
-                # Direct .sh file paths
-                if prop_value.endswith(".sh"):
-                    script_files.add(prop_value)
+                prop_lower = prop_value.lower()
 
-                # Extract script paths using regex (covers command arguments etc)
-                script_matches = re.findall(r'/[^\s;"\']*\.sh', prop_value)
+                # 1. SCRIPT/EXECUTABLE FILES - intelligent pattern matching
+                # Common script/executable extensions
+                script_extensions = [
+                    ".sh",
+                    ".py",
+                    ".sql",
+                    ".jar",
+                    ".pl",
+                    ".r",
+                    ".rb",
+                    ".js",
+                    ".scala",
+                    ".groovy",
+                ]
+
+                # Direct file path detection
+                for ext in script_extensions:
+                    if prop_value.endswith(ext):
+                        script_files.add(prop_value)
+
+                # Path-based script detection (covers command arguments)
+                script_pattern = (
+                    r'/[^\s;"\']*\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat)\b'
+                )
+                script_matches = re.findall(script_pattern, prop_value, re.IGNORECASE)
                 for script_path in script_matches:
                     script_files.add(script_path)
 
-                # Working directories containing /scripts/
-                if "Working Directory" in prop_name and "/scripts/" in prop_value:
-                    working_dirs.add(prop_value)
+                # 2. FILESYSTEM PATHS - intelligent pattern detection
+                # HDFS patterns (more comprehensive)
+                hdfs_patterns = [
+                    r"hdfs://[^\s]+",  # hdfs:// protocol
+                    r"/user/[^\s]+",  # /user/ paths
+                    r"/etl/[^\s]+",  # /etl/ paths
+                    r"/hdfs/[^\s]+",  # /hdfs/ paths
+                    r"/warehouse/[^\s]+",  # warehouse paths
+                    r"/tmp/[^\s]+",  # temp paths
+                    r"/data/[^\s]+",  # data paths
+                ]
 
-                # HDFS paths
-                if any(
-                    hdfs_key in prop_name
-                    for hdfs_key in ["Directory", "Input Directory", "Output Directory"]
-                ):
-                    if prop_value and ("/etl/" in prop_value or "/user/" in prop_value):
-                        hdfs_paths.add(prop_value)
+                for pattern in hdfs_patterns:
+                    hdfs_matches = re.findall(pattern, prop_value)
+                    for path in hdfs_matches:
+                        cleaned_path = path.strip().rstrip(";")
+                        if len(cleaned_path) > 8 and not cleaned_path.startswith("${"):
+                            hdfs_paths.add(cleaned_path)
 
-                # Database hosts (Impala, Hive, etc.)
-                if "impala" in prop_value.lower() or "hive" in prop_value.lower():
-                    # Extract hostname patterns
-                    host_matches = re.findall(
-                        r"[\w\-]+\.na-[\w\-]+\.nxp\.com", prop_value
-                    )
-                    for host in host_matches:
-                        database_hosts.add(host)
+                # 3. WORKING DIRECTORIES - intelligent detection
+                if prop_value.startswith("/") and len(prop_value) > 5:
+                    # Check if property name suggests it's a directory
+                    dir_keywords = [
+                        "directory",
+                        "dir",
+                        "path",
+                        "folder",
+                        "working",
+                        "base",
+                        "root",
+                    ]
+                    if any(keyword in prop_name.lower() for keyword in dir_keywords):
+                        working_dirs.add(prop_value.strip())
 
-                # External SFTP/FTP hosts
-                if any(
-                    host_key in prop_name for host_key in ["Hostname", "Host", "Server"]
-                ):
+                # 4. DATABASE CONNECTIONS - intelligent host extraction
+                # Look for database-related keywords and extract hostnames
+                db_keywords = [
+                    "jdbc:",
+                    "impala",
+                    "hive",
+                    "mysql",
+                    "postgres",
+                    "oracle",
+                    "sqlserver",
+                    "mongodb",
+                    "cassandra",
+                ]
+                if any(keyword in prop_lower for keyword in db_keywords):
+                    # Extract various hostname patterns
+                    hostname_patterns = [
+                        r"[\w\-\.]+\.[\w\-\.]*\.(?:com|org|net|edu|gov)",  # domain names
+                        r"jdbc:[^/]+//([^:/]+)",  # JDBC URLs
+                        r"://([^:/]+)",  # protocol://host
+                    ]
+                    for pattern in hostname_patterns:
+                        host_matches = re.findall(pattern, prop_value, re.IGNORECASE)
+                        for host in host_matches:
+                            if len(host) > 3 and "." in host:
+                                database_hosts.add(host)
+
+                # 5. EXTERNAL HOSTS - intelligent detection
+                # Look for external service indicators
+                external_indicators = [
+                    "ftp",
+                    "sftp",
+                    "ssh",
+                    "http",
+                    "https",
+                    "smtp",
+                    "ldap",
+                ]
+                host_related_props = [
+                    "hostname",
+                    "host",
+                    "server",
+                    "url",
+                    "endpoint",
+                    "address",
+                ]
+
+                # Method 1: Property name suggests external host
+                if any(keyword in prop_name.lower() for keyword in host_related_props):
                     if (
-                        prop_value
+                        "." in prop_value
                         and not prop_value.startswith("/")
-                        and "." in prop_value
-                    ):  # Not a path, has domain
-                        external_hosts.add(prop_value)
+                        and len(prop_value) < 200
+                        and len(prop_value) > 3
+                    ):
+                        external_hosts.add(prop_value.strip())
+
+                # Method 2: Content suggests external service
+                if any(indicator in prop_lower for indicator in external_indicators):
+                    # Extract hostnames from URLs or connection strings
+                    url_pattern = r"(?:https?|ftp|sftp)://([^/:\s]+)"
+                    url_hosts = re.findall(url_pattern, prop_value, re.IGNORECASE)
+                    for host in url_hosts:
+                        external_hosts.add(host)
 
     # Generate summary report
     report_lines = [
