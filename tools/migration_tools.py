@@ -18,7 +18,6 @@ from json_repair import repair_json
 from config import DATABRICKS_HOSTNAME, logger
 
 # Registry removed - generating fresh each time
-from utils import read_text as _read_text
 from utils import safe_name as _safe_name
 from utils import write_text as _write_text
 
@@ -91,13 +90,9 @@ def _unescape_code(code: str) -> str:
 
 
 # Chunking tools removed - no longer needed with intelligent batching
-from tools.generator_tools import generate_databricks_code
-from tools.job_tools import (
-    check_job_run_status,
-    deploy_and_run_job,
-    scaffold_asset_bundle,
-)
-from utils import extract_nifi_parameters_and_services_impl
+# generator_tools imports removed - no longer generating individual processor code
+# job_tools imports removed - no longer creating deployable jobs, only migration guides
+from .xml_tools import extract_nifi_parameters_and_services_impl
 
 # Default max processors per chunk (batch size) via env var
 MAX_PROCS_PER_CHUNK_DEFAULT = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
@@ -766,73 +761,21 @@ def orchestrate_focused_nifi_migration(
             f"📊 [PROCESSOR BREAKDOWN] {len(pruned_processors)} essential processors ({total_complex} complex, {len(data_movement_procs)} simple)"
         )
 
-        # Setup output directory
+        # Setup output directory - simple structure for migration guide
         root = Path(out_dir)
         proj_name = _safe_name(project)
         out = root / proj_name
-        (out / "src/steps").mkdir(parents=True, exist_ok=True)
-        (out / "jobs").mkdir(parents=True, exist_ok=True)
-        (out / "conf").mkdir(parents=True, exist_ok=True)
-        (out / "notebooks").mkdir(parents=True, exist_ok=True)
+        (out / "conf").mkdir(
+            parents=True, exist_ok=True
+        )  # Keep conf for analysis files
 
         if not notebook_path:
             notebook_path = _default_notebook_path(project)
 
-        # Generate tasks for each processor category
-        all_tasks = []
-
-        # 1. Generate LLM-powered tasks for data transformation processors
-        if data_transformation_procs or external_processing_procs:
-            llm_processors = data_transformation_procs + external_processing_procs
-            print(
-                f"🧠 [LLM GENERATION] Processing {len(llm_processors)} data processors with intelligence..."
-            )
-
-            # Use batched processing for efficient LLM generation
-            llm_tasks = _generate_batch_processor_code(
-                llm_processors, "focused_migration", project
-            )
-            all_tasks.extend(llm_tasks)
-
-        # 2. Generate simple template tasks for data movement processors
-        if data_movement_procs:
-            print(
-                f"📦 [TEMPLATE GENERATION] Processing {len(data_movement_procs)} data movement processors..."
-            )
-            template_tasks = _process_processors_with_templates(
-                data_movement_procs, project
-            )
-            all_tasks.extend(template_tasks)
-
-        # 3. Create job configuration with only essential tasks
+        # Generate comprehensive migration guide with analysis and recommendations
         print(
-            f"🔗 [JOB CREATION] Creating job with {len(all_tasks)} essential tasks..."
+            f"📋 [GUIDE GENERATION] Creating comprehensive migration guide for {len(pruned_processors)} processors..."
         )
-
-        # Build simple dependencies based on semantic flows
-        task_dependencies = _build_focused_dependencies(all_tasks, semantic_flows)
-
-        job_config = {
-            "name": job,
-            "tasks": [
-                {
-                    "task_key": task["id"],
-                    "notebook_task": {
-                        "notebook_path": f"{notebook_path}/src/steps/{task['id']}.py"
-                    },
-                    "depends_on": task_dependencies.get(task["id"], []),
-                    "new_cluster": {
-                        "spark_version": "15.4.x-scala2.12",
-                        "node_type_id": "i3.xlarge",
-                        "num_workers": 2,
-                    },
-                }
-                for task in all_tasks
-            ],
-        }
-
-        # Save artifacts
-        _write_text(out / "jobs" / "job.focused.json", json.dumps(job_config, indent=2))
 
         # Save focused analysis
         focused_analysis = {
@@ -853,45 +796,34 @@ def orchestrate_focused_nifi_migration(
             json.dumps(focused_analysis, indent=2),
         )
 
-        # Generate notebooks for each task
-        for task in all_tasks:
-            task_code = task.get(
-                "code", f"# {task['name']}\n# TODO: Implement task logic"
-            )
-            notebook_content = f'# Databricks notebook source\n"""\n{task["name"]}\nTask ID: {task["id"]}\n"""\n\n{task_code}'
-            _write_text(out / "src" / "steps" / f"{task['id']}.py", notebook_content)
+        # Generate comprehensive migration guide instead of fragmented code
+        from .migration_guide_generator import generate_migration_guide
 
-        # Create orchestrator notebook
-        orchestrator = _generate_focused_orchestrator(all_tasks, project)
-        _write_text(out / "notebooks" / "orchestrator.py", orchestrator)
+        migration_guide = generate_migration_guide(
+            processors=pruned_processors,
+            semantic_flows=semantic_flows,
+            project_name=project,
+            analysis=focused_analysis,
+        )
 
-        # Generate bundle YAML
-        bundle_yaml = scaffold_asset_bundle(project, job, notebook_path)
-        _write_text(out / "databricks.yml", bundle_yaml)
+        # Save the migration guide
+        _write_text(out / "MIGRATION_GUIDE.md", migration_guide)
 
-        # Deploy if requested
-        deploy_result = "Not deployed"
-        if run_now:
-            try:
-                print(f"🚀 [DEPLOY] Deploying focused migration job...")
-                deploy_result = deploy_and_run_job(
-                    json.dumps(job_config), run_now=run_now
-                )
-                print(f"✅ [DEPLOY SUCCESS] {deploy_result}")
-            except Exception as e:
-                print(f"❌ [DEPLOY FAILED] {e}")
-                deploy_result = f"Error: {e}"
+        # Note: No databricks.yml generated - migration guide approach instead of deployable assets
+
+        # Migration guide generated - no deployment needed
+        print(
+            f"✅ [GUIDE COMPLETE] Migration guide saved to {out / 'MIGRATION_GUIDE.md'}"
+        )
 
         result = {
-            "migration_type": "focused_essential_only",
-            "processors_migrated": len(all_tasks),
-            "processors_skipped": f"All infrastructure processors skipped",
+            "migration_type": "comprehensive_guide",
+            "processors_analyzed": len(pruned_processors),
             "breakdown": focused_analysis["breakdown"],
             "output_directory": str(out),
-            "job_config_path": str(out / "jobs" / "job.focused.json"),
-            "deploy_result": deploy_result,
+            "migration_guide_path": str(out / "MIGRATION_GUIDE.md"),
             "semantic_flows_applied": True,
-            "cost_optimization": f"Reduced LLM calls by focusing on {len(data_transformation_procs + external_processing_procs)} essential processors only",
+            "approach": "Migration guide with recommendations instead of fragmented code generation",
         }
 
         return json.dumps(result, indent=2)
@@ -900,107 +832,8 @@ def orchestrate_focused_nifi_migration(
         return json.dumps({"error": f"Focused migration failed: {str(e)}"})
 
 
-def _process_processors_with_templates(
-    processors: List[Dict[str, Any]], project: str
-) -> List[Dict[str, Any]]:
-    """Generate tasks using simple templates for data movement processors."""
-    tasks = []
-
-    for i, proc in enumerate(processors):
-        proc_type = proc.get("processor_type", "Unknown")
-        proc_name = proc.get("name", f"processor_{i}")
-
-        # Simple template based on processor type
-        if "GetFile" in proc_type or "ListFile" in proc_type:
-            code = f"""# {proc_type} → Auto Loader Template
-# Simple file reading operation
-
-df = spark.readStream.format("cloudFiles") \\
-    .option("cloudFiles.format", "json") \\
-    .load("/path/to/input")
-
-df.writeStream \\
-    .format("delta") \\
-    .outputMode("append") \\
-    .option("checkpointLocation", "/path/to/checkpoint") \\
-    .start("/path/to/output")
-"""
-        elif "PutFile" in proc_type or "PutHDFS" in proc_type:
-            code = f"""# {proc_type} → Delta Write Template
-# Simple file writing operation
-
-df = spark.read.format("delta").load("/path/to/input")
-
-df.write \\
-    .format("delta") \\
-    .mode("append") \\
-    .save("/path/to/output")
-"""
-        else:
-            code = f"""# {proc_type} → Data Movement Template
-# Simple data transfer operation
-
-df = spark.read.format("delta").load("/path/to/input")
-# {proc_name}: Move data without transformation
-df.write.format("delta").mode("append").save("/path/to/output")
-"""
-
-        task = {
-            "id": proc.get("id", f"move_proc_{i}"),
-            "name": proc_name,
-            "type": proc_type,
-            "code": code,
-            "classification": "data_movement",
-            "business_purpose": "Data movement without transformation",
-        }
-        tasks.append(task)
-
-    return tasks
-
-
-def _build_focused_dependencies(
-    tasks: List[Dict[str, Any]], semantic_flows: Dict[str, Any]
-) -> Dict[str, List[str]]:
-    """Build simple task dependencies based on semantic flows."""
-    dependencies = {}
-
-    # For now, create simple sequential dependencies
-    # TODO: Use semantic_flows to create smarter dependencies
-    for i, task in enumerate(tasks):
-        if i > 0:
-            dependencies[task["id"]] = [{"task_key": tasks[i - 1]["id"]}]
-        else:
-            dependencies[task["id"]] = []
-
-    return dependencies
-
-
-def _generate_focused_orchestrator(tasks: List[Dict[str, Any]], project: str) -> str:
-    """Generate orchestrator notebook for focused migration."""
-    task_list = "\\n".join(
-        [f"# - {task['name']} ({task['classification']})" for task in tasks]
-    )
-
-    return f'''# Databricks notebook source
-"""
-Focused NiFi Migration Orchestrator
-Project: {project}
-Generated: Automated migration focusing only on essential data processors
-
-Tasks ({len(tasks)} total):
-{task_list}
-"""
-
-# COMMAND ----------
-
-print("🎯 Starting focused NiFi migration execution...")
-print(f"Processing {len(tasks)} essential data processors only")
-print("Infrastructure processors were skipped entirely")
-
-# COMMAND ----------
-
-# Task execution logic would go here
-# Each task runs as a separate Databricks job task
-
-print("✅ Focused migration orchestration complete")
-'''
+# Removed old processor-by-processor generation functions:
+# - _process_processors_with_templates
+# - _build_focused_dependencies
+# - _generate_focused_orchestrator
+# These are no longer needed as we now generate comprehensive migration guides
