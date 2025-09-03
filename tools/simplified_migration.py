@@ -164,9 +164,9 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"📋 Essential processors report: {essential_report_path}")
 
-    # Generate focused asset summary (without full catalog)
+    # Generate focused asset summary from ALL processors (before pruning)
     asset_summary_path = _generate_focused_asset_summary(
-        pruned_result, f"{out_dir}/{project}"
+        processor_classifications, f"{out_dir}/{project}"
     )
     print(f"📄 Asset summary report: {asset_summary_path}")
 
@@ -526,16 +526,22 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
     return "→ Review migration approach based on business logic"
 
 
-def _generate_focused_asset_summary(pruned_result, output_dir: str) -> str:
+def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
     """Generate a focused asset summary without the noise of full catalog."""
 
-    # Parse pruned result
-    if isinstance(pruned_result, str):
-        pruned_data = json.loads(pruned_result)
+    # Parse processor data (can be classifications or pruned result)
+    if isinstance(processor_data, str):
+        data = json.loads(processor_data)
     else:
-        pruned_data = pruned_result
+        data = processor_data
 
-    processors = pruned_data.get("pruned_processors", [])
+    # Handle different input formats
+    if "processor_classifications" in data:
+        processors = data.get("processor_classifications", [])
+    elif "pruned_processors" in data:
+        processors = data.get("pruned_processors", [])
+    else:
+        processors = data.get("processors", [])
 
     # Extract key assets with high confidence
     script_files = set()
@@ -544,45 +550,55 @@ def _generate_focused_asset_summary(pruned_result, output_dir: str) -> str:
     external_hosts = set()
     working_dirs = set()
 
+    import re
+
     for proc in processors:
         properties = proc.get("properties", {})
-        proc_type = proc.get("type", "")
+        proc_name = proc.get("name", "")
 
-        # Extract script files (high confidence)
-        if proc_type == "ExecuteStreamCommand":
-            command_path = properties.get("Command Path", "")
-            working_dir = properties.get("Working Directory", "")
+        # Comprehensive script file extraction from all properties
+        for prop_name, prop_value in properties.items():
+            if prop_value and isinstance(prop_value, str):
+                # Direct .sh file paths
+                if prop_value.endswith(".sh"):
+                    script_files.add(prop_value)
 
-            # Script files
-            if command_path and (".sh" in command_path or "/scripts/" in command_path):
-                script_files.add(command_path)
+                # Extract script paths using regex (covers command arguments etc)
+                script_matches = re.findall(r'/[^\s;"\']*\.sh', prop_value)
+                for script_path in script_matches:
+                    script_files.add(script_path)
 
-            # Working directories
-            if working_dir and working_dir != "null":
-                working_dirs.add(working_dir)
+                # Working directories containing /scripts/
+                if "Working Directory" in prop_name and "/scripts/" in prop_value:
+                    working_dirs.add(prop_value)
 
-            # Database hosts from command arguments
-            args = properties.get("Command Arguments", "")
-            if "impala" in args.lower():
-                # Extract Impala hostnames
-                parts = args.split(";")
-                for part in parts:
-                    if ".na-" in part and ".nxp.com" in part:  # NXP hostname pattern
-                        database_hosts.add(part.strip("-i").strip())
+                # HDFS paths
+                if any(
+                    hdfs_key in prop_name
+                    for hdfs_key in ["Directory", "Input Directory", "Output Directory"]
+                ):
+                    if prop_value and ("/etl/" in prop_value or "/user/" in prop_value):
+                        hdfs_paths.add(prop_value)
 
-        # HDFS paths
-        if proc_type in ["PutHDFS", "ListFile", "GetFile"]:
-            directory = properties.get("Directory", "") or properties.get(
-                "Input Directory", ""
-            )
-            if directory and ("/etl/" in directory or "/user/" in directory):
-                hdfs_paths.add(directory)
+                # Database hosts (Impala, Hive, etc.)
+                if "impala" in prop_value.lower() or "hive" in prop_value.lower():
+                    # Extract hostname patterns
+                    host_matches = re.findall(
+                        r"[\w\-]+\.na-[\w\-]+\.nxp\.com", prop_value
+                    )
+                    for host in host_matches:
+                        database_hosts.add(host)
 
-        # External hosts
-        if proc_type == "PutSFTP":
-            hostname = properties.get("Hostname", "")
-            if hostname:
-                external_hosts.add(hostname)
+                # External SFTP/FTP hosts
+                if any(
+                    host_key in prop_name for host_key in ["Hostname", "Host", "Server"]
+                ):
+                    if (
+                        prop_value
+                        and not prop_value.startswith("/")
+                        and "." in prop_value
+                    ):  # Not a path, has domain
+                        external_hosts.add(prop_value)
 
     # Generate summary report
     report_lines = [
