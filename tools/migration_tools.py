@@ -12,14 +12,25 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Dict, List
 
-from databricks_langchain import ChatDatabricks
-from json_repair import repair_json
-
 from config import DATABRICKS_HOSTNAME, logger
 
 # Registry removed - generating fresh each time
 from utils import safe_name as _safe_name
 from utils import write_text as _write_text
+
+# ChatDatabricks and json_repair will be imported at runtime when needed
+
+
+def __repair_json_if_available_if_available(content: str) -> str:
+    """Try to repair JSON using json_repair if available, otherwise return as-is."""
+    try:
+        from json_repair import _repair_json_if_available
+
+        return _repair_json_if_available(content)
+    except ImportError:
+        # Fallback: return content as-is if json_repair not available
+        return content
+
 
 # Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
@@ -274,6 +285,15 @@ def _process_single_llm_batch(
             "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
         )
 
+        # Import ChatDatabricks at runtime
+        try:
+            from databricks_langchain import ChatDatabricks
+        except ImportError:
+            try:
+                from langchain_community.chat_models import ChatDatabricks
+            except ImportError:
+                raise ImportError("Databricks LLM not available")
+
         # Create LLM with very low temperature for consistent JSON output
         llm_json = ChatDatabricks(endpoint=model_endpoint, temperature=0.05)
 
@@ -374,11 +394,13 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
 
             # Try various recovery strategies in order
             recovery_strategies = [
-                ("json-repair", lambda c: repair_json(c)),
+                ("json-repair", lambda c: _repair_json_if_available(c)),
                 (
                     "markdown extraction",
                     lambda c: (
-                        repair_json(c.split("```json")[1].split("```")[0].strip())
+                        _repair_json_if_available(
+                            c.split("```json")[1].split("```")[0].strip()
+                        )
                         if "```json" in c
                         else None
                     ),
@@ -386,7 +408,7 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                 (
                     "boundary detection",
                     lambda c: (
-                        repair_json(c[c.find("{") : c.rfind("}") + 1])
+                        _repair_json_if_available(c[c.find("{") : c.rfind("}") + 1])
                         if c.find("{") >= 0 and c.rfind("}") > c.find("{")
                         else None
                     ),

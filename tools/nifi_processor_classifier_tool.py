@@ -6,12 +6,24 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
-from databricks_langchain import ChatDatabricks
-from json_repair import repair_json
-
 from .xml_tools import parse_nifi_template
 
+# ChatDatabricks will be imported at runtime when needed
+# json_repair will be imported at runtime when needed
+
+
 # workflow_summary logic moved inline - no external dependency needed
+
+
+def __repair_json_if_available_if_available(content: str) -> str:
+    """Try to repair JSON using json_repair if available, otherwise return as-is."""
+    try:
+        from json_repair import _repair_json_if_available
+
+        return _repair_json_if_available(content)
+    except ImportError:
+        # Fallback: return content as-is if json_repair not available
+        return content
 
 
 # Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
@@ -656,6 +668,15 @@ def _analyze_with_enhanced_llm(
     )
 
     try:
+        # Import ChatDatabricks at runtime
+        try:
+            from databricks_langchain import ChatDatabricks
+        except ImportError:
+            try:
+                from langchain_community.chat_models import ChatDatabricks
+            except ImportError:
+                raise ImportError("Databricks LLM not available")
+
         llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.1)
 
         # Enhanced context for ambiguous processors
@@ -736,12 +757,14 @@ Return ONLY a JSON object:
             analysis_result = None
             # Recovery strategies
             recovery_strategies = [
-                ("json-repair", lambda c: json.loads(repair_json(c))),
+                ("json-repair", lambda c: json.loads(_repair_json_if_available(c))),
                 (
                     "markdown extraction",
                     lambda c: (
                         json.loads(
-                            repair_json(c.split("```json")[1].split("```")[0].strip())
+                            _repair_json_if_available(
+                                c.split("```json")[1].split("```")[0].strip()
+                            )
                         )
                         if "```json" in c
                         else None
@@ -750,7 +773,9 @@ Return ONLY a JSON object:
                 (
                     "boundary detection",
                     lambda c: (
-                        json.loads(repair_json(c[c.find("{") : c.rfind("}") + 1]))
+                        json.loads(
+                            _repair_json_if_available(c[c.find("{") : c.rfind("}") + 1])
+                        )
                         if c.find("{") >= 0 and c.rfind("}") > c.find("{")
                         else None
                     ),
@@ -1029,6 +1054,43 @@ def _analyze_single_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, An
     if not processors:
         return []
 
+    # Check if LLM is available before attempting any processing
+    try:
+        from databricks_langchain import ChatDatabricks
+
+        llm_available = True
+    except ImportError:
+        try:
+            from langchain_community.chat_models import ChatDatabricks
+
+            llm_available = True
+        except ImportError:
+            llm_available = False
+
+    # If LLM is not available, immediately return fallback results
+    if not llm_available:
+        print(
+            f"⚠️ [LLM FALLBACK] LLM unavailable, returning 'unknown' classifications for {len(processors)} processors"
+        )
+        results = []
+        for proc in processors:
+            results.append(
+                {
+                    "processor_type": proc.get("processor_type", ""),
+                    "properties": proc.get("properties", {}),
+                    "id": proc.get("id", ""),
+                    "name": proc.get("name", ""),
+                    "data_manipulation_type": "unknown",
+                    "actual_data_processing": "LLM not available for analysis",
+                    "transforms_data_content": False,
+                    "business_purpose": "LLM analysis unavailable",
+                    "data_impact_level": "unknown",
+                    "key_operations": ["llm_unavailable"],
+                    "analysis_method": "fallback_no_llm",
+                }
+            )
+        return results
+
     model_endpoint = os.environ.get(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
@@ -1093,12 +1155,14 @@ Be specific about what happens to the actual data content, not just metadata or 
             batch_results = None
             # Try various recovery strategies in order (same as migration_tools.py)
             recovery_strategies = [
-                ("json-repair", lambda c: json.loads(repair_json(c))),
+                ("json-repair", lambda c: json.loads(_repair_json_if_available(c))),
                 (
                     "markdown extraction",
                     lambda c: (
                         json.loads(
-                            repair_json(c.split("```json")[1].split("```")[0].strip())
+                            _repair_json_if_available(
+                                c.split("```json")[1].split("```")[0].strip()
+                            )
                         )
                         if "```json" in c
                         else None
@@ -1107,7 +1171,9 @@ Be specific about what happens to the actual data content, not just metadata or 
                 (
                     "boundary detection",
                     lambda c: (
-                        json.loads(repair_json(c[c.find("[") : c.rfind("]") + 1]))
+                        json.loads(
+                            _repair_json_if_available(c[c.find("[") : c.rfind("]") + 1])
+                        )
                         if c.find("[") >= 0 and c.rfind("]") > c.find("[")
                         else None
                     ),
