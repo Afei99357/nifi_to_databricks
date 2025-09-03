@@ -1339,8 +1339,6 @@ def analyze_workflow_patterns(
     # Save markdown if requested (no console printing - removed per user feedback)
     if save_markdown:
         # Generate markdown report using internal function
-        import os
-
         base_path = os.path.splitext(json_path)[0]
         markdown_path = f"{base_path}_analysis_report.md"
 
