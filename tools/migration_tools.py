@@ -807,7 +807,11 @@ def orchestrate_focused_nifi_migration(
         )
 
         # Save the migration guide
-        _write_text(out / "MIGRATION_GUIDE.md", migration_guide)
+        guide_path = out / "MIGRATION_GUIDE.md"
+        print(f"💾 [GUIDE] Writing guide to: {guide_path}")
+        print(f"📄 [GUIDE] Guide content length: {len(migration_guide)} characters")
+        _write_text(guide_path, migration_guide)
+        print(f"✅ [GUIDE] Successfully written to: {guide_path}")
 
         # Note: No databricks.yml generated - migration guide approach instead of deployable assets
 

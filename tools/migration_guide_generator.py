@@ -213,7 +213,9 @@ Format as detailed markdown with code blocks and checklists.
             max_tokens=4000,
         )
 
+        print(f"🔄 [LLM] Sending request to {model_endpoint}...")
         migration_guide = llm.invoke(guide_prompt).content
+        print(f"✅ [LLM] Received response, length: {len(migration_guide)} characters")
 
         # Add generation metadata
         header = f"""# {project_name} - NiFi to Databricks Migration Guide
@@ -226,7 +228,9 @@ Format as detailed markdown with code blocks and checklists.
 
 """
 
-        return header + migration_guide
+        final_guide = header + migration_guide
+        print(f"📋 [GUIDE] Final guide length: {len(final_guide)} characters")
+        return final_guide
 
     except Exception as e:
         print(f"❌ [GUIDE GENERATION] LLM generation failed: {e}")
