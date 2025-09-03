@@ -1,0 +1,258 @@
+{
+  "workflow_metadata": {
+    "total_processors": 6,
+    "analysis_timestamp": "unknown",
+    "source_file": "unknown"
+  },
+  "asset_summary": {
+    "total_script_files": 0,
+    "total_hdfs_paths": 3,
+    "total_table_references": 7,
+    "total_sql_statements": 0,
+    "unique_working_directories": [],
+    "unique_hosts": []
+  },
+  "processor_assets": [
+    {
+      "processor_name": "PutHDFS_Critical",
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "hdfs_paths": [
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/critical/${now():format(",
+          "type": "user_directory"
+        }
+      ],
+      "file_paths": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "path": "/opt/nifi/nifi-current/conf/core-site.xml"
+        },
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/critical/${now():format("
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "table": "site.xml",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/critical/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      }
+    },
+    {
+      "processor_name": "PutHDFS_Error",
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "hdfs_paths": [
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/error/${now():format(",
+          "type": "user_directory"
+        }
+      ],
+      "file_paths": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "path": "/opt/nifi/nifi-current/conf/core-site.xml"
+        },
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/error/${now():format("
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "table": "site.xml",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/error/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      }
+    },
+    {
+      "processor_name": "RouteOnAttribute",
+      "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+      "table_references": [
+        {
+          "property": "critical",
+          "table": "log.level",
+          "type": "schema.table"
+        },
+        {
+          "property": "error",
+          "table": "log.level",
+          "type": "schema.table"
+        },
+        {
+          "property": "info",
+          "table": "log.level",
+          "type": "schema.table"
+        },
+        {
+          "property": "warning",
+          "table": "log.level",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Routing Strategy": "Route to Property name",
+        "critical": "${log.level:equals('CRITICAL')}",
+        "error": "${log.level:equals('ERROR')}",
+        "info": "${log.level:equals('INFO')}",
+        "warning": "${log.level:equals('WARNING')}"
+      }
+    },
+    {
+      "processor_name": "PutHDFS_Other",
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "hdfs_paths": [
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/other/${now():format(",
+          "type": "user_directory"
+        }
+      ],
+      "file_paths": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "path": "/opt/nifi/nifi-current/conf/core-site.xml"
+        },
+        {
+          "property": "Directory",
+          "path": "/user/nifi/logs/other/${now():format("
+        }
+      ],
+      "table_references": [
+        {
+          "property": "Hadoop Configuration Resources",
+          "table": "site.xml",
+          "type": "schema.table"
+        }
+      ],
+      "raw_properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/other/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      }
+    }
+  ],
+  "consolidated_assets": {
+    "all_script_files": [],
+    "all_hdfs_paths": [
+      {
+        "property": "Directory",
+        "path": "/user/nifi/logs/critical/${now():format(",
+        "type": "user_directory"
+      },
+      {
+        "property": "Directory",
+        "path": "/user/nifi/logs/error/${now():format(",
+        "type": "user_directory"
+      },
+      {
+        "property": "Directory",
+        "path": "/user/nifi/logs/other/${now():format(",
+        "type": "user_directory"
+      }
+    ],
+    "all_table_references": [
+      {
+        "property": "Hadoop Configuration Resources",
+        "table": "site.xml",
+        "type": "schema.table"
+      },
+      {
+        "property": "Hadoop Configuration Resources",
+        "table": "site.xml",
+        "type": "schema.table"
+      },
+      {
+        "property": "critical",
+        "table": "log.level",
+        "type": "schema.table"
+      },
+      {
+        "property": "error",
+        "table": "log.level",
+        "type": "schema.table"
+      },
+      {
+        "property": "info",
+        "table": "log.level",
+        "type": "schema.table"
+      },
+      {
+        "property": "warning",
+        "table": "log.level",
+        "type": "schema.table"
+      },
+      {
+        "property": "Hadoop Configuration Resources",
+        "table": "site.xml",
+        "type": "schema.table"
+      }
+    ],
+    "all_sql_statements": [],
+    "all_working_directories": [],
+    "all_host_references": [],
+    "all_database_connections": []
+  }
+}

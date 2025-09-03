@@ -1,0 +1,210 @@
+{
+  "workflow_metadata": {
+    "filename": "json_log_process_pipeline.xml",
+    "xml_path": "nifi_pipeline_file/json_log_process_pipeline.xml",
+    "total_processors": 6,
+    "analysis_timestamp": "2025-09-03T13:52:18.997599"
+  },
+  "classification_results": [
+    {
+      "processor_type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+      "properties": {
+        "Destination": "flowfile-attribute",
+        "Return Type": "auto-detect",
+        "Path Not Found Behavior": "ignore",
+        "Null Value Representation": "empty string",
+        "log.host": "$.host",
+        "log.level": "$.level",
+        "log.message": "$.message",
+        "log.service": "$.service",
+        "log.timestamp": "$.timestamp"
+      },
+      "id": "",
+      "name": "EvaluateJsonPath",
+      "data_manipulation_type": "data_transformation",
+      "actual_data_processing": "Data transformation: extracting fields from JSON data",
+      "transforms_data_content": true,
+      "business_purpose": "Data processing: EvaluateJsonPath",
+      "data_impact_level": "high",
+      "key_operations": [
+        "json_field_extraction"
+      ],
+      "analysis_method": "rule_based_transformation"
+    },
+    {
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/critical/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      },
+      "id": "",
+      "name": "PutHDFS_Critical",
+      "data_manipulation_type": "data_movement",
+      "actual_data_processing": "Data movement: writing files to HDFS",
+      "transforms_data_content": false,
+      "business_purpose": "Data transfer: PutHDFS_Critical",
+      "data_impact_level": "low",
+      "key_operations": [
+        "processing"
+      ],
+      "analysis_method": "rule_based_movement"
+    },
+    {
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/error/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      },
+      "id": "",
+      "name": "PutHDFS_Error",
+      "data_manipulation_type": "data_movement",
+      "actual_data_processing": "Data movement: writing files to HDFS",
+      "transforms_data_content": false,
+      "business_purpose": "Data transfer: PutHDFS_Error",
+      "data_impact_level": "low",
+      "key_operations": [
+        "processing"
+      ],
+      "analysis_method": "rule_based_movement"
+    },
+    {
+      "processor_type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+      "properties": {
+        "Routing Strategy": "Route to Property name",
+        "critical": "${log.level:equals('CRITICAL')}",
+        "error": "${log.level:equals('ERROR')}",
+        "info": "${log.level:equals('INFO')}",
+        "warning": "${log.level:equals('WARNING')}"
+      },
+      "id": "",
+      "name": "RouteOnAttribute",
+      "data_manipulation_type": "infrastructure_only",
+      "actual_data_processing": "Infrastructure work: routing decisions based on attributes",
+      "transforms_data_content": false,
+      "business_purpose": "System operation: RouteOnAttribute",
+      "data_impact_level": "none",
+      "key_operations": [
+        "routing"
+      ],
+      "analysis_method": "rule_based_infrastructure"
+    },
+    {
+      "processor_type": "org.apache.nifi.processors.hadoop.PutHDFS",
+      "properties": {
+        "Hadoop Configuration Resources": "/opt/nifi/nifi-current/conf/core-site.xml",
+        "kerberos-credentials-service": null,
+        "kerberos-user-service": null,
+        "Kerberos Principal": null,
+        "Kerberos Keytab": null,
+        "Kerberos Password": null,
+        "Kerberos Relogin Period": "4 hours",
+        "Additional Classpath Resources": null,
+        "Directory": "/user/nifi/logs/other/${now():format('yyyy-MM-dd')}",
+        "Conflict Resolution Strategy": "append",
+        "writing-strategy": "writeAndRename",
+        "Block Size": null,
+        "IO Buffer Size": null,
+        "Replication": null,
+        "Permissions umask": null,
+        "Remote Owner": null,
+        "Remote Group": null,
+        "Compression codec": "NONE",
+        "Ignore Locality": "false"
+      },
+      "id": "",
+      "name": "PutHDFS_Other",
+      "data_manipulation_type": "data_movement",
+      "actual_data_processing": "Data movement: writing files to HDFS",
+      "transforms_data_content": false,
+      "business_purpose": "Data transfer: PutHDFS_Other",
+      "data_impact_level": "low",
+      "key_operations": [
+        "processing"
+      ],
+      "analysis_method": "rule_based_movement"
+    },
+    {
+      "processor_type": "",
+      "properties": {
+        "Base Path": "ingest",
+        "Listening Port": "8091",
+        "health-check-port": null,
+        "Max Data to Receive per Second": null,
+        "SSL Context Service": null,
+        "HTTP Protocols": "HTTP_1_1",
+        "client-authentication": "AUTO",
+        "Authorized DN Pattern": ".*",
+        "authorized-issuer-dn-pattern": ".*",
+        "Max Unconfirmed Flowfile Time": "60 secs",
+        "HTTP Headers to receive as Attributes (Regex)": null,
+        "Return Code": "200",
+        "multipart-request-max-size": "1 MB",
+        "multipart-read-buffer-size": "512 KB",
+        "max-thread-pool-size": "200",
+        "record-reader": null,
+        "record-writer": null
+      },
+      "id": "",
+      "name": "ListenHTTP",
+      "data_manipulation_type": "unknown",
+      "actual_data_processing": "LLM not available for analysis",
+      "transforms_data_content": false,
+      "business_purpose": "LLM analysis unavailable",
+      "data_impact_level": "unknown",
+      "key_operations": [
+        "llm_unavailable"
+      ],
+      "analysis_method": "fallback_no_llm"
+    }
+  ],
+  "total_processors": 6,
+  "workflow_characteristics": {
+    "classification_breakdown": {
+      "data_transformation": 1,
+      "data_movement": 3,
+      "infrastructure_only": 1,
+      "external_processing": 0,
+      "unknown": 1
+    },
+    "impact_analysis": {
+      "high": 1,
+      "medium": 0,
+      "low": 4,
+      "none": 1
+    }
+  }
+}

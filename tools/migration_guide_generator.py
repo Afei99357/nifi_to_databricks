@@ -121,7 +121,30 @@ def _analyze_processors_for_guide(processors: List[Dict[str, Any]]) -> Dict[str,
     # Group processors by type
     processor_types = {}
     for proc in processors:
-        proc_type = proc.get("type", "Unknown").split(".")[-1]
+        # More robust type extraction with fallbacks
+        raw_type = proc.get("type", "")
+        full_type = proc.get("full_type", "")
+
+        # Extract processor type with proper fallbacks
+        if raw_type and raw_type.strip() and raw_type != "Unknown":
+            # Use the short type if it's valid
+            proc_type = raw_type.split(".")[-1] if "." in raw_type else raw_type
+        elif full_type and full_type.strip() and full_type != "Unknown":
+            # Fall back to extracting from full_type
+            proc_type = full_type.split(".")[-1] if "." in full_type else full_type
+        else:
+            # Last resort: use the processor name or Unknown
+            proc_name = proc.get("name", "Unknown")
+            proc_type = (
+                f"UnknownType_{proc_name.replace(' ', '_')}"
+                if proc_name != "Unknown"
+                else "UnknownType"
+            )
+
+        # Ensure proc_type is valid (no empty strings)
+        if not proc_type or not proc_type.strip():
+            proc_type = "UnknownType"
+
         proc_name = proc.get("name", "Unknown")
         proc_classification = proc.get("classification", "unknown")
         proc_properties = proc.get("properties", {})
