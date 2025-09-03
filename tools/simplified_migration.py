@@ -164,6 +164,12 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"📋 Essential processors report: {essential_report_path}")
 
+    # Generate focused asset summary (without full catalog)
+    asset_summary_path = _generate_focused_asset_summary(
+        pruned_result, f"{out_dir}/{project}"
+    )
+    print(f"📄 Asset summary report: {asset_summary_path}")
+
     # Step 8: Generate comprehensive migration guide (essential processors only)
     print(
         "📋 Generating comprehensive migration guide for essential data processors..."
@@ -332,7 +338,8 @@ def _generate_essential_processors_report(pruned_result, output_dir: str) -> str
 
         for proc in processors_list:
             name = proc.get("name", "Unknown")
-            proc_type = proc.get("type", "Unknown")
+            # Use robust type extraction like in migration guide generator
+            proc_type = _extract_robust_processor_type(proc)
             properties = proc.get("properties", {})
 
             report_lines.append(f'### {proc_type} - "{name}"')
@@ -357,6 +364,52 @@ def _generate_essential_processors_report(pruned_result, output_dir: str) -> str
     return report_path
 
 
+def _extract_robust_processor_type(proc: dict) -> str:
+    """Extract processor type with same robust logic as migration guide generator."""
+    raw_type = proc.get("type", "")
+    full_type = proc.get("full_type", "")
+
+    # Extract processor type with proper fallbacks
+    if raw_type and raw_type.strip() and raw_type != "Unknown":
+        # Use the short type if it's valid
+        proc_type = raw_type.split(".")[-1] if "." in raw_type else raw_type
+    elif full_type and full_type.strip() and full_type != "Unknown":
+        # Fall back to extracting from full_type
+        proc_type = full_type.split(".")[-1] if "." in full_type else full_type
+    else:
+        # Last resort: use the processor name or Unknown
+        proc_name = proc.get("name", "Unknown")
+        if proc_name != "Unknown" and proc_name.strip():
+            # Extract a reasonable type name from processor name
+            # E.g., "Xsite States - Add configuration" -> "UpdateAttribute" (likely)
+            if any(
+                keyword in proc_name.lower()
+                for keyword in ["add configuration", "add queries"]
+            ):
+                proc_type = "UpdateAttribute"
+            elif "split" in proc_name.lower():
+                proc_type = "SplitContent"
+            elif "move" in proc_name.lower() and "file" in proc_name.lower():
+                proc_type = "ExecuteStreamCommand"  # Likely file operation
+            else:
+                # Use a cleaned version of the name
+                clean_name = (
+                    proc_name.replace(" - ", "_")
+                    .replace(" ", "_")
+                    .replace("(", "")
+                    .replace(")", "")
+                )
+                proc_type = f"Custom_{clean_name[:15]}"
+        else:
+            proc_type = "Unknown"
+
+    # Ensure proc_type is valid (no empty strings)
+    if not proc_type or not proc_type.strip():
+        proc_type = "Unknown"
+
+    return proc_type
+
+
 def _extract_processor_key_details(proc_type: str, name: str, properties: dict) -> list:
     """Extract the most important details for manual review."""
     details = []
@@ -372,9 +425,13 @@ def _extract_processor_key_details(proc_type: str, name: str, properties: dict) 
     elif proc_type == "ExecuteStreamCommand":
         command = properties.get("Command Path", "")
         args = properties.get("Command Arguments", "")
+        working_dir = properties.get("Working Directory", "")
+
         if command:
             details.append(f"- **Command**: `{command}`")
-        if args and len(args) < 100:  # Only show short args
+        if working_dir:
+            details.append(f"- **Working Dir**: `{working_dir}`")
+        if args and len(args) < 150:  # Show slightly longer args
             details.append(f"- **Arguments**: `{args}`")
         elif "impala" in args.lower() or "sql" in args.lower():
             details.append("- **Purpose**: Database/SQL operations")
@@ -383,16 +440,63 @@ def _extract_processor_key_details(proc_type: str, name: str, properties: dict) 
 
     elif proc_type == "PutHDFS":
         directory = properties.get("Directory", "")
+        conflict_resolution = properties.get("Conflict Resolution Strategy", "")
         if directory:
             details.append(f"- **Output Directory**: `{directory}`")
+        if conflict_resolution:
+            details.append(f"- **Conflict Strategy**: `{conflict_resolution}`")
 
     elif proc_type == "PutSFTP":
         hostname = properties.get("Hostname", "")
         remote_path = properties.get("Remote Path", "")
+        username = properties.get("Username", "")
         if hostname:
             details.append(f"- **Host**: `{hostname}`")
+        if username:
+            details.append(f"- **User**: `{username}`")
         if remote_path:
             details.append(f"- **Remote Path**: `{remote_path}`")
+
+    elif proc_type == "UpdateAttribute":
+        # Show some dynamic attributes for UpdateAttribute processors
+        interesting_props = []
+        for key, value in properties.items():
+            if (
+                key
+                not in [
+                    "Delete Attributes Expression",
+                    "Store State",
+                    "canonical-value-lookup-cache-size",
+                ]
+                and value
+            ):
+                if len(str(value)) < 100:  # Only short values
+                    interesting_props.append(f"- **{key}**: `{value}`")
+                if len(interesting_props) >= 2:  # Limit to 2 properties
+                    break
+        details.extend(interesting_props)
+
+    elif proc_type == "ReplaceText":
+        search_value = properties.get("Search Value", "")
+        replacement_value = properties.get("Replacement Value", "")
+        if search_value:
+            details.append(
+                f"- **Search**: `{search_value[:50]}{'...' if len(search_value) > 50 else ''}`"
+            )
+        if replacement_value:
+            details.append(
+                f"- **Replace**: `{replacement_value[:50]}{'...' if len(replacement_value) > 50 else ''}`"
+            )
+
+    elif proc_type.startswith("Custom_") or proc_type == "Unknown":
+        # For custom or unknown processors, show most interesting properties
+        interesting_props = []
+        for key, value in properties.items():
+            if value and len(str(value)) < 100:
+                interesting_props.append(f"- **{key}**: `{value}`")
+                if len(interesting_props) >= 2:
+                    break
+        details.extend(interesting_props)
 
     return details
 
@@ -420,3 +524,147 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
         return "→ Review and convert custom logic to Databricks"
 
     return "→ Review migration approach based on business logic"
+
+
+def _generate_focused_asset_summary(pruned_result, output_dir: str) -> str:
+    """Generate a focused asset summary without the noise of full catalog."""
+
+    # Parse pruned result
+    if isinstance(pruned_result, str):
+        pruned_data = json.loads(pruned_result)
+    else:
+        pruned_data = pruned_result
+
+    processors = pruned_data.get("pruned_processors", [])
+
+    # Extract key assets with high confidence
+    script_files = set()
+    hdfs_paths = set()
+    database_hosts = set()
+    external_hosts = set()
+    working_dirs = set()
+
+    for proc in processors:
+        properties = proc.get("properties", {})
+        proc_type = proc.get("type", "")
+
+        # Extract script files (high confidence)
+        if proc_type == "ExecuteStreamCommand":
+            command_path = properties.get("Command Path", "")
+            working_dir = properties.get("Working Directory", "")
+
+            # Script files
+            if command_path and (".sh" in command_path or "/scripts/" in command_path):
+                script_files.add(command_path)
+
+            # Working directories
+            if working_dir and working_dir != "null":
+                working_dirs.add(working_dir)
+
+            # Database hosts from command arguments
+            args = properties.get("Command Arguments", "")
+            if "impala" in args.lower():
+                # Extract Impala hostnames
+                parts = args.split(";")
+                for part in parts:
+                    if ".na-" in part and ".nxp.com" in part:  # NXP hostname pattern
+                        database_hosts.add(part.strip("-i").strip())
+
+        # HDFS paths
+        if proc_type in ["PutHDFS", "ListFile", "GetFile"]:
+            directory = properties.get("Directory", "") or properties.get(
+                "Input Directory", ""
+            )
+            if directory and ("/etl/" in directory or "/user/" in directory):
+                hdfs_paths.add(directory)
+
+        # External hosts
+        if proc_type == "PutSFTP":
+            hostname = properties.get("Hostname", "")
+            if hostname:
+                external_hosts.add(hostname)
+
+    # Generate summary report
+    report_lines = [
+        "# NiFi Asset Summary",
+        "",
+        "## Overview",
+        f"- **Essential Processors Analyzed**: {len(processors)}",
+        f"- **Script Files Found**: {len(script_files)}",
+        f"- **HDFS Paths Found**: {len(hdfs_paths)}",
+        f"- **Database Hosts Found**: {len(database_hosts)}",
+        f"- **External Hosts Found**: {len(external_hosts)}",
+        f"- **Working Directories**: {len(working_dirs)}",
+        "",
+    ]
+
+    if script_files:
+        report_lines.extend(["## Script Files Requiring Migration", ""])
+        for script in sorted(script_files):
+            report_lines.append(f"- `{script}`")
+        report_lines.append("")
+
+    if database_hosts:
+        report_lines.extend(["## Database Connections", ""])
+        for host in sorted(database_hosts):
+            report_lines.append(f"- **Impala**: `{host}`")
+        report_lines.append("")
+
+    if hdfs_paths:
+        report_lines.extend(["## HDFS Paths for Unity Catalog Migration", ""])
+        for path in sorted(hdfs_paths):
+            report_lines.append(f"- `{path}`")
+        report_lines.append("")
+
+    if external_hosts:
+        report_lines.extend(["## External Host Dependencies", ""])
+        for host in sorted(external_hosts):
+            report_lines.append(f"- **SFTP**: `{host}`")
+        report_lines.append("")
+
+    if working_dirs:
+        report_lines.extend(["## Working Directories", ""])
+        for dir_path in sorted(working_dirs):
+            report_lines.append(f"- `{dir_path}`")
+        report_lines.append("")
+
+    # Migration recommendations
+    report_lines.extend(
+        [
+            "## Migration Recommendations",
+            "",
+            "### High Priority",
+        ]
+    )
+
+    if script_files:
+        report_lines.append("- **Convert shell scripts** to PySpark/Databricks SQL")
+    if database_hosts:
+        report_lines.append(
+            "- **Replace Impala connections** with Databricks SQL compute"
+        )
+    if hdfs_paths:
+        report_lines.append("- **Migrate HDFS data** to Unity Catalog managed tables")
+
+    if external_hosts or working_dirs:
+        report_lines.extend(
+            [
+                "",
+                "### Medium Priority",
+            ]
+        )
+        if external_hosts:
+            report_lines.append(
+                "- **Replace SFTP transfers** with cloud storage integration"
+            )
+        if working_dirs:
+            report_lines.append(
+                "- **Review script dependencies** in working directories"
+            )
+
+    # Write to file
+    summary_path = f"{output_dir}/nifi_asset_summary.md"
+    with open(summary_path, "w") as f:
+        f.write("\n".join(report_lines))
+
+    return summary_path
