@@ -548,7 +548,6 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
     hdfs_paths = set()
     database_hosts = set()
     external_hosts = set()
-    working_dirs = set()
 
     import re
 
@@ -608,20 +607,7 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
                         if len(cleaned_path) > 8 and not cleaned_path.startswith("${"):
                             hdfs_paths.add(cleaned_path)
 
-                # 3. WORKING DIRECTORIES - intelligent detection
-                if prop_value.startswith("/") and len(prop_value) > 5:
-                    # Check if property name suggests it's a directory
-                    dir_keywords = [
-                        "directory",
-                        "dir",
-                        "path",
-                        "folder",
-                        "working",
-                        "base",
-                        "root",
-                    ]
-                    if any(keyword in prop_name.lower() for keyword in dir_keywords):
-                        working_dirs.add(prop_value.strip())
+                # 3. WORKING DIRECTORIES - removed (not needed for migration planning)
 
                 # 4. DATABASE CONNECTIONS - intelligent host extraction
                 # Look for database-related keywords and extract hostnames
@@ -692,12 +678,11 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
         "# NiFi Asset Summary",
         "",
         "## Overview",
-        f"- **Essential Processors Analyzed**: {len(processors)}",
+        f"- **Total Processors Analyzed**: {len(processors)}",
         f"- **Script Files Found**: {len(script_files)}",
         f"- **HDFS Paths Found**: {len(hdfs_paths)}",
         f"- **Database Hosts Found**: {len(database_hosts)}",
         f"- **External Hosts Found**: {len(external_hosts)}",
-        f"- **Working Directories**: {len(working_dirs)}",
         "",
     ]
 
@@ -725,12 +710,6 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
             report_lines.append(f"- **SFTP**: `{host}`")
         report_lines.append("")
 
-    if working_dirs:
-        report_lines.extend(["## Working Directories", ""])
-        for dir_path in sorted(working_dirs):
-            report_lines.append(f"- `{dir_path}`")
-        report_lines.append("")
-
     # Migration recommendations
     report_lines.extend(
         [
@@ -749,21 +728,14 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
     if hdfs_paths:
         report_lines.append("- **Migrate HDFS data** to Unity Catalog managed tables")
 
-    if external_hosts or working_dirs:
+    if external_hosts:
         report_lines.extend(
             [
                 "",
                 "### Medium Priority",
+                "- **Replace SFTP transfers** with cloud storage integration",
             ]
         )
-        if external_hosts:
-            report_lines.append(
-                "- **Replace SFTP transfers** with cloud storage integration"
-            )
-        if working_dirs:
-            report_lines.append(
-                "- **Review script dependencies** in working directories"
-            )
 
     # Write to file
     summary_path = f"{output_dir}/nifi_asset_summary.md"
