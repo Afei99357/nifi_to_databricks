@@ -26,6 +26,34 @@ def _repair_json_if_available(content: str) -> str:
         return content
 
 
+def _parse_llm_json_simple(content: str) -> dict:
+    """
+    Simple JSON parsing with basic recovery - replaces complex recovery strategies.
+    """
+    # Try direct parsing first
+    try:
+        return json.loads(content.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Try with json-repair if available
+    try:
+        return json.loads(_repair_json_if_available(content))
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting from markdown code block
+    if "```json" in content:
+        try:
+            json_part = content.split("```json")[1].split("```")[0].strip()
+            return json.loads(json_part)
+        except (json.JSONDecodeError, IndexError):
+            pass
+
+    # Final fallback - fail gracefully
+    raise ValueError(f"Unable to parse JSON from LLM response")
+
+
 # Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
 
@@ -836,53 +864,8 @@ Return ONLY a JSON object:
         # Reduced verbosity - only log critical steps
         response = llm.invoke(enhanced_prompt)
 
-        # Parse LLM response with recovery strategies
-        try:
-            analysis_result = json.loads(response.content.strip())
-        except json.JSONDecodeError:
-            content = response.content.strip()
-            analysis_result = None
-            # Recovery strategies
-            recovery_strategies = [
-                ("json-repair", lambda c: json.loads(_repair_json_if_available(c))),
-                (
-                    "markdown extraction",
-                    lambda c: (
-                        json.loads(
-                            _repair_json_if_available(
-                                c.split("```json")[1].split("```")[0].strip()
-                            )
-                        )
-                        if "```json" in c
-                        else None
-                    ),
-                ),
-                (
-                    "boundary detection",
-                    lambda c: (
-                        json.loads(
-                            _repair_json_if_available(c[c.find("{") : c.rfind("}") + 1])
-                        )
-                        if c.find("{") >= 0 and c.rfind("}") > c.find("{")
-                        else None
-                    ),
-                ),
-            ]
-
-            for strategy_name, strategy_func in recovery_strategies:
-                try:
-                    repaired_content = strategy_func(content)
-                    if repaired_content:
-                        analysis_result = repaired_content
-                        print(f"🔧 [HYBRID LLM] Recovered JSON using {strategy_name}")
-                        break
-                except (json.JSONDecodeError, ValueError, IndexError):
-                    continue
-
-            if analysis_result is None:
-                raise ValueError(
-                    "All JSON recovery attempts failed for enhanced LLM analysis"
-                )
+        # Simple JSON parsing with basic recovery
+        analysis_result = _parse_llm_json_simple(response.content.strip())
 
         # Add processor metadata and override impact level with conservative rules
         manipulation_type = analysis_result.get("data_manipulation_type", "unknown")
@@ -1234,51 +1217,8 @@ Be specific about what happens to the actual data content, not just metadata or 
         )
         response = llm.invoke(batch_prompt)
 
-        # Parse LLM response with JSON recovery strategies
-        try:
-            batch_results = json.loads(response.content.strip())
-        except json.JSONDecodeError:
-            content = response.content.strip()
-            batch_results = None
-            # Try various recovery strategies in order (same as migration_tools.py)
-            recovery_strategies = [
-                ("json-repair", lambda c: json.loads(_repair_json_if_available(c))),
-                (
-                    "markdown extraction",
-                    lambda c: (
-                        json.loads(
-                            _repair_json_if_available(
-                                c.split("```json")[1].split("```")[0].strip()
-                            )
-                        )
-                        if "```json" in c
-                        else None
-                    ),
-                ),
-                (
-                    "boundary detection",
-                    lambda c: (
-                        json.loads(
-                            _repair_json_if_available(c[c.find("[") : c.rfind("]") + 1])
-                        )
-                        if c.find("[") >= 0 and c.rfind("]") > c.find("[")
-                        else None
-                    ),
-                ),
-            ]
-
-            for strategy_name, strategy_func in recovery_strategies:
-                try:
-                    repaired_content = strategy_func(content)
-                    if repaired_content:
-                        batch_results = repaired_content
-                        print(f"🔧 [LLM BATCH] Recovered JSON using {strategy_name}")
-                        break
-                except (json.JSONDecodeError, ValueError, IndexError):
-                    continue
-
-            if batch_results is None:
-                raise ValueError("All JSON recovery attempts failed")
+        # Simple JSON parsing with basic recovery
+        batch_results = _parse_llm_json_simple(response.content.strip())
 
         # Combine results with processor metadata and conservative impact levels
         results = []
