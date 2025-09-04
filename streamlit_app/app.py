@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 import os
+import sys
 import tempfile
 
 import streamlit as st
+
+# Add parent directory to Python path to find tools and config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import config.settings to automatically load .env file
 import config.settings  # noqa: F401
