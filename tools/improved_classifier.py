@@ -447,7 +447,11 @@ def analyze_workflow_patterns(
 ) -> Dict[str, Any]:
     """Optional single entry-point: parse → classify → (optional) write JSON/MD."""
     try:
-        template_data = json.loads(parse_nifi_template(xml_path))
+        # Read the XML file content first
+        with open(xml_path, "r", encoding="utf-8") as f:
+            xml_content = f.read()
+
+        template_data = json.loads(parse_nifi_template(xml_content))
         processors = template_data.get("processors", [])
         classification_results = analyze_processors_batch(processors)
         summary = _summarize(classification_results)
