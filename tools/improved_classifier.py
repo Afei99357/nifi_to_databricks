@@ -634,6 +634,22 @@ def _classify_processors_batch_llm(
     if not processors:
         return []
 
+    # Respect batch size configuration
+    max_batch_size = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", 20))
+    if len(processors) > max_batch_size:
+        print(
+            f"🔀 [LLM BATCH] Splitting {len(processors)} processors into chunks of {max_batch_size}"
+        )
+        all_results = []
+        for i in range(0, len(processors), max_batch_size):
+            chunk = processors[i : i + max_batch_size]
+            print(
+                f"🧠 [LLM CHUNK {i//max_batch_size + 1}] Processing {len(chunk)} processors..."
+            )
+            chunk_results = _classify_processors_batch_llm(chunk)  # Recursive call
+            all_results.extend(chunk_results)
+        return all_results
+
     model_endpoint = os.environ.get(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
