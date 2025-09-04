@@ -3,10 +3,9 @@
 
 from . import (
     analysis_tools,
+    improved_pruning,
     migration_guide_generator,
     migration_tools,
-    nifi_processor_classifier_tool,
-    pruning_tools,
     simplified_migration,
     xml_tools,
 )

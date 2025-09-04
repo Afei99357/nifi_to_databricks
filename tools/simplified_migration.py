@@ -10,18 +10,18 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
-
-# Asset discovery removed - focus on business migration guide only
-from tools.migration_tools import orchestrate_focused_nifi_migration
-from tools.nifi_processor_classifier_tool import (
+from tools.improved_classifier import (
     analyze_processors_batch,
     analyze_workflow_patterns,
 )
-from tools.pruning_tools import (
+from tools.improved_pruning import (
     create_semantic_data_flows,
     detect_data_flow_chains,
     prune_infrastructure_processors,
 )
+
+# Asset discovery removed - focus on business migration guide only
+from tools.migration_tools import orchestrate_focused_nifi_migration
 
 
 def migrate_nifi_to_databricks_simplified(

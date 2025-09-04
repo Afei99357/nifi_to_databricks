@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 # Import the sophisticated analysis functions
-from .nifi_processor_classifier_tool import analyze_workflow_patterns
+from .improved_classifier import analyze_workflow_patterns
 
 # Removed langchain_core.tools import - no longer using # Removed @tool decorator - direct function call approach decorator
 
