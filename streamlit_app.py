@@ -4,14 +4,12 @@ import tempfile
 
 import streamlit as st
 
+# Import config.settings to automatically load .env file
+import config.settings  # noqa: F401
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
 
 def main():
-    # Set up environment
-    os.environ.setdefault("MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
-    os.environ.setdefault("DATABRICKS_HOSTNAME", "https://test.databricks.com")
-    os.environ.setdefault("DATABRICKS_TOKEN", "test-token")
 
     st.title("🚀 NiFi to Databricks Migration")
 
