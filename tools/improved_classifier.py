@@ -7,6 +7,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .xml_tools import parse_nifi_template
 
+
+def _repair_json_if_available(content: str) -> str:
+    """Try to repair JSON using json_repair if available, otherwise return as-is."""
+    try:
+        from json_repair import repair_json
+
+        return repair_json(content)
+    except ImportError:
+        # Fallback: return content as-is if json_repair not available
+        return content
+
+
 # ---------- Regex helpers
 _SQL_DML_RE = re.compile(r"\b(INSERT|UPDATE|DELETE|MERGE)\b", re.IGNORECASE)
 _SQL_DDL_META = re.compile(
@@ -39,22 +51,37 @@ def _extract_sql(properties: Dict[str, Any]) -> str:
 
 
 def _parse_llm_json_simple(content: str) -> dict:
-    """Simple JSON parsing with basic recovery."""
+    """Simple JSON parsing with json_repair recovery and progress output."""
     # Try direct parsing first
     try:
         return json.loads(content.strip())
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
+
+    # Try json_repair first
+    try:
+        repaired = _repair_json_if_available(content.strip())
+        result = json.loads(repaired)
+        print(f"🔧 [LLM BATCH] Recovered JSON using json_repair")
+        return result
+    except (json.JSONDecodeError, Exception):
+        print(f"❌ [LLM BATCH] json_repair recovery failed")
 
     # Try extracting from markdown code block
     if "```json" in content:
         try:
             json_part = content.split("```json")[1].split("```")[0].strip()
-            return json.loads(json_part)
+            repaired = _repair_json_if_available(json_part)
+            result = json.loads(repaired)
+            print(f"🔧 [LLM BATCH] Recovered JSON from markdown block with repair")
+            return result
         except (json.JSONDecodeError, IndexError):
-            pass
+            print(f"❌ [LLM BATCH] Markdown JSON recovery also failed")
 
     # Final fallback - fail gracefully
+    print(
+        f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation"
+    )
     raise ValueError(f"Unable to parse JSON from LLM response")
 
 
@@ -163,6 +190,215 @@ def _classify_by_rules(
                 "data_impact_level": "none",
                 "key_operations": ["metrics"],
             }
+
+    # RouteOnAttribute: flow control and routing
+    if "routeonattribute" in pt or "route" in pt:
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Routes FlowFiles based on conditions; no content modification.",
+            "transforms_data_content": False,
+            "business_purpose": "Flow control and conditional routing.",
+            "data_impact_level": "none",
+            "key_operations": ["routing"],
+        }
+
+    # Log processors: LogMessage and any processor with 'log' in name
+    if "logmessage" in pt or any(
+        term in nm
+        for term in [
+            "log ",
+            "log error",
+            "log success",
+            "log warn",
+            "log memory",
+            "log kerberos",
+            "log query",
+            "log hdfs",
+            "log unidentified",
+            "log unreachable",
+            "log staging",
+            "log refresh",
+            "log alternative",
+            "log direct",
+            "log token",
+            "log failed",
+            "log successful",
+            "log permanent",
+            "log start",
+            "log ready",
+            "log that",
+            "log if",
+            "log creation",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Logs messages for monitoring; no content or data changes.",
+            "transforms_data_content": False,
+            "business_purpose": "Monitoring, debugging, and audit trails.",
+            "data_impact_level": "none",
+            "key_operations": ["logging"],
+        }
+
+    # Wait processors: timing and coordination
+    if any(
+        term in nm
+        for term in [
+            "wait for",
+            "delay",
+            " second delay",
+            " minute delay",
+            "wait for previous",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Introduces timing delays or waits; no content modification.",
+            "transforms_data_content": False,
+            "business_purpose": "Flow timing, coordination, and synchronization.",
+            "data_impact_level": "none",
+            "key_operations": ["timing_coordination"],
+        }
+
+    # Continue/Dummy/Release processors: flow control
+    if any(
+        term in nm
+        for term in [
+            "continue until",
+            "dummy",
+            "release flow",
+            "release token",
+            "acquire token",
+            "check if",
+            "determine if",
+            "maximum #attempts",
+            "script parameters valid",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Flow control, coordination, and decision logic; no content changes.",
+            "transforms_data_content": False,
+            "business_purpose": "Workflow orchestration and synchronization.",
+            "data_impact_level": "none",
+            "key_operations": ["flow_control"],
+        }
+
+    # ExecuteSQL: database operations (catch various patterns)
+    if "executesql" in pt or any(
+        term in nm
+        for term in [
+            "run refresh statement",
+            "execute direct insert query",
+            "update nifi log",
+            "insert into nifi log",
+            "refresh table",
+            "recover partitions",
+            "analyze staging",
+            "ingest staging",
+            "initialize staging",
+            "run script",
+            "call alternative loading script",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Executes SQL queries or scripts against external systems.",
+            "transforms_data_content": True,
+            "business_purpose": "Database operations and external system integration.",
+            "data_impact_level": "high",
+            "key_operations": ["sql_execution"],
+        }
+
+    # Split processors: content manipulation
+    if (
+        any(
+            term in nm
+            for term in ["split klarf", "split loaders", "split into individual"]
+        )
+        or "split" in pt
+    ):
+        return {
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Splits content or routes based on criteria.",
+            "transforms_data_content": False,
+            "business_purpose": "Content organization and routing.",
+            "data_impact_level": "low",
+            "key_operations": ["content_split"],
+        }
+
+    # Clear/Content manipulation
+    if any(
+        term in nm
+        for term in [
+            "clear content",
+            "content to parameter",
+            "put logtype in attribute",
+            "evaluate query result",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Manipulates FlowFile attributes or clears content for flow control.",
+            "transforms_data_content": False,
+            "business_purpose": "Attribute management and flow preparation.",
+            "data_impact_level": "none",
+            "key_operations": ["attribute_management"],
+        }
+
+    # File operations and manual processes
+    if any(
+        term in nm
+        for term in [
+            "manually create files",
+            "determine trigger file names",
+            "create trigger file",
+            "determine manual trigger",
+            "manual trigger",
+            "list scripts",
+            "determine flows",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Creates or manages files and triggers.",
+            "transforms_data_content": False,
+            "business_purpose": "File management and workflow triggering.",
+            "data_impact_level": "low",
+            "key_operations": ["file_trigger_management"],
+        }
+
+    # Processing control and scheduling
+    if any(
+        term in nm
+        for term in [
+            "processing outside office hours",
+            "shift between continuous",
+            "determine #files per minute",
+            "determine sws lots",
+            "route on filetype",
+            "route on error",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Processing control, scheduling, and routing decisions.",
+            "transforms_data_content": False,
+            "business_purpose": "Workflow scheduling and control logic.",
+            "data_impact_level": "none",
+            "key_operations": ["scheduling_control"],
+        }
+
+    # Kerberos authentication
+    if any(term in nm for term in ["refresh kerberos", "kerberos"]):
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Handles authentication and security tokens.",
+            "transforms_data_content": False,
+            "business_purpose": "Security and authentication management.",
+            "data_impact_level": "none",
+            "key_operations": ["authentication"],
+        }
 
     # No confident rule
     return None
@@ -415,16 +651,33 @@ def _classify_processors_batch_llm(
 
         # Build batch prompt with same format as individual
         batch_data = []
+        processor_names = []
         for i, p in enumerate(processors):
             pt = p.get("type", "") or ""
             nm = p.get("name", "") or ""
             props = p.get("properties", {}) or {}
             batch_data.append({"index": i, "type": pt, "name": nm, "properties": props})
+            processor_names.append(nm)
+
+        print(
+            f"🔍 [LLM BATCH] Processor types: {', '.join(set([p.get('type', '').split('.')[-1] for p in processors]))}"
+        )
+        print(f"🚀 [LLM BATCH] Sending batch request to {model_endpoint}...")
+        print(
+            f"📝 [LLM BATCH] Processors: {', '.join(processor_names[:5])}{'...' if len(processor_names) > 5 else ''}"
+        )
+
+        # Clean the JSON before sending to LLM to avoid escape sequence issues
+        raw_json = json.dumps(
+            batch_data, indent=2, ensure_ascii=True
+        )  # Use ensure_ascii=True for safety
+        cleaned_json = _repair_json_if_available(raw_json)
+        print(f"🧹 [LLM BATCH] Cleaned JSON for LLM processing")
 
         prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
 
 Processors:
-{json.dumps(batch_data, indent=2, ensure_ascii=False)}
+{cleaned_json}
 
 For each processor, decide booleans STRICTLY:
 - touches_flowfile_content: true/false
@@ -454,7 +707,12 @@ Return ONLY a JSON array:
 ]"""
 
         flags_raw = llm.invoke(prompt)
+        print(f"✅ [LLM BATCH] Received response, parsing generated code...")
+
         parsed = _parse_llm_json_simple(flags_raw.content)
+        print(
+            f"🎯 [LLM BATCH] Successfully parsed {len(parsed) if isinstance(parsed, list) else 0} code snippets"
+        )
 
         if not isinstance(parsed, list) or len(parsed) != len(processors):
             raise ValueError(
@@ -483,6 +741,7 @@ Return ONLY a JSON array:
             results.append(result)
             print(f"✅ [LLM BATCH] Classified {nm}: {result['data_manipulation_type']}")
 
+        print(f"✨ [LLM BATCH] Generated {len(results)} processor tasks for batch")
         return results
 
     except Exception as e:
