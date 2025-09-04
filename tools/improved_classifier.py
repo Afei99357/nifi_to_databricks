@@ -391,25 +391,147 @@ def _props_key(props: Dict[str, Any]) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
+def _classify_processors_batch_llm(
+    processors: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Batch LLM classification using the same boolean flag approach as classify_processor_improved."""
+    if not processors:
+        return []
+
+    model_endpoint = os.environ.get(
+        "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
+    )
+
+    try:
+        try:
+            from databricks_langchain import ChatDatabricks
+        except ImportError:
+            try:
+                from langchain_community.chat_models import ChatDatabricks
+            except ImportError:
+                raise ImportError("Databricks LLM not available")
+
+        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
+
+        # Build batch prompt with same format as individual
+        batch_data = []
+        for i, p in enumerate(processors):
+            pt = p.get("type", "") or ""
+            nm = p.get("name", "") or ""
+            props = p.get("properties", {}) or {}
+            batch_data.append({"index": i, "type": pt, "name": nm, "properties": props})
+
+        prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
+
+Processors:
+{json.dumps(batch_data, indent=2, ensure_ascii=False)}
+
+For each processor, decide booleans STRICTLY:
+- touches_flowfile_content: true/false
+- executes_sql_here: true/false
+- sql_has_dml: true/false
+- sql_is_metadata_only: true/false
+- moves_or_renames_files: true/false
+- sets_only_attributes: true/false
+- rule_id: short string naming the single rule you used
+Then provide:
+- data_manipulation_type: one of ["data_transformation","data_movement","infrastructure_only","external_processing"]
+
+Return ONLY a JSON array:
+[
+  {{
+    "index": 0,
+    "touches_flowfile_content": <bool>,
+    "executes_sql_here": <bool>,
+    "sql_has_dml": <bool>,
+    "sql_is_metadata_only": <bool>,
+    "moves_or_renames_files": <bool>,
+    "sets_only_attributes": <bool>,
+    "rule_id": "<string>",
+    "data_manipulation_type": "<label>"
+  }},
+  ...
+]"""
+
+        flags_raw = llm.invoke(prompt)
+        parsed = _parse_llm_json_simple(flags_raw.content)
+
+        if not isinstance(parsed, list) or len(parsed) != len(processors):
+            raise ValueError(
+                f"Expected {len(processors)} results, got {len(parsed) if isinstance(parsed, list) else 'non-array'}"
+            )
+
+        # Build results in same order as input
+        results = []
+        for p, llm_result in zip(processors, parsed):
+            pt = p.get("type", "") or ""
+            nm = p.get("name", "") or ""
+            pid = p.get("id", "") or ""
+            props = p.get("properties", {}) or {}
+
+            result = {
+                "processor_type": pt,
+                "properties": props,
+                "id": pid,
+                "name": nm,
+                "data_manipulation_type": llm_result.get(
+                    "data_manipulation_type", "unknown"
+                ),
+                "analysis_method": "llm_batch",
+                **{k: v for k, v in llm_result.items() if k != "index"},
+            }
+            results.append(result)
+            print(f"✅ [LLM BATCH] Classified {nm}: {result['data_manipulation_type']}")
+
+        return results
+
+    except Exception as e:
+        print(f"❌ [LLM BATCH] Batch classification failed: {e}")
+        # Fallback to individual classification
+        results = []
+        for p in processors:
+            try:
+                result = classify_processor_improved(
+                    processor_type=p.get("type", ""),
+                    properties=p.get("properties", {}),
+                    name=p.get("name", ""),
+                    proc_id=p.get("id", ""),
+                )
+                results.append(result)
+            except Exception:
+                # Ultimate fallback
+                results.append(
+                    {
+                        "processor_type": p.get("type", ""),
+                        "properties": p.get("properties", {}),
+                        "id": p.get("id", ""),
+                        "name": p.get("name", ""),
+                        "data_manipulation_type": "unknown",
+                        "analysis_method": "fallback",
+                    }
+                )
+        return results
+
+
 def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Optional convenience wrapper with de-dup caching."""
+    """Batch analysis with rules-first optimization and LLM batching."""
     cache: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     results: List[Dict[str, Any]] = []
+    llm_batch = []  # Processors that need LLM analysis
 
+    # First pass: Apply rules and collect LLM candidates
     for p in processors:
         pt = p.get("type", "") or ""
         nm = p.get("name", "") or ""
         pid = p.get("id", "") or ""
         props = p.get("properties", {}) or {}
-
-        # Cache key: processor type + properties hash + name
         key = (pt, _props_key(props), nm)
 
         if key not in cache:
             # Try rules first (fast, no LLM call)
             rule_result = _classify_by_rules(pt, nm, props)
             if rule_result:
-                # Rules worked - add processor info and mark as rules_first
+                # Rules worked - cache result
                 cache[key] = {
                     **rule_result,
                     "processor_type": pt,
@@ -422,10 +544,27 @@ def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str,
                     f"✅ [RULES] Classified {nm}: {rule_result['data_manipulation_type']}"
                 )
             else:
-                # Fallback to LLM (individual call for now)
-                cache[key] = classify_processor_improved(
-                    processor_type=pt, properties=props, name=nm, proc_id=pid
-                )
+                # Need LLM analysis - add to batch
+                llm_batch.append((key, p))
+
+    # Second pass: Batch process LLM calls
+    if llm_batch:
+        print(
+            f"🧠 [LLM BATCH] Processing {len(llm_batch)} processors requiring LLM analysis..."
+        )
+        llm_results = _classify_processors_batch_llm([p[1] for p in llm_batch])
+
+        # Cache LLM results
+        for (key, original_proc), llm_result in zip(llm_batch, llm_results):
+            cache[key] = llm_result
+
+    # Third pass: Build final results
+    for p in processors:
+        pt = p.get("type", "") or ""
+        nm = p.get("name", "") or ""
+        pid = p.get("id", "") or ""
+        props = p.get("properties", {}) or {}
+        key = (pt, _props_key(props), nm)
 
         # Copy result and keep the actual id/name in case duplicates differed there
         r = dict(cache[key])
