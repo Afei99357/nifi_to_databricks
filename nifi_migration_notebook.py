@@ -3,7 +3,7 @@
 
 # COMMAND ----------
 
-dbutils.library.restartPython()
+dbutils.library.restartPython()  # type: ignore
 
 # COMMAND ----------
 
@@ -50,32 +50,13 @@ print("=" * 60)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Step 1: Quick Analysis (Optional)
-# MAGIC
-# MAGIC First, let's understand what's in the NiFi workflow before migration.
-
-# COMMAND ----------
-
-print("🔍 STEP 1: ANALYZING NIFI WORKFLOW")
-print("-" * 40)
-
-# Quick analysis to understand the workflow
-analysis_result = analyze_nifi_workflow_only(xml_path)
-
-print("✅ Analysis complete!")
-print(f"📊 Workflow contains semantic data flows and processor classifications")
-print(f"🎯 Ready for intelligent migration")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Step 2: Complete Migration
+# MAGIC #### Complete Migration
 # MAGIC
 # MAGIC Execute the full migration pipeline: analyze → prune → chain → migrate
 
 # COMMAND ----------
 
-print("🚀 STEP 2: COMPLETE MIGRATION PIPELINE")
+print("🚀 COMPLETE MIGRATION PIPELINE")
 print("-" * 40)
 
 # Execute complete migration with all intelligence features
@@ -89,3 +70,4 @@ migration_result = migrate_nifi_to_databricks_simplified(
 
 print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
 print("=" * 60)
+# type: ignore
