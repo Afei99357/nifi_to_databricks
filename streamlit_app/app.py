@@ -10,6 +10,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import config.settings to automatically load .env file
 import config.settings  # noqa: F401
+
+# Clear OAuth credentials that might conflict with PAT token
+os.environ.pop("DATABRICKS_CLIENT_ID", None)
+os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
+
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
 
@@ -36,75 +41,14 @@ def main():
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                     notebook_path="./output_results/main",
                 )
-                st.success("✅ Migration completed successfully!")
+                st.success("✅ Migration completed!")
 
-                # Show user-friendly results
-                if result and "analysis" in result:
-                    analysis = result["analysis"]
-                    if hasattr(analysis, "get") and analysis.get(
-                        "classification_results"
-                    ):
-                        processors = analysis["classification_results"]
+                # Simple output location
+                project_name = f"migration_{uploaded_file.name.replace('.xml', '')}"
+                st.info(f"📂 Results saved to: `./output_results/{project_name}/`")
 
-                        st.subheader("📊 Migration Summary")
-                        col1, col2, col3 = st.columns(3)
-
-                        with col1:
-                            st.metric("Total Processors", len(processors))
-
-                        with col2:
-                            essential = len(
-                                [
-                                    p
-                                    for p in processors
-                                    if p.get("data_manipulation_type")
-                                    not in ["infrastructure_only", "unknown"]
-                                ]
-                            )
-                            st.metric("Essential Processors", essential)
-
-                        with col3:
-                            reduction = (
-                                round(
-                                    (len(processors) - essential)
-                                    / len(processors)
-                                    * 100,
-                                    1,
-                                )
-                                if processors
-                                else 0
-                            )
-                            st.metric("Reduction", f"{reduction}%")
-
-                        # Show output location
-                        project_name = (
-                            f"migration_{uploaded_file.name.replace('.xml', '')}"
-                        )
-                        st.info(
-                            f"📂 **Results saved to:** `./output_results/{project_name}/`"
-                        )
-
-                        # Show generated files
-                        st.subheader("📋 Generated Files")
-                        st.write(
-                            "- `notebooks/` - Databricks notebooks with PySpark code"
-                        )
-                        st.write(
-                            "- `jobs/` - Job configurations for pipeline orchestration"
-                        )
-                        st.write(
-                            "- `src/steps/` - Individual processor implementations"
-                        )
-                        st.write("- `README.md` - Project documentation")
-                    else:
-                        st.info(
-                            "Migration completed but no processor analysis available"
-                        )
-                else:
-                    st.info("Migration completed but no detailed results available")
-
-                # Show raw result in expandable section
-                with st.expander("🔍 Raw Migration Results"):
+                # Show raw result in expandable section (for debugging)
+                with st.expander("Show details"):
                     st.json(result)
 
             except Exception as e:
