@@ -164,6 +164,13 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"📋 Essential processors report: {essential_report_path}")
 
+    # Generate unknown processors JSON for manual review
+    unknown_json_path = _generate_unknown_processors_json(
+        analysis_result, f"{out_dir}/{project}"
+    )
+    if unknown_json_path:
+        print(f"❓ Unknown processors JSON: {unknown_json_path}")
+
     # Generate focused asset summary from ALL processors (before pruning)
     asset_summary_path = _generate_focused_asset_summary(
         processor_classifications, f"{out_dir}/{project}"
@@ -743,3 +750,30 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
         f.write("\n".join(report_lines))
 
     return summary_path
+
+
+def _generate_unknown_processors_json(analysis_result, output_dir: str) -> str:
+    """Generate JSON with unknown processors for manual review."""
+    import json
+
+    # Find unknown processors
+    unknown = []
+    if hasattr(analysis_result, "get"):
+        for proc in analysis_result.get("classification_results", []):
+            if proc.get("data_manipulation_type") == "unknown":
+                unknown.append(
+                    {
+                        "name": proc.get("name"),
+                        "type": proc.get("processor_type"),
+                        "reason": "LLM failed - needs manual classification",
+                    }
+                )
+
+    if not unknown:
+        return None
+
+    json_path = f"{output_dir}/unknown_processors.json"
+    with open(json_path, "w") as f:
+        json.dump(unknown, f, indent=2)
+
+    return json_path
