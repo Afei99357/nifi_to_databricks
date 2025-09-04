@@ -37,20 +37,103 @@ def main():
             try:
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
-                    out_dir="/dbfs/tmp/migration_output",
+                    out_dir="/tmp",
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                 )
                 st.success("✅ Migration completed!")
 
-                # Simple output location
-                project_name = f"migration_{uploaded_file.name.replace('.xml', '')}"
-                st.info(
-                    f"📂 Results saved to: `/dbfs/tmp/migration_output/{project_name}/`"
-                )
+                # Display results directly in the app
+                if result and "analysis" in result:
+                    analysis = result["analysis"]
 
-                # Show raw result in expandable section (for debugging)
-                with st.expander("Show details"):
-                    st.json(result)
+                    # Migration Summary
+                    st.subheader("📊 Migration Summary")
+                    if hasattr(analysis, "get") and analysis.get(
+                        "classification_results"
+                    ):
+                        processors = analysis["classification_results"]
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Total Processors", len(processors))
+                        with col2:
+                            essential = len(
+                                [
+                                    p
+                                    for p in processors
+                                    if p.get("data_manipulation_type")
+                                    not in ["infrastructure_only", "unknown"]
+                                ]
+                            )
+                            st.metric("Essential Processors", essential)
+                        with col3:
+                            reduction = (
+                                round(
+                                    (len(processors) - essential)
+                                    / len(processors)
+                                    * 100,
+                                    1,
+                                )
+                                if processors
+                                else 0
+                            )
+                            st.metric("Reduction", f"{reduction}%")
+
+                    # Migration Guide
+                    with st.expander("📋 Migration Guide", expanded=True):
+                        if "migration_result" in result:
+                            migration_data = result["migration_result"]
+                            if isinstance(migration_data, str):
+                                import json
+
+                                try:
+                                    migration_info = json.loads(migration_data)
+                                    st.markdown("### Migration Overview")
+                                    st.write(
+                                        f"**Migration Type:** {migration_info.get('migration_type', 'N/A')}"
+                                    )
+                                    st.write(
+                                        f"**Processors Analyzed:** {migration_info.get('processors_analyzed', 'N/A')}"
+                                    )
+                                    st.write(
+                                        f"**Approach:** {migration_info.get('approach', 'N/A')}"
+                                    )
+                                except:
+                                    st.text(migration_data)
+
+                    # Processor Details
+                    with st.expander("🔧 Processor Analysis"):
+                        if hasattr(analysis, "get") and analysis.get(
+                            "classification_results"
+                        ):
+                            processors = analysis["classification_results"]
+                            for i, proc in enumerate(processors[:10]):  # Show first 10
+                                st.markdown(
+                                    f"**{proc.get('name', f'Processor {i+1}')}**"
+                                )
+                                st.write(
+                                    f"- Type: `{proc.get('processor_type', 'Unknown')}`"
+                                )
+                                st.write(
+                                    f"- Category: `{proc.get('data_manipulation_type', 'Unknown')}`"
+                                )
+                                st.write(
+                                    f"- Business Purpose: {proc.get('business_purpose', 'Not specified')}"
+                                )
+                                st.divider()
+
+                            if len(processors) > 10:
+                                st.info(
+                                    f"Showing first 10 of {len(processors)} processors"
+                                )
+
+                    # Raw Results
+                    with st.expander("🔍 Raw Migration Results"):
+                        st.json(result)
+                else:
+                    st.info("Migration completed but no detailed results available")
+                    with st.expander("🔍 Raw Results"):
+                        st.json(result)
 
             except Exception as e:
                 st.error(f"❌ Migration failed: {e}")
