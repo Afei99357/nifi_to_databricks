@@ -406,9 +406,26 @@ def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str,
         key = (pt, _props_key(props), nm)
 
         if key not in cache:
-            cache[key] = classify_processor_improved(
-                processor_type=pt, properties=props, name=nm, proc_id=pid
-            )
+            # Try rules first (fast, no LLM call)
+            rule_result = _classify_by_rules(pt, nm, props)
+            if rule_result:
+                # Rules worked - add processor info and mark as rules_first
+                cache[key] = {
+                    **rule_result,
+                    "processor_type": pt,
+                    "properties": props,
+                    "id": pid,
+                    "name": nm,
+                    "analysis_method": "rules_first",
+                }
+                print(
+                    f"✅ [RULES] Classified {nm}: {rule_result['data_manipulation_type']}"
+                )
+            else:
+                # Fallback to LLM (individual call for now)
+                cache[key] = classify_processor_improved(
+                    processor_type=pt, properties=props, name=nm, proc_id=pid
+                )
 
         # Copy result and keep the actual id/name in case duplicates differed there
         r = dict(cache[key])
