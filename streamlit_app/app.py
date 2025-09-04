@@ -37,7 +37,7 @@ def main():
             try:
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
-                    out_dir="/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results",
+                    out_dir="/dbfs/tmp/migration_output",
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                 )
                 st.success("✅ Migration completed!")
@@ -45,7 +45,7 @@ def main():
                 # Simple output location
                 project_name = f"migration_{uploaded_file.name.replace('.xml', '')}"
                 st.info(
-                    f"📂 Results saved to: `/Workspace/Users/eliao@bpcs.com/nifi_to_databricks_large_xml/output_results/{project_name}/`"
+                    f"📂 Results saved to: `/dbfs/tmp/migration_output/{project_name}/`"
                 )
 
                 # Show raw result in expandable section (for debugging)
