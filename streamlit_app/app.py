@@ -36,10 +36,81 @@ def main():
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                     notebook_path="./output_results/main",
                 )
-                st.success("Migration completed!")
-                st.json(result)
+                st.success("✅ Migration completed successfully!")
+
+                # Show user-friendly results
+                if result and "analysis" in result:
+                    analysis = result["analysis"]
+                    if hasattr(analysis, "get") and analysis.get(
+                        "classification_results"
+                    ):
+                        processors = analysis["classification_results"]
+
+                        st.subheader("📊 Migration Summary")
+                        col1, col2, col3 = st.columns(3)
+
+                        with col1:
+                            st.metric("Total Processors", len(processors))
+
+                        with col2:
+                            essential = len(
+                                [
+                                    p
+                                    for p in processors
+                                    if p.get("data_manipulation_type")
+                                    not in ["infrastructure_only", "unknown"]
+                                ]
+                            )
+                            st.metric("Essential Processors", essential)
+
+                        with col3:
+                            reduction = (
+                                round(
+                                    (len(processors) - essential)
+                                    / len(processors)
+                                    * 100,
+                                    1,
+                                )
+                                if processors
+                                else 0
+                            )
+                            st.metric("Reduction", f"{reduction}%")
+
+                        # Show output location
+                        project_name = (
+                            f"migration_{uploaded_file.name.replace('.xml', '')}"
+                        )
+                        st.info(
+                            f"📂 **Results saved to:** `./output_results/{project_name}/`"
+                        )
+
+                        # Show generated files
+                        st.subheader("📋 Generated Files")
+                        st.write(
+                            "- `notebooks/` - Databricks notebooks with PySpark code"
+                        )
+                        st.write(
+                            "- `jobs/` - Job configurations for pipeline orchestration"
+                        )
+                        st.write(
+                            "- `src/steps/` - Individual processor implementations"
+                        )
+                        st.write("- `README.md` - Project documentation")
+                    else:
+                        st.info(
+                            "Migration completed but no processor analysis available"
+                        )
+                else:
+                    st.info("Migration completed but no detailed results available")
+
+                # Show raw result in expandable section
+                with st.expander("🔍 Raw Migration Results"):
+                    st.json(result)
+
             except Exception as e:
-                st.error(f"Migration failed: {e}")
+                st.error(f"❌ Migration failed: {e}")
+                st.write("**Debug info:**")
+                st.code(str(e))
             finally:
                 os.unlink(tmp_xml_path)
 
