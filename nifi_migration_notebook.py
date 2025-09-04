@@ -64,7 +64,6 @@ migration_result = migrate_nifi_to_databricks_simplified(
     xml_path=xml_path,
     out_dir=output_dir,
     project=project_name,
-    notebook_path=f"{output_dir}/{project_name}/main",
     # Note: Now generates comprehensive migration guide instead of deployable jobs
 )
 
