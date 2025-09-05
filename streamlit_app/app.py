@@ -41,44 +41,34 @@ def main():
                 )
                 st.success("✅ Migration completed!")
 
-                # Display new report sections
-                if result and "reports" in result:
+                # Display reports
+                if result.get("reports"):
                     reports = result["reports"]
 
                     # Essential Processors Report
-                    if (
-                        "essential_processors" in reports
-                        and reports["essential_processors"]
-                    ):
+                    if reports.get("essential_processors"):
                         with st.expander(
                             "📋 Essential Processors Report", expanded=True
                         ):
                             st.markdown(reports["essential_processors"])
 
                     # Unknown Processors Report
-                    if (
-                        "unknown_processors" in reports
-                        and reports["unknown_processors"]
-                    ):
-                        unknown_data = reports["unknown_processors"]
-                        if unknown_data.get("count", 0) > 0:
-                            with st.expander(
-                                f"❓ Unknown Processors ({unknown_data['count']})"
-                            ):
-                                unknown_list = unknown_data.get(
-                                    "unknown_processors", []
+                    unknown_data = reports.get("unknown_processors", {})
+                    if unknown_data.get("count", 0) > 0:
+                        with st.expander(
+                            f"❓ Unknown Processors ({unknown_data['count']})"
+                        ):
+                            for proc in unknown_data.get("unknown_processors", []):
+                                st.write(f"**{proc.get('name', 'Unknown')}**")
+                                st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
+                                st.write(
+                                    f"- Reason: {proc.get('reason', 'No reason provided')}"
                                 )
-                                for proc in unknown_list:
-                                    st.write(f"**{proc.get('name', 'Unknown')}**")
-                                    st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                                    st.write(
-                                        f"- Reason: {proc.get('reason', 'No reason provided')}"
-                                    )
-                                    st.write("---")
-                        else:
-                            st.info(
-                                "✅ No unknown processors - all were successfully classified"
-                            )
+                                st.write("---")
+                    else:
+                        st.info(
+                            "✅ No unknown processors - all were successfully classified"
+                        )
 
                     # Asset Summary Report
                     if "asset_summary" in reports and reports["asset_summary"]:
