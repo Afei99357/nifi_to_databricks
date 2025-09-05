@@ -145,9 +145,7 @@ def migrate_nifi_to_databricks_simplified(
         semantic_flows=semantic_flows,
         out_dir=out_dir,
         project=project,
-        job=f"{project}_job",
         notebook_path=notebook_path or "",
-        run_now=False,  # No deployment - migration guide approach
     )
 
     # Compile complete results
