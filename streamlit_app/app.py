@@ -3,14 +3,14 @@ import os
 import sys
 import tempfile
 
+# Add parent directory to Python path to find tools and config (MUST be before imports)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 import streamlit as st
 
 # Import config.settings to automatically load .env file
 import config.settings  # noqa: F401
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
-
-# Add parent directory to Python path to find tools and config
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Clear OAuth credentials that might conflict with PAT token
 os.environ.pop("DATABRICKS_CLIENT_ID", None)
