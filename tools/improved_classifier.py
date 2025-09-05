@@ -671,6 +671,9 @@ def _classify_processors_batch_llm(
 
     # Token should already be available in environment from Databricks runtime
 
+    if not processors:
+        return []
+
     # Build batch data
     batch_data = []
     for i, p in enumerate(processors):
@@ -683,9 +686,10 @@ def _classify_processors_batch_llm(
             }
         )
 
-    llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
+    try:
+        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
 
-    prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
+        prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
 
 Processors:
 {json.dumps(batch_data, indent=2)}
@@ -717,26 +721,43 @@ Return ONLY a JSON array:
   ...
 ]"""
 
-    flags_raw = llm.invoke(prompt)
-    parsed = json.loads(flags_raw.content.strip())
+        print(f"🚀 [LLM BATCH] Calling model endpoint {model_endpoint}...")
+        flags_raw = llm.invoke(prompt)
+        parsed = json.loads(flags_raw.content.strip())
+        print(f"✅ [LLM BATCH] Successfully processed {len(parsed)} processors")
 
-    # Build results
-    results = []
-    for p, llm_result in zip(processors, parsed):
-        result = {
-            "processor_type": p.get("type", ""),
-            "properties": p.get("properties", {}),
-            "id": p.get("id", ""),
-            "name": p.get("name", ""),
-            "data_manipulation_type": llm_result.get(
-                "data_manipulation_type", "unknown"
-            ),
-            "analysis_method": "llm_batch",
-            **{k: v for k, v in llm_result.items() if k != "index"},
-        }
-        results.append(result)
+        # Build results
+        results = []
+        for p, llm_result in zip(processors, parsed):
+            result = {
+                "processor_type": p.get("type", ""),
+                "properties": p.get("properties", {}),
+                "id": p.get("id", ""),
+                "name": p.get("name", ""),
+                "data_manipulation_type": llm_result.get(
+                    "data_manipulation_type", "unknown"
+                ),
+                "analysis_method": "llm_batch",
+                **{k: v for k, v in llm_result.items() if k != "index"},
+            }
+            results.append(result)
 
-    return results
+        return results
+
+    except Exception as e:
+        print(f"❌ [LLM BATCH] Failed: {e}")
+        # Return fallback results
+        return [
+            {
+                "processor_type": p.get("type", ""),
+                "properties": p.get("properties", {}),
+                "id": p.get("id", ""),
+                "name": p.get("name", ""),
+                "data_manipulation_type": "unknown",
+                "analysis_method": "llm_batch_failed",
+            }
+            for p in processors
+        ]
 
 
 def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
