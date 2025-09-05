@@ -498,10 +498,20 @@ def classify_processor_improved(
     try:
         try:
             from databricks_langchain import ChatDatabricks
-        except ImportError:
+
+            print(
+                f"[DEBUG] Successfully imported ChatDatabricks from databricks_langchain"
+            )
+        except ImportError as e1:
+            print(f"[DEBUG] Failed to import from databricks_langchain: {e1}")
             try:
                 from langchain_community.chat_models import ChatDatabricks
-            except ImportError:
+
+                print(
+                    f"[DEBUG] Successfully imported ChatDatabricks from langchain_community"
+                )
+            except ImportError as e2:
+                print(f"[DEBUG] Failed to import from langchain_community: {e2}")
                 raise ImportError("Databricks LLM not available")
 
         llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
@@ -657,10 +667,20 @@ def _classify_processors_batch_llm(
     try:
         try:
             from databricks_langchain import ChatDatabricks
-        except ImportError:
+
+            print(
+                f"[DEBUG] Successfully imported ChatDatabricks from databricks_langchain"
+            )
+        except ImportError as e1:
+            print(f"[DEBUG] Failed to import from databricks_langchain: {e1}")
             try:
                 from langchain_community.chat_models import ChatDatabricks
-            except ImportError:
+
+                print(
+                    f"[DEBUG] Successfully imported ChatDatabricks from langchain_community"
+                )
+            except ImportError as e2:
+                print(f"[DEBUG] Failed to import from langchain_community: {e2}")
                 raise ImportError("Databricks LLM not available")
 
         llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)

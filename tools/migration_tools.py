@@ -288,10 +288,20 @@ def _process_single_llm_batch(
         # Import ChatDatabricks at runtime
         try:
             from databricks_langchain import ChatDatabricks
-        except ImportError:
+
+            print(
+                f"[DEBUG] Successfully imported ChatDatabricks from databricks_langchain"
+            )
+        except ImportError as e1:
+            print(f"[DEBUG] Failed to import from databricks_langchain: {e1}")
             try:
                 from langchain_community.chat_models import ChatDatabricks
-            except ImportError:
+
+                print(
+                    f"[DEBUG] Successfully imported ChatDatabricks from langchain_community"
+                )
+            except ImportError as e2:
+                print(f"[DEBUG] Failed to import from langchain_community: {e2}")
                 raise ImportError("Databricks LLM not available")
 
         # Create LLM with very low temperature for consistent JSON output
