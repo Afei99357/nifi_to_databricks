@@ -480,12 +480,6 @@ def classify_processor_improved(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
 
-    # Ensure DATABRICKS_HOST environment variable for langchain
-    if "DATABRICKS_HOST" not in os.environ:
-        hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
-        if hostname:
-            os.environ["DATABRICKS_HOST"] = hostname
-
     # 0) Try deterministic rules FIRST
     rule_hit = _classify_by_rules(processor_type, name, properties)
     if rule_hit:
@@ -669,12 +663,6 @@ def _classify_processors_batch_llm(
     model_endpoint = os.environ.get(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
-
-    # Ensure DATABRICKS_HOST environment variable for langchain
-    if "DATABRICKS_HOST" not in os.environ:
-        hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
-        if hostname:
-            os.environ["DATABRICKS_HOST"] = hostname
 
     try:
         try:

@@ -285,12 +285,6 @@ def _process_single_llm_batch(
             "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
         )
 
-        # Ensure DATABRICKS_HOST environment variable for langchain
-        if "DATABRICKS_HOST" not in os.environ:
-            hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
-            if hostname:
-                os.environ["DATABRICKS_HOST"] = hostname
-
         # Import ChatDatabricks at runtime
         try:
             from databricks_langchain import ChatDatabricks
