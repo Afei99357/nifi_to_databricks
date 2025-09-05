@@ -671,38 +671,24 @@ def _classify_processors_batch_llm(
 
     # Token should already be available in environment from Databricks runtime
 
-    try:
-        llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
-
-        # Build batch prompt with same format as individual
-        batch_data = []
-        processor_names = []
-        for i, p in enumerate(processors):
-            pt = p.get("type", "") or ""
-            nm = p.get("name", "") or ""
-            props = p.get("properties", {}) or {}
-            batch_data.append({"index": i, "type": pt, "name": nm, "properties": props})
-            processor_names.append(nm)
-
-        print(
-            f"🔍 [LLM BATCH] Processor types: {', '.join(set([p.get('type', '').split('.')[-1] for p in processors]))}"
-        )
-        print(f"🚀 [LLM BATCH] Sending batch request to {model_endpoint}...")
-        print(
-            f"📝 [LLM BATCH] Processors: {', '.join(processor_names[:5])}{'...' if len(processor_names) > 5 else ''}"
+    # Build batch data
+    batch_data = []
+    for i, p in enumerate(processors):
+        batch_data.append(
+            {
+                "index": i,
+                "type": p.get("type", ""),
+                "name": p.get("name", ""),
+                "properties": p.get("properties", {}),
+            }
         )
 
-        # Clean the JSON before sending to LLM to avoid escape sequence issues
-        raw_json = json.dumps(
-            batch_data, indent=2, ensure_ascii=True
-        )  # Use ensure_ascii=True for safety
-        cleaned_json = _repair_json_if_available(raw_json)
-        print(f"🧹 [LLM BATCH] Cleaned JSON for LLM processing")
+    llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
 
-        prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
+    prompt = f"""You are a NiFi expert. Analyze these {len(processors)} NiFi processors. Return ONLY a JSON array with decision flags for each.
 
 Processors:
-{cleaned_json}
+{json.dumps(batch_data, indent=2)}
 
 For each processor, decide booleans STRICTLY:
 - touches_flowfile_content: true/false
@@ -731,70 +717,26 @@ Return ONLY a JSON array:
   ...
 ]"""
 
-        flags_raw = llm.invoke(prompt)
-        print(f"✅ [LLM BATCH] Received response, parsing generated code...")
+    flags_raw = llm.invoke(prompt)
+    parsed = json.loads(flags_raw.content.strip())
 
-        parsed = _parse_llm_json_simple(flags_raw.content)
-        print(
-            f"🎯 [LLM BATCH] Successfully parsed {len(parsed) if isinstance(parsed, list) else 0} code snippets"
-        )
+    # Build results
+    results = []
+    for p, llm_result in zip(processors, parsed):
+        result = {
+            "processor_type": p.get("type", ""),
+            "properties": p.get("properties", {}),
+            "id": p.get("id", ""),
+            "name": p.get("name", ""),
+            "data_manipulation_type": llm_result.get(
+                "data_manipulation_type", "unknown"
+            ),
+            "analysis_method": "llm_batch",
+            **{k: v for k, v in llm_result.items() if k != "index"},
+        }
+        results.append(result)
 
-        if not isinstance(parsed, list) or len(parsed) != len(processors):
-            raise ValueError(
-                f"Expected {len(processors)} results, got {len(parsed) if isinstance(parsed, list) else 'non-array'}"
-            )
-
-        # Build results in same order as input
-        results = []
-        for p, llm_result in zip(processors, parsed):
-            pt = p.get("type", "") or ""
-            nm = p.get("name", "") or ""
-            pid = p.get("id", "") or ""
-            props = p.get("properties", {}) or {}
-
-            result = {
-                "processor_type": pt,
-                "properties": props,
-                "id": pid,
-                "name": nm,
-                "data_manipulation_type": llm_result.get(
-                    "data_manipulation_type", "unknown"
-                ),
-                "analysis_method": "llm_batch",
-                **{k: v for k, v in llm_result.items() if k != "index"},
-            }
-            results.append(result)
-            print(f"✅ [LLM BATCH] Classified {nm}: {result['data_manipulation_type']}")
-
-        print(f"✨ [LLM BATCH] Generated {len(results)} processor tasks for batch")
-        return results
-
-    except Exception as e:
-        print(f"❌ [LLM BATCH] Batch classification failed: {e}")
-        # Fallback to individual classification
-        results = []
-        for p in processors:
-            try:
-                result = classify_processor_improved(
-                    processor_type=p.get("type", ""),
-                    properties=p.get("properties", {}),
-                    name=p.get("name", ""),
-                    proc_id=p.get("id", ""),
-                )
-                results.append(result)
-            except Exception:
-                # Ultimate fallback
-                results.append(
-                    {
-                        "processor_type": p.get("type", ""),
-                        "properties": p.get("properties", {}),
-                        "id": p.get("id", ""),
-                        "name": p.get("name", ""),
-                        "data_manipulation_type": "unknown",
-                        "analysis_method": "fallback",
-                    }
-                )
-        return results
+    return results
 
 
 def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
