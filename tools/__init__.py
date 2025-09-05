@@ -5,7 +5,6 @@ from . import (
     analysis_tools,
     improved_classifier,
     improved_pruning,
-    migration_guide_generator,
     migration_tools,
     simplified_migration,
     xml_tools,
