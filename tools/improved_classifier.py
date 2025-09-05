@@ -723,14 +723,15 @@ Return ONLY a JSON array:
 
         print(f"🚀 [LLM BATCH] Calling model endpoint {model_endpoint}...")
         flags_raw = llm.invoke(prompt)
-        print(f"[DEBUG] LLM response type: {type(flags_raw.content)}")
-        print(
-            f"[DEBUG] LLM response length: {len(flags_raw.content) if flags_raw.content else 0}"
-        )
-        print(
-            f"[DEBUG] LLM response preview: {repr(flags_raw.content[:200]) if flags_raw.content else 'None'}"
-        )
-        parsed = json.loads(flags_raw.content.strip())
+
+        # Extract JSON from markdown code blocks if needed
+        content = flags_raw.content.strip()
+        if content.startswith("```json"):
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif content.startswith("```"):
+            content = content.split("```")[1].split("```")[0].strip()
+
+        parsed = json.loads(content)
         print(f"✅ [LLM BATCH] Successfully processed {len(parsed)} processors")
 
         # Build results
