@@ -126,14 +126,9 @@ def _generate_batch_processor_code(
             f"🧠 [LLM BATCH] Generating code for {len(processors)} processors in {chunk_id}"
         )
 
-        # Import the builtin pattern function
-        from tools.generator_tools import _get_builtin_pattern
-
-        # Separate processors into those with built-in patterns and those needing LLM generation
-        builtin_tasks = []
-        llm_needed_processors = []
+        # All processors need LLM generation since generator_tools is not available
+        llm_needed_processors = processors
         processor_specs = []
-        processor_types = []
 
         for idx, processor in enumerate(processors):
             # Get processor identification - prefer original type, fallback to classification info
@@ -160,61 +155,24 @@ def _generate_batch_processor_code(
                 "project": project,
             }
 
-            # Check if there's a built-in pattern for this processor
-            pattern = _get_builtin_pattern(proc_type, props, workflow_context)
-
-            if pattern["code"]:  # Built-in pattern available
-                # Use built-in pattern with Unity Catalog conversion
-                class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
-                processor_types.append(f"{class_name} (built-in)")
-
-                task = {
+            processor_specs.append(
+                {
+                    "index": idx,
+                    "type": proc_type,
+                    "name": proc_name,
+                    "properties": props,
                     "id": processor.get(
                         "id",
                         _generate_task_id(
                             proc_name, proc_type, chunk_id, idx, group_name
                         ),
                     ),
-                    "name": _safe_name(proc_name),
-                    "type": proc_type,
-                    "code": pattern["code"],
-                    "properties": props,
-                    "chunk_id": chunk_id,
-                    "processor_index": idx,
+                    "classification": classification,
+                    "business_purpose": business_purpose or reasoning,
+                    "analysis_reasoning": reasoning,
+                    "workflow_context": workflow_context,
                 }
-                builtin_tasks.append(task)
-            else:  # No built-in pattern, needs LLM generation
-                class_name = proc_type.split(".")[-1] if "." in proc_type else proc_type
-                processor_types.append(f"{class_name} (LLM)")
-
-                llm_needed_processors.append(processor)
-                processor_specs.append(
-                    {
-                        "index": idx,
-                        "type": proc_type,
-                        "name": proc_name,
-                        "properties": props,
-                        "id": processor.get(
-                            "id",
-                            _generate_task_id(
-                                proc_name, proc_type, chunk_id, idx, group_name
-                            ),
-                        ),
-                        "classification": classification,
-                        "business_purpose": business_purpose or reasoning,
-                        "analysis_reasoning": reasoning,
-                        "workflow_context": workflow_context,
-                    }
-                )
-
-        # Batch processing processors
-
-        # If all processors have built-in patterns, return early
-        if not llm_needed_processors:
-            print(
-                f"✨ [LLM BATCH] All {len(processors)} processors used built-in patterns"
             )
-            return builtin_tasks
 
         # Get batch size from environment (same as processor classification)
         max_batch_size = int(os.environ.get("MAX_PROCESSORS_PER_CHUNK", "20"))
@@ -488,13 +446,8 @@ GENERATE JSON FOR ALL {len(processor_specs)} PROCESSORS:"""
                         proc_type = processor.get("type", "Unknown")
                         proc_name = processor.get("name", f"processor_{start+idx}")
                         props = processor.get("properties", {})
-                        try:
-                            code = generate_databricks_code(
-                                processor_type=proc_type,
-                                properties=json.dumps(props),
-                            )
-                        except Exception:
-                            code = f"""# {proc_type} → Fallback Template
+                        # Generate fallback code template
+                        code = f"""# {proc_type} → Fallback Template
 # Properties: {json.dumps(props, indent=2)}
 
 df = spark.read.format('delta').load('/path/to/input')
@@ -524,13 +477,8 @@ df.write.format('delta').mode('append').save('/path/to/output')
                 proc_name = processor.get("name", f"processor_{idx}")
                 props = processor.get("properties", {})
 
-                try:
-                    code = generate_databricks_code(
-                        processor_type=proc_type,
-                        properties=json.dumps(props),
-                    )
-                except Exception:
-                    code = f"""# {proc_type} → Fallback Template
+                # Generate fallback code template
+                code = f"""# {proc_type} → Fallback Template
 # Properties: {json.dumps(props, indent=2)}
 
 df = spark.read.format('delta').load('/path/to/input')
@@ -820,7 +768,7 @@ def orchestrate_focused_nifi_migration(
 
         # Note: No longer generating conf/focused_migration_analysis.json - migration guide approach
 
-        # Generate comprehensive migration guide instead of fragmented code
+        # Import at function level to avoid circular imports
         from .migration_guide_generator import generate_migration_guide
 
         migration_guide = generate_migration_guide(

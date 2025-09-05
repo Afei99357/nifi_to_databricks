@@ -4,6 +4,8 @@ Direct function call approach for linear migration workflow.
 """
 
 import json
+import os
+import re
 from typing import Any, Dict, Optional
 
 from tools.analysis_tools import (
@@ -55,8 +57,6 @@ def migrate_nifi_to_databricks_simplified(
 
     # Step 1: Create output directory structure
     print("📁 Creating output directory structure...")
-    import os
-
     os.makedirs(f"{out_dir}/{project}", exist_ok=True)
 
     # Step 2: Read XML content
@@ -88,92 +88,46 @@ def migrate_nifi_to_databricks_simplified(
     )
     print(f"🏷️  Processor Classifications: Completed")
 
-    # Parse classification results for pruning
-    try:
-        class_data = json.loads(processor_classifications)
-        classifications = class_data.get("processor_classifications", [])
-
-        # Classifications loaded for pruning
-
-    except Exception as e:
-        print(f"🚨 Failed to parse classifications: {e}")
+    # Classifications loaded for pruning - parsing handled in pruning step
 
     # Step 4: Prune infrastructure processors
     print("✂️  Pruning infrastructure-only processors...")
 
-    # Debug: Check what we're passing to pruning
-    try:
-        debug_data = json.loads(processor_classifications)
-        if "processor_classifications" in debug_data:
-            debug_count = len(debug_data["processor_classifications"])
-            print(f"🔍 PRUNING DEBUG: Found {debug_count} processor classifications")
-        else:
-            print(f"🔍 PRUNING DEBUG: Keys in data: {list(debug_data.keys())}")
-    except:
-        print(f"🔍 PRUNING DEBUG: Could not parse processor_classifications JSON")
-
     pruned_result = prune_infrastructure_processors(processor_classifications)
-    # print(f"🎯 Pruned Result: {pruned_result}")  # Comment out detailed JSON output
 
-    # DEBUG: Check pruning results
-    try:
-        if isinstance(pruned_result, str):
-            pruned_data = json.loads(pruned_result)
-        else:
-            pruned_data = pruned_result
+    # Check pruning results and show essential count
+    if isinstance(pruned_result, str):
+        pruned_data = json.loads(pruned_result)
+    else:
+        pruned_data = pruned_result
 
-        if "error" in pruned_data:
-            print(f"🚨 PRUNING ERROR: {pruned_data.get('error', 'Unknown error')}")
-        else:
-            essential = pruned_data.get("pruned_processors", [])
-            print(f"\n🔍 PRUNING DEBUG:")
-            print(f"Essential processors after pruning: {len(essential)}")
-            if essential:
-                print("Essential processor examples:")
-                for i, p in enumerate(essential[:3]):
-                    print(
-                        f"  {i+1}. {p.get('name')} ({p.get('type')}) - {p.get('classification')}"
-                    )
-    except Exception as e:
-        print(f"🚨 Failed to parse pruning results: {e}")
+    if "error" in pruned_data:
+        print(f"⚠️ Pruning error: {pruned_data.get('error', 'Unknown')}")
+    else:
+        essential_count = len(pruned_data.get("pruned_processors", []))
+        print(f"✅ Pruning complete: {essential_count} essential processors identified")
 
     # Step 5: Detect data flow chains
     print("🔗 Detecting semantic data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
-    # print(f"⛓️  Chains Result: {chains_result}")  # Comment out detailed JSON output
 
     # Step 6: Create semantic data flows
     print("🌊 Creating semantic data flows...")
     semantic_flows = create_semantic_data_flows(chains_result)
-    # print(f"🎨 Semantic Flows: {semantic_flows}")  # Comment out detailed JSON output
 
     # Step 7: Extract and catalog all workflow assets for manual review
     print("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
 
-    # Parse analysis result for asset extraction
-    if isinstance(analysis_result, str):
-        analysis_data = json.loads(analysis_result)
-    else:
-        analysis_data = analysis_result
+    # Asset discovery skipped - focusing on business migration guide
 
-    print("📋 Asset discovery skipped - focusing on business migration guide")
-
-    # Generate reports content for display
-    print("📋 Generating reports content...")
-
+    # Generate reports content
     essential_processors_content = _generate_essential_processors_report(pruned_result)
-    print(f"📋 Essential processors report: Generated")
-
     unknown_processors_content = _generate_unknown_processors_json(analysis_result)
-    print(f"❓ Unknown processors report: Generated")
-
     asset_summary_content = _generate_focused_asset_summary(processor_classifications)
-    print(f"📄 Asset summary report: Generated")
+    print("📋 Reports generated successfully")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
-    print(
-        "📋 Generating comprehensive migration guide for essential data processors..."
-    )
+    print("📋 Generating comprehensive migration guide...")
 
     # Parse pruned_result to get the list of essential processors
 
@@ -183,9 +137,7 @@ def migrate_nifi_to_databricks_simplified(
         pruned_data = pruned_result
 
     essential_processors = pruned_data.get("pruned_processors", [])
-    print(
-        f"📊 Focusing on {len(essential_processors)} essential processors (infrastructure skipped)"
-    )
+    print(f"🎯 Processing {len(essential_processors)} essential processors")
 
     migration_result = orchestrate_focused_nifi_migration(
         xml_path=xml_path,
@@ -250,8 +202,6 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
 
     # Perform analysis steps (single analysis shared between functions)
     # For analysis-only, save to a temp directory next to XML
-    import os
-
     temp_output_dir = os.path.join(os.path.dirname(xml_path), "analysis_temp")
 
     # Single analysis call that both functions can use
@@ -565,8 +515,6 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
     database_hosts = set()
     external_hosts = set()
 
-    import re
-
     for proc in processors:
         properties = proc.get("properties", {})
         proc_name = proc.get("name", "")
@@ -767,8 +715,6 @@ def _generate_unknown_processors_json(analysis_result, output_dir: str = None) -
     Returns:
         Dictionary containing unknown processors data
     """
-    import json
-
     # Find unknown processors
     unknown = []
     if hasattr(analysis_result, "get"):
