@@ -158,24 +158,17 @@ def migrate_nifi_to_databricks_simplified(
 
     print("📋 Asset discovery skipped - focusing on business migration guide")
 
-    # Generate essential processors report for manual review
-    essential_report_path = _generate_essential_processors_report(
-        pruned_result, f"{out_dir}/{project}"
-    )
-    print(f"📋 Essential processors report: {essential_report_path}")
+    # Generate reports content for display
+    print("📋 Generating reports content...")
 
-    # Generate unknown processors JSON for manual review
-    unknown_json_path = _generate_unknown_processors_json(
-        analysis_result, f"{out_dir}/{project}"
-    )
-    if unknown_json_path:
-        print(f"❓ Unknown processors JSON: {unknown_json_path}")
+    essential_processors_content = _generate_essential_processors_report(pruned_result)
+    print(f"📋 Essential processors report: Generated")
 
-    # Generate focused asset summary from ALL processors (before pruning)
-    asset_summary_path = _generate_focused_asset_summary(
-        processor_classifications, f"{out_dir}/{project}"
-    )
-    print(f"📄 Asset summary report: {asset_summary_path}")
+    unknown_processors_content = _generate_unknown_processors_json(analysis_result)
+    print(f"❓ Unknown processors report: Generated")
+
+    asset_summary_content = _generate_focused_asset_summary(processor_classifications)
+    print(f"📄 Asset summary report: Generated")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
     print(
@@ -215,7 +208,11 @@ def migrate_nifi_to_databricks_simplified(
             "data_flow_chains": chains_result,
             "semantic_flows": semantic_flows,
         },
-        # Asset discovery removed - business migration guide focus
+        "reports": {
+            "essential_processors": essential_processors_content,
+            "unknown_processors": unknown_processors_content,
+            "asset_summary": asset_summary_content,
+        },
         "configuration": {
             "xml_path": xml_path,
             "out_dir": out_dir,
@@ -289,8 +286,16 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     return analysis_result
 
 
-def _generate_essential_processors_report(pruned_result, output_dir: str) -> str:
-    """Generate a clean, focused report of essential processors for manual review."""
+def _generate_essential_processors_report(pruned_result, output_dir: str = None) -> str:
+    """Generate a clean, focused report of essential processors for manual review.
+
+    Args:
+        pruned_result: Pruned processor data
+        output_dir: Output directory (ignored, kept for compatibility)
+
+    Returns:
+        String containing the markdown content
+    """
 
     # Parse pruned result
     if isinstance(pruned_result, str):
@@ -363,12 +368,8 @@ def _generate_essential_processors_report(pruned_result, output_dir: str) -> str
             else:
                 report_lines.append("")
 
-    # Write to file
-    report_path = f"{output_dir}/essential_processors.md"
-    with open(report_path, "w") as f:
-        f.write("\n".join(report_lines))
-
-    return report_path
+    # Return content instead of writing to file
+    return "\n".join(report_lines)
 
 
 def _extract_robust_processor_type(proc: dict) -> str:
@@ -533,8 +534,16 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
     return "→ Review migration approach based on business logic"
 
 
-def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
-    """Generate a focused asset summary without the noise of full catalog."""
+def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> str:
+    """Generate a focused asset summary without the noise of full catalog.
+
+    Args:
+        processor_data: Processor data (classifications or pruned result)
+        output_dir: Output directory (ignored, kept for compatibility)
+
+    Returns:
+        String containing the markdown content
+    """
 
     # Parse processor data (can be classifications or pruned result)
     if isinstance(processor_data, str):
@@ -744,16 +753,20 @@ def _generate_focused_asset_summary(processor_data, output_dir: str) -> str:
             ]
         )
 
-    # Write to file
-    summary_path = f"{output_dir}/nifi_asset_summary.md"
-    with open(summary_path, "w") as f:
-        f.write("\n".join(report_lines))
-
-    return summary_path
+    # Return content instead of writing to file
+    return "\n".join(report_lines)
 
 
-def _generate_unknown_processors_json(analysis_result, output_dir: str) -> str:
-    """Generate JSON with unknown processors for manual review."""
+def _generate_unknown_processors_json(analysis_result, output_dir: str = None) -> dict:
+    """Generate JSON with unknown processors for manual review.
+
+    Args:
+        analysis_result: Analysis result data
+        output_dir: Output directory (ignored, kept for compatibility)
+
+    Returns:
+        Dictionary containing unknown processors data
+    """
     import json
 
     # Find unknown processors
@@ -769,11 +782,5 @@ def _generate_unknown_processors_json(analysis_result, output_dir: str) -> str:
                     }
                 )
 
-    if not unknown:
-        return None
-
-    json_path = f"{output_dir}/unknown_processors.json"
-    with open(json_path, "w") as f:
-        json.dump(unknown, f, indent=2)
-
-    return json_path
+    # Return data object instead of writing to file
+    return {"unknown_processors": unknown, "count": len(unknown)}

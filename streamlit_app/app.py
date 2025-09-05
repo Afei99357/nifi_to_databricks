@@ -41,114 +41,53 @@ def main():
                 )
                 st.success("✅ Migration completed!")
 
-                # Display results directly in the app
-                if result and "analysis" in result:
-                    analysis = result["analysis"]
+                # Display new report sections
+                if result and "reports" in result:
+                    reports = result["reports"]
 
-                    # Migration Summary
-                    st.subheader("📊 Migration Summary")
-
-                    # Try different ways to access processors
-                    processors = None
+                    # Essential Processors Report
                     if (
-                        isinstance(analysis, dict)
-                        and "classification_results" in analysis
+                        "essential_processors" in reports
+                        and reports["essential_processors"]
                     ):
-                        processors = analysis["classification_results"]
-                    elif isinstance(analysis, str):
-                        # Maybe it's a JSON string
-                        try:
-                            import json
-
-                            parsed = json.loads(analysis)
-                            if "classification_results" in parsed:
-                                processors = parsed["classification_results"]
-                        except:
-                            pass
-
-                    if processors:
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Total Processors", len(processors))
-                        with col2:
-                            essential = len(
-                                [
-                                    p
-                                    for p in processors
-                                    if isinstance(p, dict)
-                                    and p.get("data_manipulation_type")
-                                    not in ["infrastructure_only", "unknown"]
-                                ]
-                            )
-                            st.metric("Essential Processors", essential)
-                        with col3:
-                            reduction = (
-                                round(
-                                    (len(processors) - essential)
-                                    / len(processors)
-                                    * 100,
-                                    1,
-                                )
-                                if processors
-                                else 0
-                            )
-                            st.metric("Reduction", f"{reduction}%")
-                    else:
-                        st.info(
-                            "📊 Processor analysis: 51 processors analyzed (see Migration Guide above)"
-                        )
-
-                    # Migration Guide
-                    with st.expander("📋 Migration Guide", expanded=True):
-                        if "migration_result" in result:
-                            migration_data = result["migration_result"]
-                            if isinstance(migration_data, str):
-                                import json
-
-                                try:
-                                    migration_info = json.loads(migration_data)
-                                    st.markdown("### Migration Overview")
-                                    st.write(
-                                        f"**Migration Type:** {migration_info.get('migration_type', 'N/A')}"
-                                    )
-                                    st.write(
-                                        f"**Processors Analyzed:** {migration_info.get('processors_analyzed', 'N/A')}"
-                                    )
-                                    st.write(
-                                        f"**Approach:** {migration_info.get('approach', 'N/A')}"
-                                    )
-                                except:
-                                    st.text(migration_data)
-
-                    # Processor Details
-                    with st.expander("🔧 Processor Analysis"):
-                        if hasattr(analysis, "get") and analysis.get(
-                            "classification_results"
+                        with st.expander(
+                            "📋 Essential Processors Report", expanded=True
                         ):
-                            processors = analysis["classification_results"]
-                            for i, proc in enumerate(processors[:10]):  # Show first 10
-                                st.markdown(
-                                    f"**{proc.get('name', f'Processor {i+1}')}**"
-                                )
-                                st.write(
-                                    f"- Type: `{proc.get('processor_type', 'Unknown')}`"
-                                )
-                                st.write(
-                                    f"- Category: `{proc.get('data_manipulation_type', 'Unknown')}`"
-                                )
-                                st.write(
-                                    f"- Business Purpose: {proc.get('business_purpose', 'Not specified')}"
-                                )
-                                st.divider()
+                            st.markdown(reports["essential_processors"])
 
-                            if len(processors) > 10:
-                                st.info(
-                                    f"Showing first 10 of {len(processors)} processors"
+                    # Unknown Processors Report
+                    if (
+                        "unknown_processors" in reports
+                        and reports["unknown_processors"]
+                    ):
+                        unknown_data = reports["unknown_processors"]
+                        if unknown_data.get("count", 0) > 0:
+                            with st.expander(
+                                f"❓ Unknown Processors ({unknown_data['count']})"
+                            ):
+                                unknown_list = unknown_data.get(
+                                    "unknown_processors", []
                                 )
-                else:
-                    st.info("Migration completed but no detailed results available")
-                    with st.expander("🔍 Raw Results"):
-                        st.json(result)
+                                for proc in unknown_list:
+                                    st.write(f"**{proc.get('name', 'Unknown')}**")
+                                    st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
+                                    st.write(
+                                        f"- Reason: {proc.get('reason', 'No reason provided')}"
+                                    )
+                                    st.write("---")
+                        else:
+                            st.info(
+                                "✅ No unknown processors - all were successfully classified"
+                            )
+
+                    # Asset Summary Report
+                    if "asset_summary" in reports and reports["asset_summary"]:
+                        with st.expander("📄 Asset Summary"):
+                            st.markdown(reports["asset_summary"])
+
+                # Raw Results (for debugging)
+                with st.expander("🔍 Raw Results"):
+                    st.json(result)
 
             except Exception as e:
                 st.error(f"❌ Migration failed: {e}")
