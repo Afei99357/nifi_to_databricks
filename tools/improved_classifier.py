@@ -5,6 +5,11 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from databricks_langchain import ChatDatabricks
+except ImportError:
+    from langchain_community.chat_models import ChatDatabricks
+
 from .xml_tools import parse_nifi_template
 
 
@@ -506,11 +511,6 @@ def classify_processor_improved(
 
     # 1) Fallback to LLM (flags)
     try:
-        try:
-            from databricks_langchain import ChatDatabricks
-        except ImportError:
-            from langchain_community.chat_models import ChatDatabricks
-
         llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
 
         prompt = f"""You are a NiFi expert. Return ONLY compact JSON with decision flags.
@@ -672,11 +672,6 @@ def _classify_processors_batch_llm(
     # Token should already be available in environment from Databricks runtime
 
     try:
-        try:
-            from databricks_langchain import ChatDatabricks
-        except ImportError:
-            from langchain_community.chat_models import ChatDatabricks
-
         llm = ChatDatabricks(endpoint=model_endpoint, temperature=0.0)
 
         # Build batch prompt with same format as individual

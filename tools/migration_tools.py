@@ -12,6 +12,11 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Dict, List
 
+try:
+    from databricks_langchain import ChatDatabricks
+except ImportError:
+    from langchain_community.chat_models import ChatDatabricks
+
 from config import DATABRICKS_HOSTNAME, logger
 
 # Registry removed - generating fresh each time
@@ -294,12 +299,6 @@ def _process_single_llm_batch(
                 os.environ["DATABRICKS_HOST"] = hostname
 
         # Token should already be available in environment from Databricks runtime
-
-        # Import ChatDatabricks at runtime
-        try:
-            from databricks_langchain import ChatDatabricks
-        except ImportError:
-            from langchain_community.chat_models import ChatDatabricks
 
         # Create LLM with very low temperature for consistent JSON output
         llm_json = ChatDatabricks(endpoint=model_endpoint, temperature=0.05)
