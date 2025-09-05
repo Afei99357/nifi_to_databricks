@@ -480,6 +480,20 @@ def classify_processor_improved(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
 
+    # Set required environment variables for ChatDatabricks
+    if "DATABRICKS_HOST" not in os.environ:
+        hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
+        if hostname and not hostname.startswith("http"):
+            hostname = f"https://{hostname}"
+        if hostname:
+            os.environ["DATABRICKS_HOST"] = hostname
+
+    if "DATABRICKS_TOKEN" not in os.environ:
+        import dbutils
+
+        token = dbutils.secrets.get("llm_general_access", "model_serving_token")
+        os.environ["DATABRICKS_TOKEN"] = token
+
     # 0) Try deterministic rules FIRST
     rule_hit = _classify_by_rules(processor_type, name, properties)
     if rule_hit:
@@ -663,6 +677,20 @@ def _classify_processors_batch_llm(
     model_endpoint = os.environ.get(
         "MODEL_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct"
     )
+
+    # Set required environment variables for ChatDatabricks
+    if "DATABRICKS_HOST" not in os.environ:
+        hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
+        if hostname and not hostname.startswith("http"):
+            hostname = f"https://{hostname}"
+        if hostname:
+            os.environ["DATABRICKS_HOST"] = hostname
+
+    if "DATABRICKS_TOKEN" not in os.environ:
+        import dbutils
+
+        token = dbutils.secrets.get("llm_general_access", "model_serving_token")
+        os.environ["DATABRICKS_TOKEN"] = token
 
     try:
         try:
