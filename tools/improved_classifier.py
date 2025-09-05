@@ -491,7 +491,6 @@ def classify_processor_improved(
         if not hostname.startswith("http"):
             hostname = f"https://{hostname}"
         os.environ["DATABRICKS_HOST"] = hostname
-        print(f"[DEBUG] Set DATABRICKS_HOST={hostname}")
 
     # Token should already be available in environment from Databricks runtime
 
@@ -667,7 +666,6 @@ def _classify_processors_batch_llm(
         if not hostname.startswith("http"):
             hostname = f"https://{hostname}"
         os.environ["DATABRICKS_HOST"] = hostname
-        print(f"[DEBUG] Set DATABRICKS_HOST={hostname}")
 
     # Token should already be available in environment from Databricks runtime
 

@@ -296,7 +296,6 @@ def _process_single_llm_batch(
             if not hostname.startswith("http"):
                 hostname = f"https://{hostname}"
             os.environ["DATABRICKS_HOST"] = hostname
-            print(f"[DEBUG] Set DATABRICKS_HOST={hostname}")
 
         # Token should already be available in environment from Databricks runtime
 
