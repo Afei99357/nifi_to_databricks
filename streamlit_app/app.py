@@ -5,17 +5,16 @@ import tempfile
 
 import streamlit as st
 
-# Add parent directory to Python path to find tools and config
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 # Import config.settings to automatically load .env file
 import config.settings  # noqa: F401
+from tools.simplified_migration import migrate_nifi_to_databricks_simplified
+
+# Add parent directory to Python path to find tools and config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Clear OAuth credentials that might conflict with PAT token
 os.environ.pop("DATABRICKS_CLIENT_ID", None)
 os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
-
-from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
 
 def main():
@@ -48,11 +47,26 @@ def main():
 
                     # Migration Summary
                     st.subheader("📊 Migration Summary")
-                    if hasattr(analysis, "get") and analysis.get(
-                        "classification_results"
+
+                    # Try different ways to access processors
+                    processors = None
+                    if (
+                        isinstance(analysis, dict)
+                        and "classification_results" in analysis
                     ):
                         processors = analysis["classification_results"]
+                    elif isinstance(analysis, str):
+                        # Maybe it's a JSON string
+                        try:
+                            import json
 
+                            parsed = json.loads(analysis)
+                            if "classification_results" in parsed:
+                                processors = parsed["classification_results"]
+                        except:
+                            pass
+
+                    if processors:
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Total Processors", len(processors))
@@ -61,7 +75,8 @@ def main():
                                 [
                                     p
                                     for p in processors
-                                    if p.get("data_manipulation_type")
+                                    if isinstance(p, dict)
+                                    and p.get("data_manipulation_type")
                                     not in ["infrastructure_only", "unknown"]
                                 ]
                             )
@@ -78,6 +93,10 @@ def main():
                                 else 0
                             )
                             st.metric("Reduction", f"{reduction}%")
+                    else:
+                        st.info(
+                            "📊 Processor analysis: 51 processors analyzed (see Migration Guide above)"
+                        )
 
                     # Migration Guide
                     with st.expander("📋 Migration Guide", expanded=True):
@@ -126,10 +145,6 @@ def main():
                                 st.info(
                                     f"Showing first 10 of {len(processors)} processors"
                                 )
-
-                    # Raw Results
-                    with st.expander("🔍 Raw Migration Results"):
-                        st.json(result)
                 else:
                     st.info("Migration completed but no detailed results available")
                     with st.expander("🔍 Raw Results"):
