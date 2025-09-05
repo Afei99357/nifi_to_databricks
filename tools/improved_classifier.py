@@ -488,11 +488,7 @@ def classify_processor_improved(
         if hostname:
             os.environ["DATABRICKS_HOST"] = hostname
 
-    if "DATABRICKS_TOKEN" not in os.environ:
-        import dbutils
-
-        token = dbutils.secrets.get("llm_general_access", "model_serving_token")
-        os.environ["DATABRICKS_TOKEN"] = token
+    # Token should already be available in environment from Databricks runtime
 
     # 0) Try deterministic rules FIRST
     rule_hit = _classify_by_rules(processor_type, name, properties)
@@ -686,11 +682,7 @@ def _classify_processors_batch_llm(
         if hostname:
             os.environ["DATABRICKS_HOST"] = hostname
 
-    if "DATABRICKS_TOKEN" not in os.environ:
-        import dbutils
-
-        token = dbutils.secrets.get("llm_general_access", "model_serving_token")
-        os.environ["DATABRICKS_TOKEN"] = token
+    # Token should already be available in environment from Databricks runtime
 
     try:
         try:

@@ -293,11 +293,7 @@ def _process_single_llm_batch(
             if hostname:
                 os.environ["DATABRICKS_HOST"] = hostname
 
-        if "DATABRICKS_TOKEN" not in os.environ:
-            import dbutils
-
-            token = dbutils.secrets.get("llm_general_access", "model_serving_token")
-            os.environ["DATABRICKS_TOKEN"] = token
+        # Token should already be available in environment from Databricks runtime
 
         # Import ChatDatabricks at runtime
         try:
