@@ -12,10 +12,6 @@ import streamlit as st
 import config.settings  # noqa: F401
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
-# Clear OAuth credentials that might conflict with PAT token
-os.environ.pop("DATABRICKS_CLIENT_ID", None)
-os.environ.pop("DATABRICKS_CLIENT_SECRET", None)
-
 
 def main():
 
