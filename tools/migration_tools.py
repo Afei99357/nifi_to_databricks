@@ -291,12 +291,12 @@ def _process_single_llm_batch(
         )
 
         # Set required environment variables for ChatDatabricks
-        if "DATABRICKS_HOST" not in os.environ:
-            hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
-            if hostname and not hostname.startswith("http"):
+        hostname = os.environ.get("DATABRICKS_HOSTNAME", "")
+        if hostname:
+            if not hostname.startswith("http"):
                 hostname = f"https://{hostname}"
-            if hostname:
-                os.environ["DATABRICKS_HOST"] = hostname
+            os.environ["DATABRICKS_HOST"] = hostname
+            print(f"[DEBUG] Set DATABRICKS_HOST={hostname}")
 
         # Token should already be available in environment from Databricks runtime
 
