@@ -287,6 +287,8 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         "unknown",
     ]
 
+    processor_index = 1  # Global index counter for all processors
+
     for classification in classification_order:
         if classification not in by_classification:
             continue
@@ -302,7 +304,8 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
             proc_type = _extract_robust_processor_type(proc)
             properties = proc.get("properties", {})
 
-            report_lines.append(f'### {proc_type} - "{name}"')
+            report_lines.append(f'### {processor_index}. {proc_type} - "{name}"')
+            processor_index += 1
 
             # Extract key details based on processor type
             key_details = _extract_processor_key_details(proc_type, name, properties)
