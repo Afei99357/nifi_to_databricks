@@ -12,12 +12,8 @@ from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
     classify_processor_types,
 )
-from tools.improved_classifier import (
-    analyze_processors_batch,
-    analyze_workflow_patterns,
-)
+from tools.improved_classifier import analyze_workflow_patterns
 from tools.improved_pruning import (
-    create_semantic_data_flows,
     detect_data_flow_chains,
     prune_infrastructure_processors,
 )
@@ -113,13 +109,9 @@ def migrate_nifi_to_databricks_simplified(
         essential_count = len(pruned_data.get("pruned_processors", []))
         _log(f"✅ Pruning complete: {essential_count} essential processors identified")
 
-    # Step 5: Detect data flow chains
-    _log("🔗 Detecting semantic data flow chains...")
+    # Step 5: Detect data flow chains (for reference only)
+    _log("🔗 Detecting data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
-
-    # Step 6: Create semantic data flows
-    _log("🌊 Creating semantic data flows...")
-    semantic_flows = create_semantic_data_flows(chains_result)
 
     # Step 7: Extract and catalog all workflow assets for manual review
     _log("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
@@ -148,7 +140,6 @@ def migrate_nifi_to_databricks_simplified(
     migration_result = orchestrate_focused_nifi_migration(
         xml_path=xml_path,
         pruned_processors=essential_processors,
-        semantic_flows=semantic_flows,
         out_dir=out_dir,
         project=project,
         notebook_path=notebook_path or "",
@@ -162,7 +153,6 @@ def migrate_nifi_to_databricks_simplified(
             "processor_classifications": processor_classifications,
             "pruned_processors": pruned_result,
             "data_flow_chains": chains_result,
-            "semantic_flows": semantic_flows,
         },
         "reports": {
             "essential_processors": essential_processors_content,
@@ -179,9 +169,8 @@ def migrate_nifi_to_databricks_simplified(
         },
     }
 
-    _log("✅ Migration guide generation completed successfully!")
-    _log(f"📁 Migration guide and analysis saved to: {out_dir}")
-    _log(f"📋 Check MIGRATION_GUIDE.md for comprehensive migration recommendations")
+    _log("✅ Migration analysis completed successfully!")
+    _log(f"📋 Generated reports and processor analysis ready for review")
 
     return complete_result
 
@@ -225,14 +214,12 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     )
     pruned_result = prune_infrastructure_processors(processor_classifications)
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
-    semantic_flows = create_semantic_data_flows(chains_result)
 
     analysis_result = {
         "workflow_analysis": workflow_analysis,
         "processor_classifications": processor_classifications,
         "pruned_processors": pruned_result,
         "data_flow_chains": chains_result,
-        "semantic_flows": semantic_flows,
         "xml_path": xml_path,
     }
 

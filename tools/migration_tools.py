@@ -109,7 +109,6 @@ def build_migration_plan(xml_content: str) -> str:
 def orchestrate_focused_nifi_migration(
     xml_path: str,
     pruned_processors: List[Dict[str, Any]],
-    semantic_flows: Dict[str, Any],
     out_dir: str,
     project: str,
     notebook_path: str = "",
@@ -125,14 +124,9 @@ def orchestrate_focused_nifi_migration(
     Args:
         xml_path: Original XML path for metadata
         pruned_processors: List of essential processors after pruning
-        semantic_flows: Semantic data flow analysis results
         out_dir: Output directory for generated artifacts
         project: Project name
-        job: Job name
         notebook_path: Target notebook path in Databricks workspace
-        max_processors_per_chunk: Maximum processors per chunk (default: 20)
-        existing_cluster_id: Existing cluster ID to use
-        run_now: Whether to deploy and run the job
 
     Returns:
         JSON summary with focused migration results
@@ -190,40 +184,19 @@ def orchestrate_focused_nifi_migration(
                 "data_movement": len(data_movement_procs),
                 "infrastructure_skipped": "All infrastructure processors skipped",
             },
-            "semantic_flows": semantic_flows,
             "migration_approach": "focused_essential_only",
         }
 
-        # Import at function level to avoid circular imports
-        from .migration_guide_generator import generate_migration_guide
-
-        migration_guide = generate_migration_guide(
-            processors=pruned_processors,
-            semantic_flows=semantic_flows,
-            project_name=project,
-            analysis=focused_analysis,
-        )
-
-        # Save the migration guide
-        guide_path = out / "MIGRATION_GUIDE.md"
-        print(f"💾 [GUIDE] Writing guide to: {guide_path}")
-        print(f"📄 [GUIDE] Guide content length: {len(migration_guide)} characters")
-        _write_text(guide_path, migration_guide)
-        print(f"✅ [GUIDE] Successfully written to: {guide_path}")
-
-        # Migration guide generated - no deployment needed
         print(
-            f"✅ [GUIDE COMPLETE] Migration guide saved to {out / 'MIGRATION_GUIDE.md'}"
+            f"✅ [ANALYSIS COMPLETE] Processed {len(pruned_processors)} essential processors"
         )
 
         result = {
-            "migration_type": "comprehensive_guide",
+            "migration_type": "focused_analysis",
             "processors_analyzed": len(pruned_processors),
             "breakdown": focused_analysis["breakdown"],
             "output_directory": str(out),
-            "migration_guide_path": str(out / "MIGRATION_GUIDE.md"),
-            "semantic_flows_applied": True,
-            "approach": "Migration guide with recommendations instead of fragmented code generation",
+            "approach": "Essential processor analysis and classification complete",
         }
 
         return json.dumps(result, indent=2)
