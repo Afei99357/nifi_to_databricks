@@ -36,8 +36,8 @@ def migrate_nifi_to_databricks_simplified(
     This function performs a complete migration through these steps:
     1. Analyze NiFi workflow and classify processors
     2. Prune infrastructure-only processors
-    3. Detect semantic data flow chains
-    4. Generate comprehensive migration guide with recommendations
+    3. Detect data flow chains for reference
+    4. Generate processor analysis reports
 
     Args:
         xml_path: Path to NiFi XML template file

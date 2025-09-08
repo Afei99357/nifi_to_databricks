@@ -131,7 +131,7 @@ def analyze_nifi_workflow_detailed(
                 "processors_to_prune": infrastructure_count,
                 "migration_complexity": complexity,
                 "recommended_approach": (
-                    "semantic_data_flow"
+                    "detailed_analysis"
                     if transformation_pct > 30
                     else "simplified_migration"
                 ),
