@@ -287,8 +287,6 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         "unknown",
     ]
 
-    processor_index = 1  # Global index counter for all processors
-
     for classification in classification_order:
         if classification not in by_classification:
             continue
@@ -296,8 +294,10 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         processors_list = by_classification[classification]
         class_name = classification.replace("_", " ").title()
 
-        report_lines.extend([f"## {class_name} Processors", ""])
+        # Add visual separator between sections
+        report_lines.extend(["", "---", "", f"## {class_name} Processors", ""])
 
+        processor_index = 1  # Reset index for each section
         for proc in processors_list:
             name = proc.get("name", "Unknown")
             # Use robust type extraction like in migration guide generator
