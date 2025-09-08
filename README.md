@@ -1,6 +1,15 @@
 # NiFi to Databricks Migration Tool
 
-An intelligent migration tool that converts Apache NiFi workflows (Hadoop-based data pipelines) into Databricks jobs using direct function calls and LLM intelligence. The system uses a simplified approach to automate the complex process of translating NiFi processors, connections, and configurations into equivalent Databricks PySpark code and job definitions.
+An intelligent migration tool that converts Apache NiFi workflows into Databricks pipelines using AI-powered analysis and code generation. The system provides both a **Streamlit web app** for interactive migrations and **programmatic APIs** for automated workflows.
+
+## ✨ Key Features
+
+- **🎯 Streamlit Web App**: Interactive UI for uploading NiFi XML files and running migrations
+- **🧠 AI-Powered Analysis**: LLM-based processor classification and code generation using `databricks-langchain`
+- **✂️ Smart Pruning**: Automatically identifies and focuses on essential data processing logic
+- **🔄 Semantic Flow Detection**: Maps NiFi processor chains to logical data transformation flows
+- **📊 Comprehensive Reports**: Detailed analysis of processors, migrations, and recommendations
+- **⚙️ Databricks Native**: Uses `app.yml` configuration for seamless Databricks deployment
 
 ## 🎯 Overview
 
@@ -9,62 +18,19 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 - **🧠 Intelligent Architecture Decision**: Automatically analyzes NiFi XML and recommends optimal Databricks architecture (Jobs, DLT Pipeline, or Structured Streaming)
 - **🔍 Smart Workflow Analysis**: Advanced processor classification system that accurately identifies data transformations vs infrastructure operations
 - **🗂️ Intelligent Asset Discovery**: Comprehensive scanning of all processors to identify migration dependencies including scripts, databases, file systems, and external services
-- **🚀 Simplified Pipeline**: Direct function calls without agent complexity - linear execution path
+- **🚀 Simplified Pipeline**: Direct function calls without complexity - linear execution path
 - **✂️ Semantic Migration**: Prune → Chain → Flow approach for business-meaningful migrations
-- **Chunked Processing**: Handles large NiFi workflows (50+ processors) by intelligent chunking while preserving connectivity
-- **Complete Workflow Mapping**: Captures full NiFi structure including processors, connections, funnels, and controller services
-- **Fresh Code Generation**: LLM-powered conversion of NiFi processors to PySpark with builtin templates for common processors
-- **Job Orchestration**: Creates Databricks Jobs with precise task dependencies that mirror NiFi flow structure
-- **Funnel Handling**: Intelligent detection and bypass of NiFi funnels to prevent disconnected tasks
-- **Comprehensive Tooling**: Modular tools for XML parsing, code generation, job creation, and validation
+- **Fresh Code Generation**: AI-powered conversion of NiFi processors to PySpark recommendations
+- **Comprehensive Analysis**: Detailed reports on processor classification and migration strategy
+- **Modular Architecture**: Specialized tools for XML parsing, analysis, and report generation
 
-## 🏗️ Architecture
+## 🏗️ How It Works
 
-```
-                     🧠 Simplified Migration Pipeline
-                                    │
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│   NiFi XML     │───▶│ Analyze & Prune  │───▶│ Semantic Chain      │
-│   Templates    │    │ Processors       │    │ Detection           │
-└─────────────────┘    └──────────────────┘    └─────────────────────┘
-                              │                           │
-                              ▼                           ▼
-                    ┌──────────────────┐    ┌──────────────────────────┐
-                    │ Create Semantic  │───▶│ Generate Databricks      │
-                    │ Data Flows       │    │ Assets & Deploy          │
-                    └──────────────────┘    └──────────────────────────┘
-                              │                           │
-                              ▼                           ▼
-                    ┌──────────────────┐         ┌──────────────────┐
-                    │ LLM Code Gen     │         │   Production     │
-                    │ (Batched)        │         │   Pipeline       │
-                    └──────────────────┘         └──────────────────┘
-```
-
-### 🧠 Intelligent Architecture Decision System
-
-The tool automatically analyzes NiFi workflows and recommends the optimal Databricks architecture:
-
-**Architecture Options:**
-- **Databricks Jobs**: Batch orchestration for file-based ETL workflows
-- **DLT Pipeline**: Streaming ETL with transformations, JSON processing, and routing
-- **Structured Streaming**: Custom streaming logic for real-time data processing
-
-**Decision Factors:**
-- **Source Types**: Batch (GetFile) vs Streaming (ListenHTTP, ConsumeKafka)
-- **Transformations**: JSON processing, routing logic, complex transformations
-- **Sinks**: File outputs vs external systems
-- **Complexity**: Workflow size and interconnection complexity
-
-> **⚠️ Implementation Status**: Architecture analysis and recommendations are fully implemented. However, the current simplified migration pipeline generates **Databricks Jobs only**. DLT Pipeline and Structured Streaming generation will be integrated in future releases.
-
-### Core Components
-
-- **Simplified Migration** (`tools/simplified_migration.py`): Direct function call interface
-- **Migration Tools** (`tools/`): Specialized tools for each aspect of the conversion process
-- **Code Generation** (`tools/generator_tools.py`): LLM-powered PySpark code generation with builtin templates
-- **Configuration** (`config/`): Environment management and logging
-- **Utilities** (`utils/`): File operations, XML processing, and helper functions
+1. **📤 Upload**: Upload your NiFi XML template through the Streamlit interface
+2. **🔍 Analyze**: AI-powered analysis classifies processors and identifies data flows
+3. **✂️ Prune**: Automatically filters out infrastructure-only processors (logging, routing, flow control)
+4. **🔄 Chain**: Detects semantic data processing chains and logical flows
+5. **📊 Report**: Generates comprehensive migration analysis and recommendations
 
 ## 🗂️ Intelligent Asset Discovery
 
@@ -184,96 +150,78 @@ The migration system now includes significant performance optimizations, enhance
 **JSON Reliability**: Eliminates "Invalid \escape" errors with explicit prompt formatting rules
 **Job Status Accuracy**: Eliminates false "Job is actively running" reports for jobs that actually fail
 
-### Environment Setup
+### Databricks Deployment
 
-1. **Create `.env` file in the project root**:
+The application is designed for Databricks deployment using `app.yml` configuration:
 
-Copy and paste the following template into a new `.env` file:
+1. **Update `app.yml` with your Databricks credentials**:
 
-```bash
-# Databricks Configuration
-DATABRICKS_TOKEN=your-databricks-personal-access-token
-DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
-MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
-
-# Email Configuration (Optional)
-NOTIFICATION_EMAIL=your-email@company.com
-
-# LLM Configuration
-ENABLE_LLM_CODE_GENERATION=true      # Use batched LLM for high-quality code
-
-# Batch Processing Configuration (Performance tuning)
-MAX_PROCESSORS_PER_CHUNK=20          # Processors per batch (default: 20, tune 15-30)
-LLM_SUB_BATCH_SIZE=5                 # Sub-batch size for fallbacks (default: 10, recommended: 5)
+```yaml
+env:
+  - name: "DATABRICKS_HOSTNAME"
+    value: "https://your-workspace.cloud.databricks.com"
+  - name: "DATABRICKS_TOKEN"
+    value: "dapi-your-token-here"
+  - name: "MODEL_ENDPOINT"
+    value: "databricks-meta-llama-3-3-70b-instruct"
+  - name: "NOTIFICATION_EMAIL"
+    value: "your-email@company.com"
+  - name: "ENABLE_LLM_CODE_GENERATION"
+    value: "true"
+  - name: "MAX_PROCESSORS_PER_CHUNK"
+    value: "20"
+  - name: "LLM_SUB_BATCH_SIZE"
+    value: "5"
 ```
 
-**How to configure:**
+2. **Deploy as Databricks App**:
+   - Upload the project to your Databricks workspace
+   - The app will automatically read configuration from `app.yml`
+   - Access the Streamlit interface through Databricks Apps
 
-- Replace `your-databricks-personal-access-token` with your actual Databricks token
-- Replace `your-workspace.cloud.databricks.com` with your actual workspace URL
-- Replace `your-email@company.com` with your email address
+## 🖥️ Using the Streamlit App
 
-**Required Variables:**
-- `DATABRICKS_TOKEN`: Personal access token or service principal token for authentication
-- `DATABRICKS_HOSTNAME`: Full URL to your Databricks workspace (include https://)
-- `MODEL_ENDPOINT`: Foundation model endpoint for LLM analysis (uses Llama 3.3 70B by default)
+1. **Upload NiFi XML**: Use the file uploader to select your NiFi template XML file
+2. **Run Migration**: Click "Run Migration" to start the analysis and conversion process
+3. **View Results**: The app will display:
+   - **Essential Processors Report**: Shows the core data processing logic identified
+   - **Migration Guide**: Comprehensive analysis and recommendations
+   - **Unknown Processors**: Any processors that need manual review
+   - **Asset Summary**: Overview of generated Databricks assets
 
-**LLM Configuration Variables:**
-- `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM code generation (default: true)
+The app automatically:
+- Analyzes and classifies all NiFi processors using AI
+- Prunes infrastructure-only processors (logging, routing, flow control)
+- Detects semantic data transformation chains
+- Generates Databricks migration recommendations
+- Creates detailed reports for manual review
 
-**Batch Processing Configuration Variables:**
-- `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30 based on complexity)
-- `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5 for better success rate)
+## 🔧 Programmatic API Usage
 
-**Optional Variables:**
-- `NOTIFICATION_EMAIL`: Email for job failure notifications
-
-2. **Ready to migrate!** The tool now generates fresh code each time without requiring any pattern registry setup.
-
-## 🔍 Workflow Analysis (New!)
-
-Before migrating, you can now analyze your NiFi workflows to understand their structure and get architecture recommendations:
-
-### **Quick Workflow Analysis**
-
-```python
-# In Databricks notebook
-from tools.simplified_migration import analyze_nifi_workflow_only
-
-# Quick analysis to understand workflow
-analysis = analyze_nifi_workflow_only("nifi_pipeline_file/your_workflow.xml")
-print("Analysis complete - ready for migration")
-```
-
-**What you get:**
-- **📊 Processor breakdown**: Data transformation vs infrastructure vs movement
-- **🎯 Critical processors**: High-impact operations requiring careful migration
-- **🗂️ Asset discovery**: Complete inventory of scripts, databases, file systems, and dependencies
-- **🏗️ Architecture recommendation**: Optimal Databricks architecture (Jobs/DLT/Streaming)
-- **⚡ Migration insights**: Focus areas and automation opportunities
-- **📈 Complexity analysis**: Workflow size and interconnection patterns
-
-### **Complete Migration**
-
-Execute the full migration pipeline:
+For automated workflows, you can use the migration functions directly:
 
 ```python
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
-# Complete migration: analyze → prune → chain → migrate
+# Complete migration with analysis and reports
 result = migrate_nifi_to_databricks_simplified(
-    xml_path="nifi_pipeline_file/your_workflow.xml",
-    out_dir="output_results",
+    xml_path="path/to/your/nifi_template.xml",
+    out_dir="output_directory",
     project="my_migration_project",
-    deploy=False  # Set True to auto-deploy
+    notebook_path="/Workspace/Users/me@company.com/project/main",
 )
 
-print("Migration complete! Check output_results/ for generated assets")
+# Access results
+print("Migration completed:", result['migration_result'])
+print("Analysis summary:", result['analysis']['summary'])
+print("Reports:", result.get('reports', {}))
 ```
 
-**Result:** Production-ready Databricks **batch job** pipeline with job configurations, comprehensive asset inventory, and migration guide with external file dependencies.
+**Key Functions:**
+- `migrate_nifi_to_databricks_simplified()`: Complete migration pipeline
+- `analyze_nifi_workflow_only()`: Analysis-only mode (fast, no migration)
 
-> **📋 Current Limitation**: The simplified migration currently generates **Databricks Jobs (batch processing)** for all workflows. Even if the LLM analysis recommends DLT Pipeline or Structured Streaming, the system will create a batch job implementation. Architecture decision integration is planned for future releases.
+
 
 ## 📁 Input Files
 
@@ -318,20 +266,6 @@ out_dir = "/Workspace/Users/me@company.com/migrations/output"
 
 > **📋 Output**: All migrations currently produce **Databricks batch jobs**, regardless of workflow type. This provides universal compatibility and reliable execution for all NiFi patterns.
 
-### Legacy Chunked Migration Process (for large workflows)
-1. **Complete Workflow Mapping**: Extracts full NiFi structure including processors, connections, funnels, and controller services
-2. **Funnel Detection & Bypass**: Identifies NiFi funnels and creates bypass mappings to preserve connectivity
-3. **Intelligent Chunking**: Splits workflow by process groups (if needed) while preserving graph relationships
-4. **Chunk Processing**: Processes each chunk individually to avoid context limits
-5. **Code Generation**: Creates PySpark code for processors using builtin templates and LLM generation with proper dependencies and error handling
-6. **Workflow Reconstruction**: Merges chunk results into complete multi-task Databricks job using original connectivity map
-7. **Asset Bundling**: Creates enhanced project structure with analysis, dependencies, and configurations
-
-**Advantages of unified approach:**
-- **Scalable**: Automatically handles both small (1-10 processors) and large (100+ processors) workflows
-- **Robust**: Better error handling and context management
-- **Complete**: Preserves all NiFi connectivity including complex funnel routing
-- **Debuggable**: Comprehensive workflow maps and chunk analysis for troubleshooting
 
 ### Key Migration Patterns
 - **GetFile/ListFile** → Auto Loader with cloudFiles format
@@ -348,9 +282,9 @@ The migration system uses specialized tools in the `tools/` folder:
 
 ### Core Migration Tools
 - **`xml_tools.py`**: NiFi XML parsing and template extraction
-- **`migration_tools.py`**: Main conversion logic and orchestration (both standard and chunked)
-- **`chunking_tools.py`**: Large XML file chunking, workflow mapping, and reconstruction utilities
-- **`generator_tools.py`**: Code generation utilities with LLM-powered PySpark code creation
+- **`migration_tools.py`**: Main conversion logic and orchestration
+- **`improved_classifier.py`**: AI-powered processor classification and analysis
+- **`simplified_migration.py`**: Main migration pipeline with pruning and semantic flow detection
 
 ### Databricks Integration
 - **`job_tools.py`**: Jobs API integration, creation, and deployment
@@ -358,93 +292,31 @@ The migration system uses specialized tools in the `tools/` folder:
 - **`eval_tools.py`**: Pipeline validation and data comparison utilities
 
 ### Key Functions
-- **`orchestrate_nifi_migration`**: Standard migration for smaller workflows
-- **`orchestrate_chunked_nifi_migration`**: Advanced chunked processing for large workflows
-- **`extract_complete_workflow_map`**: Captures full NiFi structure including funnels
-- **`chunk_nifi_xml_by_process_groups`**: Intelligent workflow chunking
-- **`reconstruct_full_workflow`**: Merges chunks with preserved connectivity
+- **`migrate_nifi_to_databricks_simplified()`**: Complete migration pipeline with AI analysis
+- **`analyze_workflow_patterns()`**: Processor classification and workflow analysis
+- **`prune_infrastructure_processors()`**: Smart filtering of infrastructure-only processors
+- **`detect_data_flow_chains()`**: Semantic flow detection and chaining
 
 ## 📋 Generated Output Structure
 
 ```
 output_results/project_name/
-├── src/steps/              # Processor conversions (organized by chunks for larger workflows)
-├── chunks/                 # Individual chunk processing results and analysis (if chunked)
-├── notebooks/              # Enhanced orchestrator with intelligent execution logic
-├── jobs/                   # Multi-task job configurations with precise dependencies
-│   ├── job.json            # Standard job configuration
-│   └── job.chunked.json    # Enhanced multi-task job (primary output)
-├── conf/                   # Comprehensive migration analysis and planning
-│   ├── complete_workflow_map.json     # Full NiFi structure with funnels and connections
-│   ├── chunking_result.json           # Chunking analysis (if applicable)
-│   ├── reconstructed_workflow.json    # Final merged workflow with dependencies
-│   └── parameter_contexts.json        # NiFi parameters and controller services
-├── databricks.yml         # Asset bundle configuration for deployment
-└── README.md              # Project documentation with migration statistics
+├── reports/                # Analysis and migration reports
+│   ├── essential_processors_report.md  # Core data processing logic identified
+│   ├── workflow_analysis.json         # Complete processor classification
+│   └── migration_guide.md             # Comprehensive migration recommendations
+├── assets/                 # Generated Databricks assets (when deploy=True)
+│   ├── notebooks/          # PySpark notebooks for data processing
+│   ├── jobs/               # Databricks job configurations
+│   └── databricks.yml      # Asset bundle configuration
+└── README.md              # Project-specific documentation
 ```
 
 **Key Files:**
-- **`job.chunked.json`**: Primary job configuration with proper task dependencies
-- **`complete_workflow_map.json`**: Full workflow analysis including funnel detection
-- **`reconstructed_workflow.json`**: Final connectivity map for debugging
-- **`architecture_analysis.json`**: Intelligent architecture decision analysis and reasoning
+- **`essential_processors_report.md`**: Focus on core business logic requiring migration
+- **`workflow_analysis.json`**: Complete AI-powered processor classification and analysis
+- **`migration_guide.md`**: Detailed recommendations and migration strategy
 
-## 🧠 Architecture Decision Logic
-
-The intelligent migration system applies these decision rules:
-
-### **Decision Tree**
-
-```
-NiFi XML Analysis
-       │
-       ▼
-┌─────────────────┐
-│ Detect Sources  │ ──→ Batch only (GetFile, ListFile) ──→ Databricks Jobs
-│ & Processors    │
-└─────────────────┘
-       │
-       ▼
-┌─────────────────┐
-│ Streaming       │ ──→ + Complex transforms ──→ DLT Pipeline
-│ Detected?       │ ──→ + Simple processing ──→ Structured Streaming
-└─────────────────┘
-       │
-       ▼
-┌─────────────────┐
-│ Mixed Sources   │ ──→ Batch + Streaming ──→ DLT Pipeline (unified)
-│ (Batch+Stream)  │
-└─────────────────┘
-       │
-       ▼
-┌─────────────────┐
-│ Heavy Trans-    │ ──→ Routing + JSON + Transforms ──→ DLT Pipeline
-│ formations?     │
-└─────────────────┘
-```
-
-### **Architecture Recommendations**
-
-| **NiFi Pattern** | **Detected Features** | **Recommended Architecture** | **Reasoning** |
-|------------------|----------------------|------------------------------|---------------|
-| **File ETL** | GetFile + PutHDFS, no streaming | **Databricks Jobs** | Simple batch orchestration sufficient |
-| **Log Processing** | ListenHTTP + EvaluateJsonPath + RouteOnAttribute | **DLT Pipeline** | Streaming + JSON processing + routing logic |
-| **Kafka Pipeline** | ConsumeKafka + transforms + PublishKafka | **DLT Pipeline** | Streaming ETL with transformations |
-| **Simple Streaming** | ListenHTTP + basic transforms | **Structured Streaming** | Custom streaming logic preferred |
-| **Mixed Workload** | GetFile + ListenHTTP + routing | **DLT Pipeline** | Unified batch/streaming processing |
-| **Complex ETL** | Multiple processors + routing + JSON | **DLT Pipeline** | Declarative transformations optimal |
-
-### **Feature Detection**
-
-The system analyzes your NiFi XML to detect:
-
-- **🔄 Streaming Sources**: ListenHTTP, ConsumeKafka, ListenTCP, ConsumeJMS, etc.
-- **📁 Batch Sources**: GetFile, ListFile, QueryDatabaseTable, etc.
-- **🔧 Transformations**: EvaluateJsonPath, UpdateAttribute, ConvertRecord, etc.
-- **🔀 Routing Logic**: RouteOnAttribute, RouteOnContent, conditional processing
-- **📊 JSON Processing**: EvaluateJsonPath, SplitJson, JSON transformations
-- **🌐 External Sinks**: PublishKafka, InvokeHTTP, external system outputs
-- **📈 Complexity Factors**: Workflow size, multiple outputs, nested process groups
 
 ## 🔍 Intelligent Workflow Analysis
 
@@ -550,7 +422,6 @@ The analysis provides actionable insights for migration planning:
 
 ## 🧪 Testing and Validation
 
-# Pattern Registry removed - generates fresh code each time
 
 ### Migration Output Validation
 ```python
@@ -588,77 +459,30 @@ def my_custom_tool(parameter: str) -> str:
 
 ### Common Issues
 
-1. **Authentication Errors**: Verify `DATABRICKS_TOKEN` and `DATABRICKS_HOSTNAME` in `.env`
-2. **Pattern Not Found**: Check if processor pattern exists in registry or JSON file
+1. **Authentication Errors**: Verify `DATABRICKS_TOKEN` and `DATABRICKS_HOSTNAME` in `app.yml`
+2. **LLM Generation Errors**: Ensure model endpoint is accessible and token has permissions
 3. **Job Creation Failures**: Ensure cluster permissions and workspace access
 4. **XML Parsing Errors**: Validate NiFi template XML structure
-5. **Duplicate Task Keys**: Use chunked migration for large workflows to avoid conflicts
-6. **Circular Dependencies**: Check `reconstructed_workflow.json` for dependency issues
-7. **Disconnected Tasks**: Review `complete_workflow_map.json` for funnel bypass issues
+5. **Large Workflows**: Complex workflows may require manual review of generated reports
+6. **Unknown Processors**: Review the Unknown Processors report for manual migration needs
 
-### Performance Issues (Fixed in v2.1)
+### Performance Notes
 
-8. **Excessive LLM Calls**: Set `ENABLE_LLM_CODE_GENERATION=true` for optimal batched performance
-9. **Slow Code Generation**: The system now uses batched LLM generation (1 call per chunk vs 1 per processor)
-10. **Pipeline Timeout**: Progress tracking shows exactly where the migration is and prevents endless loops
-11. **JSON Parsing Failures**: Fixed "Invalid \escape" errors with explicit JSON format enforcement in prompts
-12. **Wasteful Fallbacks**: Reduced `LLM_SUB_BATCH_SIZE=5` to minimize individual processor generation
+The system uses intelligent batching for LLM calls to optimize performance:
+- Multiple processors are analyzed together to reduce API calls
+- Automatic fallback to smaller batches if needed
+- Progress tracking shows migration status in real-time
 
-### Batch Size Optimization
-
-If you experience JSON parsing failures or performance issues, tune these settings:
-
-```bash
-# For complex processors with lots of properties
-export MAX_PROCESSORS_PER_CHUNK=15
-
-# For better fallback success rate
-export LLM_SUB_BATCH_SIZE=5
-
-# For simple processors
-export MAX_PROCESSORS_PER_CHUNK=25
-```
-
-**Success Rate Patterns:**
-- 15-20 processors: ~80-90% success rate
-- 20-25 processors: ~66% success rate
-- 5-8 processors (fallback): ~90% success rate
-
-### Chunked Migration Troubleshooting
-
-1. **Context Limit Errors**: Reduce `max_processors_per_chunk` (try 15-20)
-2. **Missing Connections**: Check `funnel_bypasses` in workflow map for proper routing
-3. **Job Deployment Failures**: Verify task dependencies in `job.chunked.json`
-4. **Large Workflow Issues**: Use `extract_complete_workflow_map` to analyze structure
-
-### Debug Mode
-
-Enable detailed logging:
-```python
-import logging
-logging.getLogger().setLevel(logging.DEBUG)
-```
-
-### Workflow Analysis
-
-```python
-# Analyze large workflows before migration
-from tools.chunking_tools import extract_complete_workflow_map
-result = extract_complete_workflow_map("path/to/large_workflow.xml")
-print(f"Processors: {result['summary']['total_processors']}")
-print(f"Funnels: {result['summary']['total_funnels']}")
-```
 
 ## 📚 Additional Resources
 
 - **CLAUDE.md**: Detailed guidance for Claude Code interactions
 - **Sample Workflows**: Example NiFi templates in `nifi_pipeline_file/`
-- **Pattern Library**: Comprehensive patterns in `migration_nifi_patterns.json`
-- **Generated Examples**: Sample outputs in `output_results/nifi2dbx_test_1/`
+- **Streamlit App**: Interactive web interface for migrations
 
 ## 🤝 Contributing
 
-1. Add new processor patterns to the registry
+1. Improve AI processor classification rules
 2. Extend tools for specific use cases
 3. Improve error handling and validation
 4. Add support for additional NiFi components
