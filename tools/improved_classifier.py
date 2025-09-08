@@ -5,10 +5,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-try:
-    from databricks_langchain import ChatDatabricks
-except ImportError:
-    from langchain_community.chat_models import ChatDatabricks
+from databricks_langchain import ChatDatabricks
 
 from .xml_tools import parse_nifi_template
 
