@@ -1781,7 +1781,6 @@ dependencies = [
     { name = "langgraph" },
     { name = "lxml" },
     { name = "mlflow-skinny", extra = ["databricks"] },
-    { name = "python-dotenv" },
     { name = "streamlit" },
 ]
 
@@ -1807,7 +1806,6 @@ requires-dist = [
     { name = "langgraph", specifier = "==0.5.3" },
     { name = "lxml", specifier = ">=6.0.0" },
     { name = "mlflow-skinny", extras = ["databricks"], specifier = ">=3.3.1" },
-    { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "streamlit", specifier = ">=1.49.1" },
 ]
 

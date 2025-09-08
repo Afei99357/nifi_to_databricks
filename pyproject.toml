@@ -12,7 +12,6 @@ dependencies = [
     "langgraph==0.5.3",
     "lxml>=6.0.0",
     "mlflow-skinny[databricks]>=3.3.1",
-    "python-dotenv>=1.1.1",
     "streamlit>=1.49.1",
 ]
 

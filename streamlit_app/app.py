@@ -30,8 +30,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
 
-# Import config.settings to automatically load .env file
-import config.settings  # noqa: F401
 from tools.simplified_migration import migrate_nifi_to_databricks_simplified
 
 
