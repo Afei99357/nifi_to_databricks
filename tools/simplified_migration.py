@@ -32,6 +32,7 @@ def migrate_nifi_to_databricks_simplified(
     project: str,
     notebook_path: Optional[str] = None,
     max_processors_per_chunk: int = 25,
+    progress_callback: Optional[callable] = None,
 ) -> Dict[str, Any]:
     """
     Simplified NiFi to Databricks migration pipeline using direct function calls.
@@ -53,19 +54,24 @@ def migrate_nifi_to_databricks_simplified(
         Dictionary containing migration guide and analysis results
     """
 
-    print("🚀 Starting simplified NiFi to Databricks migration...")
+    def _log(message):
+        print(message)
+        if progress_callback:
+            progress_callback(message)
+
+    _log("🚀 Starting simplified NiFi to Databricks migration...")
 
     # Step 1: Create output directory structure
-    print("📁 Creating output directory structure...")
+    _log("📁 Creating output directory structure...")
     os.makedirs(f"{out_dir}/{project}", exist_ok=True)
 
     # Step 2: Read XML content
-    print("📖 Reading NiFi XML template...")
+    _log("📖 Reading NiFi XML template...")
     with open(xml_path, "r", encoding="utf-8") as f:
         xml_content = f.read()
 
     # Step 3: Analyze and classify processors (single analysis shared between functions)
-    print("🔍 Analyzing workflow and classifying processors...")
+    _log("🔍 Analyzing workflow and classifying processors...")
 
     # Single analysis call that both functions can use
     analysis_result = analyze_workflow_patterns(
@@ -79,19 +85,19 @@ def migrate_nifi_to_databricks_simplified(
         output_dir=f"{out_dir}/{project}",
         _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
     )
-    print(f"📊 Workflow Analysis: Completed")
+    _log("📊 Workflow Analysis: Completed")
 
     # Create processor classifications from the same analysis
     processor_classifications = classify_processor_types(
         xml_path,
         _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
     )
-    print(f"🏷️  Processor Classifications: Completed")
+    _log("🏷️  Processor Classifications: Completed")
 
     # Classifications loaded for pruning - parsing handled in pruning step
 
     # Step 4: Prune infrastructure processors
-    print("✂️  Pruning infrastructure-only processors...")
+    _log("✂️  Pruning infrastructure-only processors...")
 
     pruned_result = prune_infrastructure_processors(processor_classifications)
 
@@ -102,21 +108,21 @@ def migrate_nifi_to_databricks_simplified(
         pruned_data = pruned_result
 
     if "error" in pruned_data:
-        print(f"⚠️ Pruning error: {pruned_data.get('error', 'Unknown')}")
+        _log(f"⚠️ Pruning error: {pruned_data.get('error', 'Unknown')}")
     else:
         essential_count = len(pruned_data.get("pruned_processors", []))
-        print(f"✅ Pruning complete: {essential_count} essential processors identified")
+        _log(f"✅ Pruning complete: {essential_count} essential processors identified")
 
     # Step 5: Detect data flow chains
-    print("🔗 Detecting semantic data flow chains...")
+    _log("🔗 Detecting semantic data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
     # Step 6: Create semantic data flows
-    print("🌊 Creating semantic data flows...")
+    _log("🌊 Creating semantic data flows...")
     semantic_flows = create_semantic_data_flows(chains_result)
 
     # Step 7: Extract and catalog all workflow assets for manual review
-    print("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
+    _log("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
 
     # Asset discovery skipped - focusing on business migration guide
 
@@ -124,10 +130,10 @@ def migrate_nifi_to_databricks_simplified(
     essential_processors_content = _generate_essential_processors_report(pruned_result)
     unknown_processors_content = _generate_unknown_processors_json(analysis_result)
     asset_summary_content = _generate_focused_asset_summary(processor_classifications)
-    print("📋 Reports generated successfully")
+    _log("📋 Reports generated successfully")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
-    print("📋 Generating comprehensive migration guide...")
+    _log("📋 Generating comprehensive migration guide...")
 
     # Parse pruned_result to get the list of essential processors
 
@@ -137,7 +143,7 @@ def migrate_nifi_to_databricks_simplified(
         pruned_data = pruned_result
 
     essential_processors = pruned_data.get("pruned_processors", [])
-    print(f"🎯 Processing {len(essential_processors)} essential processors")
+    _log(f"🎯 Processing {len(essential_processors)} essential processors")
 
     migration_result = orchestrate_focused_nifi_migration(
         xml_path=xml_path,
@@ -173,9 +179,9 @@ def migrate_nifi_to_databricks_simplified(
         },
     }
 
-    print("✅ Migration guide generation completed successfully!")
-    print(f"📁 Migration guide and analysis saved to: {out_dir}")
-    print(f"📋 Check MIGRATION_GUIDE.md for comprehensive migration recommendations")
+    _log("✅ Migration guide generation completed successfully!")
+    _log(f"📁 Migration guide and analysis saved to: {out_dir}")
+    _log(f"📋 Check MIGRATION_GUIDE.md for comprehensive migration recommendations")
 
     return complete_result
 

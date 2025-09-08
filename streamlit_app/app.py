@@ -47,60 +47,71 @@ def main():
             tmp_file.write(uploaded_file.getvalue())
             tmp_xml_path = tmp_file.name
 
-        # Show progress
-        with st.spinner("Running migration..."):
-            try:
-                result = migrate_nifi_to_databricks_simplified(
-                    xml_path=tmp_xml_path,
-                    out_dir="/tmp",
-                    project=f"migration_{uploaded_file.name.replace('.xml', '')}",
-                )
-                st.success("✅ Migration completed!")
+        # Show progress with live logs
+        log_container = st.empty()
+        progress_bar = st.progress(0)
 
-                # Display reports
-                if result.get("reports"):
-                    reports = result["reports"]
+        # Capture logs and update UI
+        logs = []
 
-                    # Essential Processors Report
-                    if reports.get("essential_processors"):
-                        with st.expander(
-                            "📋 Essential Processors Report", expanded=True
-                        ):
-                            st.markdown(reports["essential_processors"])
+        def log_callback(message):
+            logs.append(message)
+            log_container.text_area(
+                "Migration Progress", "\n".join(logs[-10:]), height=200
+            )
 
-                    # Unknown Processors Report
-                    unknown_data = reports.get("unknown_processors", {})
-                    if unknown_data.get("count", 0) > 0:
-                        with st.expander(
-                            f"❓ Unknown Processors ({unknown_data['count']})"
-                        ):
-                            for proc in unknown_data.get("unknown_processors", []):
-                                st.write(f"**{proc.get('name', 'Unknown')}**")
-                                st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                                st.write(
-                                    f"- Reason: {proc.get('reason', 'No reason provided')}"
-                                )
-                                st.write("---")
-                    else:
-                        st.info(
-                            "✅ No unknown processors - all were successfully classified"
-                        )
+        try:
+            result = migrate_nifi_to_databricks_simplified(
+                xml_path=tmp_xml_path,
+                out_dir="/tmp",
+                project=f"migration_{uploaded_file.name.replace('.xml', '')}",
+                progress_callback=log_callback,
+            )
+            progress_bar.progress(100)
+            st.success("✅ Migration completed!")
 
-                    # Asset Summary Report
-                    if "asset_summary" in reports and reports["asset_summary"]:
-                        with st.expander("📄 Asset Summary"):
-                            st.markdown(reports["asset_summary"])
+            # Display reports
+            if result.get("reports"):
+                reports = result["reports"]
 
-                # Raw Results (for debugging)
-                with st.expander("🔍 Raw Results"):
-                    st.json(result)
+                # Essential Processors Report
+                if reports.get("essential_processors"):
+                    with st.expander("📋 Essential Processors Report", expanded=True):
+                        st.markdown(reports["essential_processors"])
 
-            except Exception as e:
-                st.error(f"❌ Migration failed: {e}")
-                st.write("**Debug info:**")
-                st.code(str(e))
-            finally:
-                os.unlink(tmp_xml_path)
+                # Unknown Processors Report
+                unknown_data = reports.get("unknown_processors", {})
+                if unknown_data.get("count", 0) > 0:
+                    with st.expander(
+                        f"❓ Unknown Processors ({unknown_data['count']})"
+                    ):
+                        for proc in unknown_data.get("unknown_processors", []):
+                            st.write(f"**{proc.get('name', 'Unknown')}**")
+                            st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
+                            st.write(
+                                f"- Reason: {proc.get('reason', 'No reason provided')}"
+                            )
+                            st.write("---")
+                else:
+                    st.info(
+                        "✅ No unknown processors - all were successfully classified"
+                    )
+
+                # Asset Summary Report
+                if "asset_summary" in reports and reports["asset_summary"]:
+                    with st.expander("📄 Asset Summary"):
+                        st.markdown(reports["asset_summary"])
+
+            # Raw Results (for debugging)
+            with st.expander("🔍 Raw Results"):
+                st.json(result)
+
+        except Exception as e:
+            st.error(f"❌ Migration failed: {e}")
+            st.write("**Debug info:**")
+            st.code(str(e))
+        finally:
+            os.unlink(tmp_xml_path)
 
 
 if __name__ == "__main__":
