@@ -102,6 +102,44 @@ def main():
                     with st.expander("📄 Asset Summary"):
                         st.markdown(reports["asset_summary"])
 
+                # Connection Analysis Report
+                if "connection_analysis" in reports and reports["connection_analysis"]:
+                    conn_analysis = reports["connection_analysis"]
+
+                    # Connection Summary Metrics
+                    summary = conn_analysis.get("connection_summary", {})
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric(
+                            "Total Processors", summary.get("total_processors", 0)
+                        )
+                    with col2:
+                        st.metric(
+                            "Essential Processors",
+                            summary.get("essential_processors", 0),
+                        )
+                    with col3:
+                        st.metric(
+                            "Complexity Reduction",
+                            summary.get("complexity_reduction", "0%"),
+                        )
+                    with col4:
+                        effectiveness = summary.get("pruning_effectiveness", "Unknown")
+                        color = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(
+                            effectiveness, "⚪"
+                        )
+                        st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
+
+                    # Full Workflow Analysis
+                    if conn_analysis.get("full_workflow_connections"):
+                        with st.expander("🕸️ Full Workflow Connection Analysis"):
+                            st.markdown(conn_analysis["full_workflow_connections"])
+
+                    # Essential Connections Analysis
+                    if conn_analysis.get("essential_connections"):
+                        with st.expander("🎯 Essential Processors Connection Analysis"):
+                            st.markdown(conn_analysis["essential_connections"])
+
             # Raw Results (for debugging)
             with st.expander("🔍 Raw Results"):
                 st.json(result)
