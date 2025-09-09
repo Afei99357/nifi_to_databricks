@@ -33,9 +33,40 @@ SCRIPT_EXTS = (
     ".groovy",
     ".exe",
     ".bat",
+    # Source code files
+    ".java",
+    ".c",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".go",
+    ".rs",
+    ".php",
+    ".kt",
+    # Configuration & data files
+    ".xml",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".properties",
+    ".conf",
+    ".cfg",
+    ".csv",
+    ".tsv",
+    ".txt",
+    ".avro",
+    ".parquet",
+    ".orc",
+    # Archives & deployments
+    ".war",
+    ".ear",
+    ".zip",
+    ".tar",
+    ".gz",
 )
 SCRIPT_PATH_RX = re.compile(
-    r'/[^\s;"\']+\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat)\b', re.I
+    r'/[^\s;"\']+\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat|java|c|cpp|cc|cxx|go|rs|php|kt|xml|json|yaml|yml|properties|conf|cfg|csv|tsv|txt|avro|parquet|orc|war|ear|zip|tar|gz)\b',
+    re.I,
 )
 
 
