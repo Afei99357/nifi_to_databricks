@@ -7,6 +7,7 @@ import json
 import os
 import re
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from tools.analysis_tools import (
     analyze_nifi_workflow_detailed,
@@ -19,6 +20,26 @@ from tools.improved_pruning import (
 )
 
 # Asset discovery removed - focus on business migration guide only
+
+# Improved asset extraction patterns
+HOST_RX = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b|[a-z0-9-]+(?:\.[a-z0-9-]+)+", re.I)
+SCRIPT_EXTS = (
+    ".sh",
+    ".py",
+    ".sql",
+    ".jar",
+    ".pl",
+    ".r",
+    ".rb",
+    ".js",
+    ".scala",
+    ".groovy",
+    ".exe",
+    ".bat",
+)
+SCRIPT_PATH_RX = re.compile(
+    r'/[^\s;"\']+\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat)\b', re.I
+)
 
 
 def migrate_nifi_to_databricks_simplified(
@@ -501,6 +522,60 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
     return "→ Review migration approach based on business logic"
 
 
+def _smart_asset_extract(
+    properties: dict,
+    script_files: set,
+    hdfs_paths: set,
+    database_hosts: set,
+    external_hosts: set,
+):
+    """Improved asset extraction with better host/JDBC detection."""
+    for prop_name, prop_value in (properties or {}).items():
+        if not prop_value or not isinstance(prop_value, str):
+            continue
+        pv = prop_value.strip()
+
+        # scripts
+        if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS):
+            script_files.add(pv)
+        for m in SCRIPT_PATH_RX.findall(pv):
+            script_files.add(m)
+
+        # HDFS/file-ish paths
+        for pattern in (
+            r"hdfs://[^\s]+",
+            r"/user/[^\s]+",
+            r"/etl/[^\s]+",
+            r"/hdfs/[^\s]+",
+            r"/warehouse/[^\s]+",
+            r"/tmp/[^\s]+",
+            r"/data/[^\s]+",
+        ):
+            for path in re.findall(pattern, pv):
+                p = path.strip().rstrip(";")
+                if p and not p.startswith("${"):
+                    hdfs_paths.add(p)
+
+        # URLs → external hosts
+        try:
+            u = urlparse(pv)
+            if u.scheme and u.hostname:
+                external_hosts.add(u.hostname.lower())
+        except Exception:
+            pass
+
+        # Host-like tokens (domains/IPs)
+        for tok in re.findall(HOST_RX, pv):
+            # classify JDBC/DB tokens as database_hosts when appropriate
+            if "jdbc:" in pv.lower() or any(
+                k in pv.lower()
+                for k in ("impala", "hive", "postgres", "oracle", "sqlserver", "mysql")
+            ):
+                database_hosts.add(tok.lower())
+            else:
+                external_hosts.add(tok.lower())
+
+
 def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> str:
     """Generate a focused asset summary without the noise of full catalog.
 
@@ -533,126 +608,13 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
     external_hosts = set()
 
     for proc in processors:
-        properties = proc.get("properties", {})
-        proc_name = proc.get("name", "")
-
-        # Intelligent asset extraction from all properties
-        for prop_name, prop_value in properties.items():
-            if prop_value and isinstance(prop_value, str):
-                prop_lower = prop_value.lower()
-
-                # 1. SCRIPT/EXECUTABLE FILES - intelligent pattern matching
-                # Common script/executable extensions
-                script_extensions = [
-                    ".sh",
-                    ".py",
-                    ".sql",
-                    ".jar",
-                    ".pl",
-                    ".r",
-                    ".rb",
-                    ".js",
-                    ".scala",
-                    ".groovy",
-                ]
-
-                # Direct file path detection
-                for ext in script_extensions:
-                    if prop_value.endswith(ext):
-                        script_files.add(prop_value)
-
-                # Path-based script detection (covers command arguments)
-                script_pattern = (
-                    r'/[^\s;"\']*\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat)\b'
-                )
-                script_matches = re.findall(script_pattern, prop_value, re.IGNORECASE)
-                for script_path in script_matches:
-                    script_files.add(script_path)
-
-                # 2. FILESYSTEM PATHS - intelligent pattern detection
-                # HDFS patterns (more comprehensive)
-                hdfs_patterns = [
-                    r"hdfs://[^\s]+",  # hdfs:// protocol
-                    r"/user/[^\s]+",  # /user/ paths
-                    r"/etl/[^\s]+",  # /etl/ paths
-                    r"/hdfs/[^\s]+",  # /hdfs/ paths
-                    r"/warehouse/[^\s]+",  # warehouse paths
-                    r"/tmp/[^\s]+",  # temp paths
-                    r"/data/[^\s]+",  # data paths
-                ]
-
-                for pattern in hdfs_patterns:
-                    hdfs_matches = re.findall(pattern, prop_value)
-                    for path in hdfs_matches:
-                        cleaned_path = path.strip().rstrip(";")
-                        if len(cleaned_path) > 8 and not cleaned_path.startswith("${"):
-                            hdfs_paths.add(cleaned_path)
-
-                # 3. WORKING DIRECTORIES - removed (not needed for migration planning)
-
-                # 4. DATABASE CONNECTIONS - intelligent host extraction
-                # Look for database-related keywords and extract hostnames
-                db_keywords = [
-                    "jdbc:",
-                    "impala",
-                    "hive",
-                    "mysql",
-                    "postgres",
-                    "oracle",
-                    "sqlserver",
-                    "mongodb",
-                    "cassandra",
-                ]
-                if any(keyword in prop_lower for keyword in db_keywords):
-                    # Extract various hostname patterns
-                    hostname_patterns = [
-                        r"[\w\-\.]+\.[\w\-\.]*\.(?:com|org|net|edu|gov)",  # domain names
-                        r"jdbc:[^/]+//([^:/]+)",  # JDBC URLs
-                        r"://([^:/]+)",  # protocol://host
-                    ]
-                    for pattern in hostname_patterns:
-                        host_matches = re.findall(pattern, prop_value, re.IGNORECASE)
-                        for host in host_matches:
-                            if len(host) > 3 and "." in host:
-                                database_hosts.add(host)
-
-                # 5. EXTERNAL HOSTS - intelligent detection
-                # Look for external service indicators
-                external_indicators = [
-                    "ftp",
-                    "sftp",
-                    "ssh",
-                    "http",
-                    "https",
-                    "smtp",
-                    "ldap",
-                ]
-                host_related_props = [
-                    "hostname",
-                    "host",
-                    "server",
-                    "url",
-                    "endpoint",
-                    "address",
-                ]
-
-                # Method 1: Property name suggests external host
-                if any(keyword in prop_name.lower() for keyword in host_related_props):
-                    if (
-                        "." in prop_value
-                        and not prop_value.startswith("/")
-                        and len(prop_value) < 200
-                        and len(prop_value) > 3
-                    ):
-                        external_hosts.add(prop_value.strip())
-
-                # Method 2: Content suggests external service
-                if any(indicator in prop_lower for indicator in external_indicators):
-                    # Extract hostnames from URLs or connection strings
-                    url_pattern = r"(?:https?|ftp|sftp)://([^/:\s]+)"
-                    url_hosts = re.findall(url_pattern, prop_value, re.IGNORECASE)
-                    for host in url_hosts:
-                        external_hosts.add(host)
+        _smart_asset_extract(
+            proc.get("properties", {}),
+            script_files,
+            hdfs_paths,
+            database_hosts,
+            external_hosts,
+        )
 
     # Generate summary report
     report_lines = [

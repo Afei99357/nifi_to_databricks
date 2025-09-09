@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
 
-from tools.simplified_migration import migrate_nifi_to_databricks_simplified
+from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
 
 
 def main():

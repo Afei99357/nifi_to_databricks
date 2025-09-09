@@ -9,7 +9,7 @@ dbutils.library.restartPython()  # type: ignore
 
 from datetime import datetime
 
-from tools.simplified_migration import (
+from tools.migration_orchestrator import (
     analyze_nifi_workflow_only,
     migrate_nifi_to_databricks_simplified,
 )
