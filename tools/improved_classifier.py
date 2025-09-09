@@ -32,6 +32,11 @@ _CP_CMDS = re.compile(r"\b(cp|copy)\b")
 _HDFS_CMDS = re.compile(r"\bhdfs(\s+dfs)?\b.*\b(-put|-mv|-cp|-rm)\b", re.IGNORECASE)
 _IMPALA_SHELL = re.compile(r"\bimpala-shell\b", re.IGNORECASE)
 
+# Enhanced ExecuteStreamCommand patterns
+_TEXT_PROCESSING_CMDS = re.compile(r"\b(awk|sed|grep|sort|uniq|head|tail|wc)\b")
+_COMPRESSION_CMDS = re.compile(r"\b(gzip|gunzip|zip|unzip|tar)\b")
+_VALIDATION_CMDS = re.compile(r"\b(echo|test|\[|\]|diff|cmp)\b")
+
 
 def _get_prop_str(properties: Dict[str, Any]) -> str:
     try:
@@ -119,8 +124,39 @@ def _classify_by_rules(
             "key_operations": ["split_stream"],
         }
 
-    # ExecuteStreamCommand: mv/cp/hdfs
+    # ExecuteStreamCommand: enhanced pattern detection
     if "executestreamcommand" in pt:
+        # Text processing tools: alter/derive content
+        if _any_property_matches(properties, _TEXT_PROCESSING_CMDS):
+            return {
+                "data_manipulation_type": "data_transformation",
+                "actual_data_processing": "Uses text tools (awk/sed/grep/sort/uniq/head/tail/wc) that alter or derive content.",
+                "transforms_data_content": True,
+                "business_purpose": "Data filtering, transformation, and processing.",
+                "data_impact_level": "medium",
+                "key_operations": ["text_processing"],
+            }
+        # Compression/archiving: packaging, not semantic transform
+        if _any_property_matches(properties, _COMPRESSION_CMDS):
+            return {
+                "data_manipulation_type": "data_movement",
+                "actual_data_processing": "Compresses/decompresses files for packaging; no content transformation.",
+                "transforms_data_content": False,
+                "business_purpose": "File packaging and storage optimization.",
+                "data_impact_level": "low",
+                "key_operations": ["compression"],
+            }
+        # Validation/ops: no data content change
+        if _any_property_matches(properties, _VALIDATION_CMDS):
+            return {
+                "data_manipulation_type": "infrastructure_only",
+                "actual_data_processing": "Validation commands (echo/test/diff/cmp); no data content change.",
+                "transforms_data_content": False,
+                "business_purpose": "Validation, testing, and diagnostics.",
+                "data_impact_level": "none",
+                "key_operations": ["validation"],
+            }
+        # File operations: move/copy/delete
         if (
             _any_property_matches(properties, _MOVE_CMDS)
             or _any_property_matches(properties, _CP_CMDS)
@@ -139,7 +175,7 @@ def _classify_by_rules(
             sql = _extract_sql(properties)
             if _SQL_DML_RE.search(sql):
                 return {
-                    "data_manipulation_type": "external_processing",
+                    "data_manipulation_type": "data_transformation",
                     "actual_data_processing": "Executes SQL DML via impala-shell that changes table content.",
                     "transforms_data_content": True,
                     "business_purpose": "Apply inserts/updates/deletes to downstream tables.",
@@ -192,6 +228,70 @@ def _classify_by_rules(
                 "data_impact_level": "none",
                 "key_operations": ["metrics"],
             }
+
+    # ControlRate: flow control and timing
+    if "controlrate" in pt:
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Controls flow rate and timing; no content changes.",
+            "transforms_data_content": False,
+            "business_purpose": "Flow throttling and rate limiting.",
+            "data_impact_level": "none",
+            "key_operations": ["rate_control"],
+        }
+
+    # GenerateFlowFile: typically infrastructure (trigger generation)
+    if "generateflowfile" in pt:
+        return {
+            "data_manipulation_type": "infrastructure_only",
+            "actual_data_processing": "Generates trigger FlowFiles; no business data processing.",
+            "transforms_data_content": False,
+            "business_purpose": "Workflow initiation and triggers.",
+            "data_impact_level": "none",
+            "key_operations": ["flow_generation"],
+        }
+
+    # Text processing utilities: data transformation
+    if any(
+        k in pt
+        for k in [
+            "extracttext",
+            "splittext",
+            "attributestojson",
+            "evaluatejsonpath",
+            "replacetex",
+        ]
+    ):
+        return {
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Parses/extracts/converts text formats without business logic changes.",
+            "transforms_data_content": True,
+            "business_purpose": "Format conversion and data parsing.",
+            "data_impact_level": "medium",
+            "key_operations": ["text_parsing"],
+        }
+
+    # ExecuteScript: typically custom transformation logic
+    if "executescript" in pt:
+        return {
+            "data_manipulation_type": "data_transformation",
+            "actual_data_processing": "Executes custom script for data processing.",
+            "transforms_data_content": True,
+            "business_purpose": "Custom data transformation logic.",
+            "data_impact_level": "high",
+            "key_operations": ["script_execution"],
+        }
+
+    # MergeContent: data movement operation
+    if "mergecontent" in pt:
+        return {
+            "data_manipulation_type": "data_movement",
+            "actual_data_processing": "Combines multiple FlowFiles; no content transformation.",
+            "transforms_data_content": False,
+            "business_purpose": "File aggregation and batching.",
+            "data_impact_level": "low",
+            "key_operations": ["file_merge"],
+        }
 
     # RouteOnAttribute: flow control and routing
     if "routeonattribute" in pt or "route" in pt:
@@ -400,6 +500,47 @@ def _classify_by_rules(
             "business_purpose": "Security and authentication management.",
             "data_impact_level": "none",
             "key_operations": ["authentication"],
+        }
+
+    # Custom processors: allowlist + conservative defaults
+    if any(x in pt for x in ["com.", "org.custom", "custom."]) or "nxp" in pt.lower():
+        # Known allowlist for specific custom processors
+        if "nxpexecutesparkjob" in pt.lower():
+            return {
+                "data_manipulation_type": "data_transformation",
+                "actual_data_processing": "Custom Spark job execution for business processing.",
+                "transforms_data_content": True,
+                "business_purpose": "Organization-specific data processing.",
+                "data_impact_level": "high",
+                "key_operations": ["custom_spark"],
+            }
+        if "nxpexecutehqlstatement" in pt.lower():
+            return {
+                "data_manipulation_type": "data_transformation",
+                "actual_data_processing": "Custom HQL statement execution for data processing.",
+                "transforms_data_content": True,
+                "business_purpose": "Database operations via custom processor.",
+                "data_impact_level": "high",
+                "key_operations": ["custom_hql"],
+            }
+        # Known infra-like customs (date generators, triggers, etc.)
+        if any(term in pt.lower() for term in ["dategen", "trigger", "generator"]):
+            return {
+                "data_manipulation_type": "infrastructure_only",
+                "actual_data_processing": "Custom utility for dates/triggers/generation.",
+                "transforms_data_content": False,
+                "business_purpose": "Workflow support and utilities.",
+                "data_impact_level": "none",
+                "key_operations": ["custom_utility"],
+            }
+        # Unknown custom processors: conservative medium impact
+        return {
+            "data_manipulation_type": "external_processing",
+            "actual_data_processing": "Custom processor requiring business logic review.",
+            "transforms_data_content": True,  # Conservative assumption
+            "business_purpose": "Organization-specific processing logic.",
+            "data_impact_level": "medium",  # Reduced from high per user feedback
+            "key_operations": ["custom_processing"],
         }
 
     # No confident rule
