@@ -90,12 +90,7 @@ def migrate_nifi_to_databricks_simplified(
         xml_path=xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
     )
 
-    # Use analysis result directly (already contains all needed data)
-    workflow_analysis = analysis_result
-    processor_classifications = analysis_result
     _log("📊 Analysis data prepared for migration pipeline")
-
-    # Classifications loaded for pruning - parsing handled in pruning step
 
     # Step 4: Prune infrastructure processors
     _log("✂️  Pruning infrastructure-only processors...")
@@ -127,7 +122,7 @@ def migrate_nifi_to_databricks_simplified(
     # Generate reports content
     essential_processors_content = _generate_essential_processors_report(pruned_result)
     unknown_processors_content = _generate_unknown_processors_json(analysis_result)
-    asset_summary_content = _generate_focused_asset_summary(processor_classifications)
+    asset_summary_content = _generate_focused_asset_summary(analysis_result)
     _log("📋 Reports generated successfully")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
@@ -179,8 +174,8 @@ def migrate_nifi_to_databricks_simplified(
     complete_result = {
         "migration_result": migration_result,
         "analysis": {
-            "workflow_analysis": workflow_analysis,
-            "processor_classifications": processor_classifications,
+            "workflow_analysis": analysis_result,
+            "processor_classifications": analysis_result,
             "pruned_processors": pruned_result,
             "data_flow_chains": chains_result,
         },
@@ -232,15 +227,14 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
         xml_path=xml_path, save_markdown=False, output_dir=temp_output_dir
     )
 
-    # Use analysis result directly (already contains all needed data)
-    workflow_analysis = analysis_result
-    processor_classifications = analysis_result
+    # Process the analysis result through the pipeline
     pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
+    # Package all results together
     analysis_result = {
-        "workflow_analysis": workflow_analysis,
-        "processor_classifications": processor_classifications,
+        "workflow_analysis": analysis_result,
+        "processor_classifications": analysis_result,
         "pruned_processors": pruned_result,
         "data_flow_chains": chains_result,
         "xml_path": xml_path,
