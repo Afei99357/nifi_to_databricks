@@ -2,9 +2,8 @@
 # Updated processor pruning and data flow chain detection that works with improved classifier
 
 import json
-import os
 import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from typing import Any, Dict, List
 
 from .xml_tools import parse_nifi_template
@@ -166,21 +165,20 @@ def detect_data_flow_chains(xml_content: str, pruned_processors_json: str) -> st
                 }
             )
 
-        # Use existing tools for parsing and DAG construction
-        template_data = json.loads(parse_nifi_template(xml_content))
-        connections = template_data.get("connections", [])
-
-        # Build DAG using existing topological sorting
-        dag_result = json.loads(build_migration_plan(xml_content))
-        all_tasks = dag_result.get("tasks", [])
-        all_edges = dag_result.get("edges", [])
+        # Extract connections from XML
+        all_edges = extract_processor_connections(xml_content)
 
         # Create lookup for essential processors
         essential_ids = {p.get("id", ""): p for p in essential_processors}
         essential_id_set = set(essential_ids.keys())
 
-        # Filter DAG to essential processors only
-        filtered_tasks = [t for t in all_tasks if t.get("id") in essential_id_set]
+        # Create filtered tasks from essential processors (for chain detection)
+        filtered_tasks = [
+            {"id": p.get("id", ""), "name": p.get("name", ""), "type": _get_ptype(p)}
+            for p in essential_processors
+        ]
+
+        # Filter edges to only include essential processors
         filtered_edges = [
             e
             for e in all_edges
@@ -366,79 +364,25 @@ def _identify_business_pattern(processors: List[Dict[str, Any]]) -> str:
         return "data_transformation"
 
 
-def build_migration_plan(xml_content: str) -> str:
+def extract_processor_connections(xml_content: str) -> List[List[str]]:
     """
-    Produce a topologically sorted DAG of NiFi processors based on Connections.
+    Extract processor connections from NiFi XML.
 
     Args:
-        xml_content: Either XML content as string OR file path to XML file
+        xml_content: NiFi XML template content
 
-    Returns JSON:
-      {
-        "tasks": [{"id": "...", "name": "...", "type": "..."}, ...],
-        "edges": [["src_id","dst_id"], ...],
-        "note": "..."
-      }
+    Returns:
+        List of [source_id, destination_id] pairs
     """
     try:
-        # Check if input is a file path or XML content
-        if xml_content.strip().startswith("<?xml") or xml_content.strip().startswith(
-            "<"
-        ):
-            # Input is XML content
-            root = ET.fromstring(xml_content)
-        else:
-            # Input is likely a file path
-            if os.path.exists(xml_content):
-                with open(xml_content, "r") as f:
-                    xml_text = f.read()
-                root = ET.fromstring(xml_text)
-            else:
-                # Try parsing as XML content anyway
-                root = ET.fromstring(xml_content)
-
-        # id → meta
-        procs: Dict[str, Dict[str, Any]] = {}
-        for pr in root.findall(".//processors"):
-            pid = (pr.findtext("id") or "").strip()
-            procs[pid] = {
-                "id": pid,
-                "name": (pr.findtext("name") or pid).strip(),
-                "type": (pr.findtext("type") or "Unknown").strip(),
-            }
-
-        edges: List[List[str]] = []
+        root = ET.fromstring(xml_content)
+        edges = []
         for conn in root.findall(".//connections"):
             src = (conn.findtext(".//source/id") or "").strip()
             dst = (conn.findtext(".//destination/id") or "").strip()
             if src and dst:
                 edges.append([src, dst])
-
-        # Kahn's algorithm for topo order
-        indeg = defaultdict(int)
-        graph: Dict[str, List[str]] = defaultdict(list)
-        for s, d in edges:
-            graph[s].append(d)
-            indeg[d] += 1
-            if s not in indeg:
-                indeg[s] += 0
-
-        q = deque([n for n in indeg if indeg[n] == 0])
-        ordered: List[Dict[str, Any]] = []
-        while q:
-            n = q.popleft()
-            if n in procs:
-                ordered.append(procs[n])
-            for v in graph[n]:
-                indeg[v] -= 1
-                if indeg[v] == 0:
-                    q.append(v)
-
-        plan = {
-            "tasks": ordered,
-            "edges": edges,
-            "note": "Use this order to compose Jobs tasks or DLT dependencies",
-        }
-        return json.dumps(plan, indent=2)
+        return edges
     except Exception as e:
-        return f"Failed building plan: {e}"
+        print(f"Warning: Failed to extract connections: {e}")
+        return []
