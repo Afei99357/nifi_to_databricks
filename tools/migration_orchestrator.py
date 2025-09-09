@@ -9,10 +9,6 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from tools.analysis_tools import (
-    analyze_nifi_workflow_detailed,
-    classify_processor_types,
-)
 from tools.improved_classifier import analyze_workflow_patterns
 from tools.improved_pruning import (
     detect_data_flow_chains,
@@ -94,21 +90,12 @@ def migrate_nifi_to_databricks_simplified(
         xml_path=xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
     )
 
-    # Create workflow analysis summary from the single analysis
-    workflow_analysis = analyze_nifi_workflow_detailed(
-        xml_path,
-        save_markdown=False,
-        output_dir=f"{out_dir}/{project}",
-        _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
+    # Use analysis result directly (already contains all needed data)
+    workflow_analysis = analysis_result
+    processor_classifications = (
+        analysis_result  # Same data, used by different downstream functions
     )
-    _log("📊 Workflow Analysis: Completed")
-
-    # Create processor classifications from the same analysis
-    processor_classifications = classify_processor_types(
-        xml_path,
-        _reuse_analysis=analysis_result,  # Pass the analysis to avoid re-running
-    )
-    _log("🏷️  Processor Classifications: Completed")
+    _log("📊 Analysis data prepared for migration pipeline")
 
     # Classifications loaded for pruning - parsing handled in pruning step
 
@@ -246,16 +233,9 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
         xml_path=xml_path, save_markdown=False, output_dir=temp_output_dir
     )
 
-    # Create workflow analysis and processor classifications from the same analysis
-    workflow_analysis = analyze_nifi_workflow_detailed(
-        xml_path,
-        save_markdown=False,
-        output_dir=temp_output_dir,
-        _reuse_analysis=analysis_result,
-    )
-    processor_classifications = classify_processor_types(
-        xml_path, _reuse_analysis=analysis_result
-    )
+    # Use analysis result directly (already contains all needed data)
+    workflow_analysis = analysis_result
+    processor_classifications = analysis_result
     pruned_result = prune_infrastructure_processors(processor_classifications)
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
@@ -694,18 +674,24 @@ def _generate_unknown_processors_json(analysis_result, output_dir: str = None) -
     Returns:
         Dictionary containing unknown processors data
     """
-    # Find unknown processors
-    unknown = []
-    if hasattr(analysis_result, "get"):
-        for proc in analysis_result.get("classification_results", []):
-            if proc.get("data_manipulation_type") == "unknown":
-                unknown.append(
-                    {
-                        "name": proc.get("name"),
-                        "type": proc.get("processor_type"),
-                        "reason": "LLM failed - needs manual classification",
-                    }
-                )
-
-    # Return data object instead of writing to file
-    return {"unknown_processors": unknown, "count": len(unknown)}
+    items = []
+    # tolerate dict-like input
+    cr = (analysis_result or {}).get("classification_results", [])
+    for proc in cr:
+        if proc.get("data_manipulation_type") == "unknown":
+            props = proc.get("properties") or {}
+            preview = []
+            for k, v in list(props.items())[:3]:
+                if isinstance(v, str) and len(v) > 120:
+                    v = v[:117] + "..."
+                preview.append(f"{k}={v}")
+            items.append(
+                {
+                    "id": proc.get("id"),
+                    "name": proc.get("name") or "Unknown",
+                    "type": proc.get("processor_type") or proc.get("type") or "Unknown",
+                    "property_preview": preview,
+                    "reason": proc.get("llm_error") or "Not matched by rules/LLM",
+                }
+            )
+    return {"unknown_processors": items, "count": len(items)}

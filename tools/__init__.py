@@ -2,7 +2,6 @@
 # Import submodules for direct function access (no agent complexity)
 
 from . import (
-    analysis_tools,
     improved_classifier,
     improved_pruning,
     migration_orchestrator,
