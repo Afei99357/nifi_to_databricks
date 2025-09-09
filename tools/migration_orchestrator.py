@@ -33,9 +33,40 @@ SCRIPT_EXTS = (
     ".groovy",
     ".exe",
     ".bat",
+    # Source code files
+    ".java",
+    ".c",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".go",
+    ".rs",
+    ".php",
+    ".kt",
+    # Configuration & data files
+    ".xml",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".properties",
+    ".conf",
+    ".cfg",
+    ".csv",
+    ".tsv",
+    ".txt",
+    ".avro",
+    ".parquet",
+    ".orc",
+    # Archives & deployments
+    ".war",
+    ".ear",
+    ".zip",
+    ".tar",
+    ".gz",
 )
 SCRIPT_PATH_RX = re.compile(
-    r'/[^\s;"\']+\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat)\b', re.I
+    r'/[^\s;"\']+\.(?:sh|py|sql|jar|pl|r|rb|js|scala|groovy|exe|bat|java|c|cpp|cc|cxx|go|rs|php|kt|xml|json|yaml|yml|properties|conf|cfg|csv|tsv|txt|avro|parquet|orc|war|ear|zip|tar|gz)\b',
+    re.I,
 )
 
 
@@ -140,6 +171,13 @@ def migrate_nifi_to_databricks_simplified(
     unknown_processors_content = _generate_unknown_processors_json(analysis_result)
     asset_summary_content = _generate_focused_asset_summary(analysis_result)
     _log("📋 Reports generated successfully")
+
+    # Debug: Check if asset summary content is properly generated
+    print(
+        f"[DEBUG] Essential processors content length: {len(essential_processors_content)}"
+    )
+    print(f"[DEBUG] Asset summary content length: {len(asset_summary_content)}")
+    print(f"[DEBUG] Asset summary starts with: {asset_summary_content[:100]}...")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
     _log("📋 Generating comprehensive migration guide...")
@@ -522,6 +560,36 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
     return "→ Review migration approach based on business logic"
 
 
+def _is_false_positive_asset(value: str) -> bool:
+    """Simple filter to skip patterns, variables, and obvious non-executable content."""
+    if not value:
+        return True
+
+    # Skip regex patterns
+    if value.startswith("^") or value.endswith("$") or ".*" in value:
+        return True
+
+    # Skip variable references
+    if "${" in value and "}" in value:
+        return True
+
+    # Skip wildcards and patterns
+    if "*" in value or "?" in value:
+        return True
+
+    # Skip multiple items in one value
+    if ";" in value or ", " in value:
+        return True
+
+    # Skip error messages or descriptive text
+    if any(
+        word in value.lower() for word in ["failed", "error", "feel like", "ingest -"]
+    ):
+        return True
+
+    return False
+
+
 def _smart_asset_extract(
     properties: dict,
     script_files: set,
@@ -529,17 +597,22 @@ def _smart_asset_extract(
     database_hosts: set,
     external_hosts: set,
 ):
-    """Improved asset extraction with better host/JDBC detection."""
+    """Improved asset extraction with better filtering to reduce false positives."""
     for prop_name, prop_value in (properties or {}).items():
         if not prop_value or not isinstance(prop_value, str):
             continue
         pv = prop_value.strip()
 
-        # scripts
-        if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS):
+        # Skip obvious false positives
+        if _is_false_positive_asset(pv):
+            continue
+
+        # scripts - only capture real executable paths
+        if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS) and pv.startswith("/"):
             script_files.add(pv)
         for m in SCRIPT_PATH_RX.findall(pv):
-            script_files.add(m)
+            if not _is_false_positive_asset(m):
+                script_files.add(m)
 
         # HDFS/file-ish paths
         for pattern in (
@@ -660,27 +733,39 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
         [
             "## Migration Recommendations",
             "",
-            "### High Priority",
         ]
     )
 
-    if script_files:
-        report_lines.append("- **Convert shell scripts** to PySpark/Databricks SQL")
-    if database_hosts:
-        report_lines.append(
-            "- **Replace Impala connections** with Databricks SQL compute"
-        )
-    if hdfs_paths:
-        report_lines.append("- **Migrate HDFS data** to Unity Catalog managed tables")
-
-    if external_hosts:
+    # Check if we found any assets
+    if not any([script_files, database_hosts, hdfs_paths, external_hosts]):
         report_lines.extend(
             [
+                "✅ **No external assets requiring migration detected**",
                 "",
-                "### Medium Priority",
-                "- **Replace SFTP transfers** with cloud storage integration",
+                "This workflow appears to use only standard NiFi processors without external dependencies.",
             ]
         )
+    else:
+        report_lines.append("### High Priority")
+        if script_files:
+            report_lines.append("- **Convert shell scripts** to PySpark/Databricks SQL")
+        if database_hosts:
+            report_lines.append(
+                "- **Replace Impala connections** with Databricks SQL compute"
+            )
+        if hdfs_paths:
+            report_lines.append(
+                "- **Migrate HDFS data** to Unity Catalog managed tables"
+            )
+
+        if external_hosts:
+            report_lines.extend(
+                [
+                    "",
+                    "### Medium Priority",
+                    "- **Replace SFTP transfers** with cloud storage integration",
+                ]
+            )
 
     # Return content instead of writing to file
     return "\n".join(report_lines)
