@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
+from tools.connection_analysis import generate_connection_analysis_reports
 from tools.improved_classifier import analyze_workflow_patterns
 from tools.improved_pruning import (
     detect_data_flow_chains,
@@ -120,6 +121,15 @@ def migrate_nifi_to_databricks_simplified(
     _log("🔗 Detecting data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
+    # Step 6: Analyze connection architecture (fan-in/fan-out hotspots)
+    _log("🕸️  Analyzing connection architecture and hotspots...")
+    connection_analysis = generate_connection_analysis_reports(
+        xml_content, pruned_result
+    )
+    _log(
+        f"🎯 Connection analysis complete: {connection_analysis['connection_summary']['complexity_reduction']} complexity reduction"
+    )
+
     # Step 7: Extract and catalog all workflow assets for manual review
     _log("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
 
@@ -188,6 +198,7 @@ def migrate_nifi_to_databricks_simplified(
             "essential_processors": essential_processors_content,
             "unknown_processors": unknown_processors_content,
             "asset_summary": asset_summary_content,
+            "connection_analysis": connection_analysis,
         },
         "configuration": {
             "xml_path": xml_path,
@@ -241,12 +252,16 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     # Process the analysis result through the pipeline
     pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
+    connection_analysis = generate_connection_analysis_reports(
+        xml_content, pruned_result
+    )
 
     # Package all results together
     analysis_result = {
         "processor_classifications": analysis_result,
         "pruned_processors": pruned_result,
         "data_flow_chains": chains_result,
+        "connection_analysis": connection_analysis,
         "xml_path": xml_path,
     }
 
