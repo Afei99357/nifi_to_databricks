@@ -137,36 +137,6 @@ def main():
                     with st.expander("📄 Asset Summary"):
                         st.markdown(reports["asset_summary"])
 
-                    st.divider()  # Add visual separation
-
-                # Essential Processors Report
-                if reports.get("essential_processors"):
-                    with st.expander("📋 Essential Processors Report", expanded=True):
-                        st.markdown(reports["essential_processors"])
-
-                # Unknown Processors Report
-                unknown_data = reports.get("unknown_processors", {})
-                if unknown_data.get("count", 0) > 0:
-                    with st.expander(
-                        f"❓ Unknown Processors ({unknown_data['count']})"
-                    ):
-                        for proc in unknown_data.get("unknown_processors", []):
-                            st.write(f"**{proc.get('name', 'Unknown')}**")
-                            st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                            st.write(
-                                f"- Reason: {proc.get('reason', 'No reason provided')}"
-                            )
-                            st.write("---")
-                else:
-                    st.info(
-                        "✅ No unknown processors - all were successfully classified"
-                    )
-
-                # Asset Summary Report
-                if "asset_summary" in reports and reports["asset_summary"]:
-                    with st.expander("📄 Asset Summary"):
-                        st.markdown(reports["asset_summary"])
-
             # Raw Results (for debugging)
             with st.expander("🔍 Raw Results"):
                 st.json(result)
