@@ -553,6 +553,36 @@ def _get_migration_hint(classification: str, proc_type: str) -> str:
     return "→ Review migration approach based on business logic"
 
 
+def _is_false_positive_asset(value: str) -> bool:
+    """Simple filter to skip patterns, variables, and obvious non-executable content."""
+    if not value:
+        return True
+
+    # Skip regex patterns
+    if value.startswith("^") or value.endswith("$") or ".*" in value:
+        return True
+
+    # Skip variable references
+    if "${" in value and "}" in value:
+        return True
+
+    # Skip wildcards and patterns
+    if "*" in value or "?" in value:
+        return True
+
+    # Skip multiple items in one value
+    if ";" in value or ", " in value:
+        return True
+
+    # Skip error messages or descriptive text
+    if any(
+        word in value.lower() for word in ["failed", "error", "feel like", "ingest -"]
+    ):
+        return True
+
+    return False
+
+
 def _smart_asset_extract(
     properties: dict,
     script_files: set,
@@ -560,17 +590,22 @@ def _smart_asset_extract(
     database_hosts: set,
     external_hosts: set,
 ):
-    """Improved asset extraction with better host/JDBC detection."""
+    """Improved asset extraction with better filtering to reduce false positives."""
     for prop_name, prop_value in (properties or {}).items():
         if not prop_value or not isinstance(prop_value, str):
             continue
         pv = prop_value.strip()
 
-        # scripts
-        if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS):
+        # Skip obvious false positives
+        if _is_false_positive_asset(pv):
+            continue
+
+        # scripts - only capture real executable paths
+        if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS) and pv.startswith("/"):
             script_files.add(pv)
         for m in SCRIPT_PATH_RX.findall(pv):
-            script_files.add(m)
+            if not _is_false_positive_asset(m):
+                script_files.add(m)
 
         # HDFS/file-ish paths
         for pattern in (
