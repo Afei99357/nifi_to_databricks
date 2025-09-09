@@ -92,9 +92,7 @@ def migrate_nifi_to_databricks_simplified(
 
     # Use analysis result directly (already contains all needed data)
     workflow_analysis = analysis_result
-    processor_classifications = (
-        analysis_result  # Same data, used by different downstream functions
-    )
+    processor_classifications = analysis_result
     _log("📊 Analysis data prepared for migration pipeline")
 
     # Classifications loaded for pruning - parsing handled in pruning step
@@ -102,7 +100,8 @@ def migrate_nifi_to_databricks_simplified(
     # Step 4: Prune infrastructure processors
     _log("✂️  Pruning infrastructure-only processors...")
 
-    pruned_result = prune_infrastructure_processors(processor_classifications)
+    # Pass the classification results in the format expected by pruning function
+    pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
 
     # Check pruning results and show essential count
     if isinstance(pruned_result, str):
@@ -236,7 +235,7 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     # Use analysis result directly (already contains all needed data)
     workflow_analysis = analysis_result
     processor_classifications = analysis_result
-    pruned_result = prune_infrastructure_processors(processor_classifications)
+    pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
     analysis_result = {
