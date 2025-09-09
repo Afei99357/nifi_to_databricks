@@ -425,15 +425,18 @@ def generate_connection_analysis_reports(xml_content: str, pruned_result: dict) 
                 "markdown": f"# Essential Connections Analysis Failed\n\nError: {str(e)}",
             }
 
-        # Calculate reduction metrics
-        total_nodes = len(full_analysis["graph"]["nodes"])
-        essential_nodes = len(pruned_analysis["graph"]["nodes"])
+        # Calculate reduction metrics using actual processor counts, not graph nodes
+        total_processors = len(full_analysis["graph"]["nodes"])
+
+        # Get actual essential processor count from pruning results
+        actual_essential_count = len(pruned_data.get("pruned_processors", []))
+
         total_edges = len(full_analysis["graph"]["edges"])
         essential_edges = len(pruned_analysis["graph"]["edges"])
 
         complexity_reduction = (
-            ((total_nodes - essential_nodes) / total_nodes * 100)
-            if total_nodes > 0
+            ((total_processors - actual_essential_count) / total_processors * 100)
+            if total_processors > 0
             else 0
         )
 
@@ -441,8 +444,8 @@ def generate_connection_analysis_reports(xml_content: str, pruned_result: dict) 
             "full_workflow_connections": full_analysis["markdown"],
             "essential_connections": pruned_analysis["markdown"],
             "connection_summary": {
-                "total_processors": total_nodes,
-                "essential_processors": essential_nodes,
+                "total_processors": total_processors,
+                "essential_processors": actual_essential_count,
                 "total_connections": total_edges,
                 "essential_connections": essential_edges,
                 "complexity_reduction": f"{complexity_reduction:.1f}%",
