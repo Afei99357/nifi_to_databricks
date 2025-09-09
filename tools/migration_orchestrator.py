@@ -264,7 +264,9 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
     # Group by classification for organization
     by_classification = {}
     for proc in processors:
-        classification = proc.get("classification", "unknown")
+        classification = proc.get(
+            "classification", proc.get("data_manipulation_type", "unknown")
+        )
         if classification not in by_classification:
             by_classification[classification] = []
         by_classification[classification].append(proc)
