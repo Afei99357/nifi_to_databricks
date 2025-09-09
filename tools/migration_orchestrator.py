@@ -579,7 +579,9 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
         data = processor_data
 
     # Handle different input formats
-    if "processor_classifications" in data:
+    if "classification_results" in data:
+        processors = data.get("classification_results", [])
+    elif "processor_classifications" in data:
         processors = data.get("processor_classifications", [])
     elif "pruned_processors" in data:
         processors = data.get("pruned_processors", [])
