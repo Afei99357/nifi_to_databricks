@@ -19,7 +19,6 @@ from tools.improved_pruning import (
 )
 
 # Asset discovery removed - focus on business migration guide only
-from tools.migration_tools import orchestrate_focused_nifi_migration
 
 
 def migrate_nifi_to_databricks_simplified(
@@ -137,13 +136,37 @@ def migrate_nifi_to_databricks_simplified(
     essential_processors = pruned_data.get("pruned_processors", [])
     _log(f"🎯 Processing {len(essential_processors)} essential processors")
 
-    migration_result = orchestrate_focused_nifi_migration(
-        xml_path=xml_path,
-        pruned_processors=essential_processors,
-        out_dir=out_dir,
-        project=project,
-        notebook_path=notebook_path or "",
-    )
+    # Categorize processors for analysis
+    data_transformation_procs = []
+    data_movement_procs = []
+    external_processing_procs = []
+
+    for proc in essential_processors:
+        classification = proc.get(
+            "classification", proc.get("data_manipulation_type", "unknown")
+        )
+        if classification == "data_transformation":
+            data_transformation_procs.append(proc)
+        elif classification == "data_movement":
+            data_movement_procs.append(proc)
+        elif classification == "external_processing":
+            external_processing_procs.append(proc)
+
+    # Create output directory
+    os.makedirs(f"{out_dir}/{project}", exist_ok=True)
+
+    migration_result = {
+        "migration_type": "focused_analysis",
+        "processors_analyzed": len(essential_processors),
+        "breakdown": {
+            "data_transformation": len(data_transformation_procs),
+            "external_processing": len(external_processing_procs),
+            "data_movement": len(data_movement_procs),
+            "infrastructure_skipped": "All infrastructure processors skipped",
+        },
+        "output_directory": f"{out_dir}/{project}",
+        "approach": "Essential processor analysis and classification complete",
+    }
 
     # Compile complete results
     complete_result = {

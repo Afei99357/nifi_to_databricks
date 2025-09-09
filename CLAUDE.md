@@ -198,7 +198,7 @@ The migration system now provides comprehensive progress tracking:
 
 **Agent Level:**
 ```
-🔧 [TOOL REQUEST] orchestrate_focused_nifi_migration
+🔧 [TOOL REQUEST] migrate_nifi_to_databricks_simplified
 🔄 [AGENT ROUND 1/5] Model requested tool call
 ✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
 ```
