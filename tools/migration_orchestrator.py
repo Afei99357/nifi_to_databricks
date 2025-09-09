@@ -174,7 +174,6 @@ def migrate_nifi_to_databricks_simplified(
     complete_result = {
         "migration_result": migration_result,
         "analysis": {
-            "workflow_analysis": analysis_result,
             "processor_classifications": analysis_result,
             "pruned_processors": pruned_result,
             "data_flow_chains": chains_result,
@@ -233,7 +232,6 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
 
     # Package all results together
     analysis_result = {
-        "workflow_analysis": analysis_result,
         "processor_classifications": analysis_result,
         "pruned_processors": pruned_result,
         "data_flow_chains": chains_result,
