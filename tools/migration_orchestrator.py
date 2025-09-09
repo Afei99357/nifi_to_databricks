@@ -90,6 +90,12 @@ def migrate_nifi_to_databricks_simplified(
         xml_path=xml_path, save_markdown=False, output_dir=f"{out_dir}/{project}"
     )
 
+    # Convert field names for backward compatibility (data_manipulation_type → classification)
+    if "classification_results" in analysis_result:
+        for proc in analysis_result["classification_results"]:
+            if "data_manipulation_type" in proc and "classification" not in proc:
+                proc["classification"] = proc["data_manipulation_type"]
+
     _log("📊 Analysis data prepared for migration pipeline")
 
     # Step 4: Prune infrastructure processors
@@ -225,6 +231,12 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     analysis_result = analyze_workflow_patterns(
         xml_path=xml_path, save_markdown=False, output_dir=temp_output_dir
     )
+
+    # Convert field names for backward compatibility (data_manipulation_type → classification)
+    if "classification_results" in analysis_result:
+        for proc in analysis_result["classification_results"]:
+            if "data_manipulation_type" in proc and "classification" not in proc:
+                proc["classification"] = proc["data_manipulation_type"]
 
     # Process the analysis result through the pipeline
     pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
