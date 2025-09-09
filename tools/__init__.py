@@ -5,7 +5,6 @@ from . import (
     improved_classifier,
     improved_pruning,
     migration_orchestrator,
-    migration_tools,
     xml_tools,
 )
 
