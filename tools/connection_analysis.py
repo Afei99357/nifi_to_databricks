@@ -92,7 +92,26 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
         present.add(d)
 
     # Keep only nodes present in this (possibly filtered) graph
-    nodes = {nid: nodes[nid] for nid in nodes if nid in present}
+    # Handle case where connections reference non-existent processors
+    filtered_nodes = {}
+    missing_nodes = set()
+    for nid in present:
+        if nid in nodes:
+            filtered_nodes[nid] = nodes[nid]
+        else:
+            missing_nodes.add(nid)
+
+    # If we have missing nodes, create placeholder entries to prevent crashes
+    for missing_id in missing_nodes:
+        filtered_nodes[missing_id] = {
+            "id": missing_id,
+            "name": f"Missing-{missing_id[:8]}",
+            "type": "Unknown",
+            "x": None,
+            "y": None,
+        }
+
+    nodes = filtered_nodes
 
     return {
         "nodes": nodes,
@@ -380,13 +399,31 @@ def generate_connection_analysis_reports(xml_content: str, pruned_result: dict) 
 
         # Full workflow analysis (all processors)
         print("🔍 [CONNECTION] Analyzing full workflow connections...")
-        full_analysis = summarize_fanin_fanout_report(xml_content, k=10)
+        try:
+            full_analysis = summarize_fanin_fanout_report(xml_content, k=10)
+        except Exception as e:
+            print(f"⚠️ [CONNECTION] Full analysis failed: {e}")
+            full_analysis = {
+                "graph": {"nodes": {}, "edges": [], "in_adj": {}, "out_adj": {}},
+                "hotspots": {"top_in": [], "top_out": []},
+                "markdown": f"# Full Workflow Analysis Failed\n\nError: {str(e)}",
+            }
 
         # Essential processors analysis (pruned view)
-        print("🎯 [CONNECTION] Analyzing essential processor connections...")
-        pruned_analysis = summarize_fanin_fanout_report(
-            xml_content, pruned_ids=essential_ids, k=10
+        print(
+            f"🎯 [CONNECTION] Analyzing essential processor connections ({len(essential_ids)} processors)..."
         )
+        try:
+            pruned_analysis = summarize_fanin_fanout_report(
+                xml_content, pruned_ids=essential_ids, k=10
+            )
+        except Exception as e:
+            print(f"⚠️ [CONNECTION] Essential analysis failed: {e}")
+            pruned_analysis = {
+                "graph": {"nodes": {}, "edges": [], "in_adj": {}, "out_adj": {}},
+                "hotspots": {"top_in": [], "top_out": []},
+                "markdown": f"# Essential Connections Analysis Failed\n\nError: {str(e)}",
+            }
 
         # Calculate reduction metrics
         total_nodes = len(full_analysis["graph"]["nodes"])
