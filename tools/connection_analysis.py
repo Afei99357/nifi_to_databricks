@@ -40,7 +40,7 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
             }
 
     # Extract processors
-    for p in root.findall(".//processors/processor"):
+    for p in root.findall(".//processors"):
         _id = (p.findtext("id") or "").strip()
         name = (p.findtext("name") or "").strip() or _id
         ptype = (p.findtext("type") or "").strip()
@@ -68,7 +68,7 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
             _add_node(_id, f"{label} {name}", label)
 
     # Extract connections
-    for c in root.findall(".//connections/connection"):
+    for c in root.findall(".//connections"):
         src = c.find("source")
         dst = c.find("destination")
         if src is None or dst is None:
