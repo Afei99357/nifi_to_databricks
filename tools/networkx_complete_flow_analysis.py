@@ -817,7 +817,10 @@ def generate_connection_analysis_reports(xml_content: str, pruned_result: dict) 
             full_workflow_markdown = f"# NetworkX Analysis Failed\n\nError: {str(e)}"
 
         # Calculate metrics
-        total_processors = networkx_analysis["component_overview"]["total_components"]
+        processor_count = networkx_analysis["component_overview"][
+            "component_breakdown"
+        ].get("processor", 0)
+        total_processors = processor_count
         actual_essential_count = len(pruned_data.get("pruned_processors", []))
         total_connections = networkx_analysis["component_overview"]["total_connections"]
 
