@@ -420,7 +420,7 @@ def analyze_complete_workflow(G, k: int = 10) -> Dict[str, Any]:
     relationship_patterns = {}
     migration_impacts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
-    for src, dst, key, edge_data in G.edges(data=True, keys=True):
+    for src, dst, key, edge_data in G.edges(keys=True, data=True):
         # Connection type breakdown
         conn_type = edge_data["connection_type"]
         connection_types[conn_type] = connection_types.get(conn_type, 0) + 1
