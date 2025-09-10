@@ -261,8 +261,6 @@ def render_hotspots_md(graph: dict, hotspots: dict, up_depth=2, down_depth=2) ->
                 f"- **Fan-in**: {len(graph['in_adj'].get(nid, []))} inputs, **Fan-out**: {len(graph['out_adj'].get(nid, []))} outputs"
             )
             lines.append(f"- **Type**: `{meta['type'].split('.')[-1]}`")
-            if meta.get("x") and meta.get("y"):
-                lines.append(f"- **Position**: ({meta.get('x')}, {meta.get('y')})")
 
             if ups:
                 lines.append(f"- **Upstream**: {', '.join(ups)}")
@@ -289,8 +287,6 @@ def render_hotspots_md(graph: dict, hotspots: dict, up_depth=2, down_depth=2) ->
                 f"- **Fan-out**: {len(graph['out_adj'].get(nid, []))} outputs, **Fan-in**: {len(graph['in_adj'].get(nid, []))} inputs"
             )
             lines.append(f"- **Type**: `{meta['type'].split('.')[-1]}`")
-            if meta.get("x") and meta.get("y"):
-                lines.append(f"- **Position**: ({meta.get('x')}, {meta.get('y')})")
 
             if ups:
                 lines.append(f"- **Upstream**: {', '.join(ups)}")

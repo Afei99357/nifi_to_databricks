@@ -172,13 +172,6 @@ def migrate_nifi_to_databricks_simplified(
     asset_summary_content = _generate_focused_asset_summary(analysis_result)
     _log("📋 Reports generated successfully")
 
-    # Debug: Check if asset summary content is properly generated
-    print(
-        f"[DEBUG] Essential processors content length: {len(essential_processors_content)}"
-    )
-    print(f"[DEBUG] Asset summary content length: {len(asset_summary_content)}")
-    print(f"[DEBUG] Asset summary starts with: {asset_summary_content[:100]}...")
-
     # Step 8: Generate comprehensive migration guide (essential processors only)
     _log("📋 Generating comprehensive migration guide...")
 
