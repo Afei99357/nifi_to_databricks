@@ -9,7 +9,7 @@ An intelligent migration tool that converts Apache NiFi workflows into Databrick
 - **✂️ Smart Pruning**: Automatically identifies and focuses on essential data processing logic
 - **🔄 Semantic Flow Detection**: Maps NiFi processor chains to logical data transformation flows
 - **📊 Comprehensive Reports**: Detailed analysis of processors, migrations, and recommendations
-- **⚙️ Databricks Native**: Uses `app.yml` configuration for seamless Databricks deployment
+- **⚙️ Databricks Native**: Uses `app.yaml` configuration for seamless Databricks deployment
 
 ## 🎯 Overview
 
@@ -152,11 +152,13 @@ The migration system now includes significant performance optimizations, enhance
 
 ### Databricks Deployment
 
-The application is designed for Databricks deployment using `app.yml` configuration:
+The application is designed for Databricks deployment using `app.yaml` configuration:
 
-1. **Update `app.yml` with your Databricks credentials**:
+1. **Create your `app.yaml` file** (this file is git-ignored for security):
 
 ```yaml
+command: ["streamlit", "run", "streamlit_app/app.py"]
+
 env:
   - name: "DATABRICKS_HOSTNAME"
     value: "https://your-workspace.cloud.databricks.com"
@@ -176,8 +178,11 @@ env:
 
 2. **Deploy as Databricks App**:
    - Upload the project to your Databricks workspace
-   - The app will automatically read configuration from `app.yml`
+   - The app will automatically read configuration from `app.yaml`
+   - Dependencies will install from `requirements.txt`
    - Access the Streamlit interface through Databricks Apps
+
+**Note**: Your `app.yaml` file with credentials is git-ignored and stays private. When you pull updates, your local credentials won't be overwritten or cause merge conflicts.
 
 ## 🖥️ Using the Streamlit App
 
@@ -459,7 +464,7 @@ def my_custom_tool(parameter: str) -> str:
 
 ### Common Issues
 
-1. **Authentication Errors**: Verify `DATABRICKS_TOKEN` and `DATABRICKS_HOSTNAME` in `app.yml`
+1. **Authentication Errors**: Verify `DATABRICKS_TOKEN` and `DATABRICKS_HOSTNAME` in `app.yaml`
 2. **LLM Generation Errors**: Ensure model endpoint is accessible and token has permissions
 3. **Job Creation Failures**: Ensure cluster permissions and workspace access
 4. **XML Parsing Errors**: Validate NiFi template XML structure
