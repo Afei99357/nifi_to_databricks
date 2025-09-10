@@ -589,8 +589,13 @@ def _smart_asset_extract(
     hdfs_paths: set,
     database_hosts: set,
     external_hosts: set,
+    table_references: set,
 ):
     """Improved asset extraction with better filtering to reduce false positives."""
+
+    # First pass: collect location and table properties by environment
+    location_table_pairs = {}
+
     for prop_name, prop_value in (properties or {}).items():
         if not prop_value or not isinstance(prop_value, str):
             continue
@@ -599,6 +604,127 @@ def _smart_asset_extract(
         # Skip obvious false positives
         if _is_false_positive_asset(pv):
             continue
+
+        prop_lower = prop_name.lower()
+
+        # Detect environment-specific location/table pairs (prod_, staging_, dev_, test_)
+        for env_prefix in ["prod_", "staging_", "dev_", "test_", "source_", "target_"]:
+            if prop_lower.startswith(env_prefix):
+                env_key = env_prefix.rstrip("_")
+                if env_key not in location_table_pairs:
+                    location_table_pairs[env_key] = {}
+
+                prop_suffix = prop_lower[len(env_prefix) :]
+                if prop_suffix in ["location", "path", "directory"]:
+                    location_table_pairs[env_key]["location"] = pv
+                elif prop_suffix in ["table", "table_name"]:
+                    location_table_pairs[env_key]["table"] = pv
+                elif prop_suffix in ["database", "db", "schema"]:
+                    location_table_pairs[env_key]["database"] = pv
+                break
+
+    # Second pass: combine location and table information
+    for env, info in location_table_pairs.items():
+        location = info.get("location", "")
+        table = info.get("table", "")
+        database = info.get("database", "")
+
+        if table and not any(char in table for char in ["${", "*", "?", ";"]):
+            # Case 1: Table already contains database.table format - use as is
+            if "." in table and len(table.split(".")) == 2:
+                db, tbl = table.split(".")
+                table_references.add(f"{db.strip()}.{tbl.strip()}")
+            # Case 2: We have both database and table (standalone table name)
+            elif database and not any(
+                char in database for char in ["${", "*", "?", ";"]
+            ):
+                table_references.add(f"{database.strip()}.{table.strip()}")
+            # Case 3: Extract database from location path if available
+            elif location and location.startswith("/"):
+                path_parts = [
+                    p for p in location.split("/") if p and not p.startswith("${")
+                ]
+                if len(path_parts) >= 1:
+                    # Use last meaningful path component as database
+                    db_from_path = path_parts[-1]
+                    table_references.add(f"{db_from_path}.{table}")
+            # Case 4: Standalone table name
+            elif table.replace("_", "").replace("-", "").isalnum():
+                table_references.add(f"unknown_db.{table}")
+
+    # Third pass: handle remaining table/location properties not caught by environment prefixes
+    for prop_name, prop_value in (properties or {}).items():
+        if not prop_value or not isinstance(prop_value, str):
+            continue
+        pv = prop_value.strip()
+
+        if _is_false_positive_asset(pv):
+            continue
+
+        prop_lower = prop_name.lower()
+
+        # Skip if already processed in environment-specific pairs
+        if any(
+            prop_lower.startswith(env + "_")
+            for env in ["prod", "staging", "dev", "test", "source", "target"]
+        ):
+            continue
+
+        # Handle standalone table/database/schema properties
+        if any(keyword in prop_lower for keyword in ["table", "database", "schema"]):
+            if (
+                "table" in prop_lower
+                and pv
+                and not any(char in pv for char in ["${", "*", "?", ";"])
+            ):
+                # Handle database.table format
+                if "." in pv and len(pv.split(".")) == 2:
+                    db, table = pv.split(".")
+                    table_references.add(f"{db.strip()}.{table.strip()}")
+                elif pv.replace("_", "").replace("-", "").isalnum():
+                    table_references.add(f"unknown_db.{pv}")
+
+        # Extract location references (often contain database/table info)
+        if "location" in prop_lower and pv.startswith("/"):
+            # Look for patterns like /warehouse/database/table or /data/database/table
+            path_parts = [p for p in pv.split("/") if p and not p.startswith("${")]
+            if len(path_parts) >= 2:
+                # Last two parts might be database.table
+                potential_table = f"{path_parts[-2]}.{path_parts[-1]}"
+                table_references.add(potential_table)
+
+        # Extract table names from SQL queries (ExecuteSQL, PutSQL, etc.)
+        if any(
+            sql_keyword in prop_lower for sql_keyword in ["sql", "query", "statement"]
+        ):
+            if len(pv) > 10 and any(
+                keyword in pv.upper()
+                for keyword in ["SELECT", "FROM", "INSERT", "UPDATE", "DELETE", "JOIN"]
+            ):
+                # Simple SQL parsing to extract table names
+                sql_upper = pv.upper()
+                # Extract table names after FROM clause
+                import re
+
+                from_patterns = [
+                    r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # FROM table_name
+                    r"JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # JOIN table_name
+                    r"INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # INSERT INTO table_name
+                    r"UPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # UPDATE table_name
+                ]
+                for pattern in from_patterns:
+                    matches = re.findall(pattern, sql_upper)
+                    for match in matches:
+                        # Clean up table name (remove aliases, whitespace)
+                        table_name = match.strip()
+                        if table_name and not any(
+                            skip in table_name.lower()
+                            for skip in ["select", "where", "order", "group"]
+                        ):
+                            if "." in table_name:
+                                table_references.add(table_name.lower())
+                            else:
+                                table_references.add(f"unknown_db.{table_name.lower()}")
 
         # scripts - only capture real executable paths
         if any(pv.lower().endswith(ext) for ext in SCRIPT_EXTS) and pv.startswith("/"):
@@ -674,6 +800,7 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
     hdfs_paths = set()
     database_hosts = set()
     external_hosts = set()
+    table_references = set()
 
     for proc in processors:
         _smart_asset_extract(
@@ -682,6 +809,7 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
             hdfs_paths,
             database_hosts,
             external_hosts,
+            table_references,
         )
 
     # Generate summary report
@@ -693,6 +821,7 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
         f"- **Script Files Found**: {len(script_files)}",
         f"- **HDFS Paths Found**: {len(hdfs_paths)}",
         f"- **Database Hosts Found**: {len(database_hosts)}",
+        f"- **Table References Found**: {len(table_references)}",
         f"- **External Hosts Found**: {len(external_hosts)}",
         "",
     ]
@@ -701,6 +830,15 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
         report_lines.extend(["## Script Files Requiring Migration", ""])
         for script in sorted(script_files):
             report_lines.append(f"- `{script}`")
+        report_lines.append("")
+
+    if table_references:
+        report_lines.extend(["## Table References for Unity Catalog Migration", ""])
+        for table in sorted(table_references):
+            if "." in table:
+                report_lines.append(f"- **Database.Table**: `{table}`")
+            else:
+                report_lines.append(f"- **Table**: `{table}`")
         report_lines.append("")
 
     if database_hosts:
@@ -730,7 +868,9 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
     )
 
     # Check if we found any assets
-    if not any([script_files, database_hosts, hdfs_paths, external_hosts]):
+    if not any(
+        [script_files, database_hosts, hdfs_paths, external_hosts, table_references]
+    ):
         report_lines.extend(
             [
                 "✅ **No external assets requiring migration detected**",
@@ -740,6 +880,10 @@ def _generate_focused_asset_summary(processor_data, output_dir: str = None) -> s
         )
     else:
         report_lines.append("### High Priority")
+        if table_references:
+            report_lines.append(
+                "- **Migrate table references** to Unity Catalog managed tables"
+            )
         if script_files:
             report_lines.append("- **Convert shell scripts** to PySpark/Databricks SQL")
         if database_hosts:
