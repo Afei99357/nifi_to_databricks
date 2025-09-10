@@ -9,12 +9,12 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from tools.connection_analysis import generate_connection_analysis_reports
 from tools.improved_classifier import analyze_workflow_patterns
 from tools.improved_pruning import (
     detect_data_flow_chains,
     prune_infrastructure_processors,
 )
+from tools.networkx_complete_flow_analysis import generate_connection_analysis_reports
 
 # Asset discovery removed - focus on business migration guide only
 
