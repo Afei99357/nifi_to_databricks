@@ -83,7 +83,7 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
         )
 
     # Extract input ports - correct XPath
-    for port in root.findall(".//inputPorts/inputPort"):
+    for port in root.findall(".//inputPorts"):
         port_id = _txt(port, "id", "component/id")
         if not port_id:
             continue
@@ -103,7 +103,7 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
         )
 
     # Extract output ports - correct XPath
-    for port in root.findall(".//outputPorts/outputPort"):
+    for port in root.findall(".//outputPorts"):
         port_id = _txt(port, "id", "component/id")
         if not port_id:
             continue
