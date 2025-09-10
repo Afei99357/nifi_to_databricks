@@ -9,6 +9,17 @@ from typing import Any, Dict, Optional, Set
 import networkx as nx
 
 
+def _txt(elem, *paths):
+    """Helper for safe text extraction with component/* fallbacks"""
+    for p in paths:
+        n = elem.find(p)
+        if n is not None:
+            t = (n.text or "").strip()
+            if t:
+                return t
+    return ""
+
+
 def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None):
     """
     Build a comprehensive NetworkX graph of the entire NiFi workflow.
@@ -53,13 +64,13 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
     # Extract processors with rich attributes - handle both regular and versioned flows
     valid_processor_ids = set()
     for proc in root.findall(".//processors"):
-        proc_id = (proc.findtext("id") or "").strip()
+        proc_id = _txt(proc, "id", "component/id")
         if not proc_id:
             continue
 
         valid_processor_ids.add(proc_id)
-        proc_name = (proc.findtext("name") or "").strip() or f"Processor-{proc_id[:8]}"
-        proc_type = (proc.findtext("type") or "").strip()
+        proc_name = _txt(proc, "name", "component/name") or f"Processor-{proc_id[:8]}"
+        proc_type = _txt(proc, "type", "component/type")
 
         G.add_node(
             proc_id,
@@ -72,12 +83,12 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
         )
 
     # Extract input ports - correct XPath
-    for port in root.findall(".//inputPorts/port"):
-        port_id = (port.findtext("id") or "").strip()
+    for port in root.findall(".//inputPorts/inputPort"):
+        port_id = _txt(port, "id", "component/id")
         if not port_id:
             continue
 
-        port_name = (port.findtext("name") or "").strip() or f"InputPort-{port_id[:8]}"
+        port_name = _txt(port, "name", "component/name") or f"InputPort-{port_id[:8]}"
 
         G.add_node(
             port_id,
@@ -92,12 +103,12 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
         )
 
     # Extract output ports - correct XPath
-    for port in root.findall(".//outputPorts/port"):
-        port_id = (port.findtext("id") or "").strip()
+    for port in root.findall(".//outputPorts/outputPort"):
+        port_id = _txt(port, "id", "component/id")
         if not port_id:
             continue
 
-        port_name = (port.findtext("name") or "").strip() or f"OutputPort-{port_id[:8]}"
+        port_name = _txt(port, "name", "component/name") or f"OutputPort-{port_id[:8]}"
 
         G.add_node(
             port_id,
@@ -113,14 +124,16 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
 
     # Extract funnels
     for funnel in root.findall(".//funnels/funnel"):
-        funnel_id = (funnel.findtext("id") or "").strip()
+        funnel_id = _txt(funnel, "id", "component/id")
         if not funnel_id:
             continue
+
+        name = _txt(funnel, "name", "component/name") or f"Funnel-{funnel_id[:8]}"
 
         G.add_node(
             funnel_id,
             component_type="funnel",
-            name=f"Funnel-{funnel_id[:8]}",
+            name=name,
             processor_type="Funnel",
             short_type="Funnel",
             migration_priority=COMPONENT_TYPES["funnel"]["priority"],
@@ -129,17 +142,26 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
 
     # Extract remote process group ports - correct XPath
     for rpg in root.findall(".//remoteProcessGroups/remoteProcessGroup"):
-        target_uri = rpg.findtext("targetUris") or "Unknown"
+        target_uri = (
+            _txt(
+                rpg,
+                "targetUri",
+                "targetUris",
+                "component/targetUri",
+                "component/targetUris",
+            )
+            or "Unknown"
+        )
 
         # Remote input ports
         for port in rpg.findall(".//inputPorts/remoteProcessGroupPort"):
-            port_id = (port.findtext("id") or "").strip()
+            port_id = _txt(port, "id", "component/id")
             if not port_id:
                 continue
 
             port_name = (
-                port.findtext("name") or ""
-            ).strip() or f"RemoteInput-{port_id[:8]}"
+                _txt(port, "name", "component/name") or f"RemoteInput-{port_id[:8]}"
+            )
 
             G.add_node(
                 port_id,
@@ -156,13 +178,13 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
 
         # Remote output ports
         for port in rpg.findall(".//outputPorts/remoteProcessGroupPort"):
-            port_id = (port.findtext("id") or "").strip()
+            port_id = _txt(port, "id", "component/id")
             if not port_id:
                 continue
 
             port_name = (
-                port.findtext("name") or ""
-            ).strip() or f"RemoteOutput-{port_id[:8]}"
+                _txt(port, "name", "component/name") or f"RemoteOutput-{port_id[:8]}"
+            )
 
             G.add_node(
                 port_id,
@@ -179,13 +201,9 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
 
     # Extract connections with categorization - one edge per relationship
     for conn in root.findall(".//connections"):
-        cid = (conn.findtext("id") or "").strip() or "conn"
-        src_elem = conn.find("source")
-        dst_elem = conn.find("destination")
-        if src_elem is None or dst_elem is None:
-            continue
-        src = (src_elem.findtext("id") or "").strip()
-        dst = (dst_elem.findtext("id") or "").strip()
+        cid = _txt(conn, "id", "component/id") or "conn"
+        src = _txt(conn, "source/id", "component/source/id")
+        dst = _txt(conn, "destination/id", "component/destination/id")
         if not src or not dst or (src not in G) or (dst not in G):
             continue
         if allowed_ids and (src not in allowed_ids or dst not in allowed_ids):
@@ -196,24 +214,39 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
         connection_type = f"{src_type}_to_{dst_type}"
         migration_impact = _get_connection_migration_impact(src_type, dst_type)
 
-        # relationships (make one edge per)
+        # relationships (with component/* fallback)
         rels = [
-            r.text or "" for r in conn.findall("selectedRelationships/relationship")
+            r.text or ""
+            for r in (
+                conn.findall("selectedRelationships/relationship")
+                or conn.findall("component/selectedRelationships/relationship")
+            )
         ] or ["unlabeled"]
 
-        # queue / backpressure
-        flow_queue = conn.find("flowFileQueue")
-        bpo = None
-        bps = None
-        prios = []
-        if flow_queue is not None:
-            bpo = (
-                flow_queue.findtext("backPressureObjectThreshold") or ""
-            ).strip() or None
-            bps = (
-                flow_queue.findtext("backPressureDataSizeThreshold") or ""
-            ).strip() or None
-            prios = [p.text or "" for p in flow_queue.findall("prioritizers/child")]
+        # queue / backpressure (with component/* fallback)
+        bpo = (
+            _txt(
+                conn,
+                "flowFileQueue/backPressureObjectThreshold",
+                "component/flowFileQueue/backPressureObjectThreshold",
+            )
+            or None
+        )
+        bps = (
+            _txt(
+                conn,
+                "flowFileQueue/backPressureDataSizeThreshold",
+                "component/flowFileQueue/backPressureDataSizeThreshold",
+            )
+            or None
+        )
+        prios = [
+            p.text or ""
+            for p in (
+                conn.findall("flowFileQueue/prioritizers/child")
+                or conn.findall("component/flowFileQueue/prioritizers/child")
+            )
+        ]
 
         # edge category (with remote precedence)
         if ("remote" in src_type) or ("remote" in dst_type):
@@ -242,7 +275,7 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
                 backpressure_object_threshold=bpo,
                 backpressure_size_threshold=bps,
                 prioritizers=prios,
-                connection_name=(conn.findtext("name") or "").strip(),
+                connection_name=_txt(conn, "name", "component/name"),
             )
 
     return G
