@@ -307,7 +307,7 @@ def analyze_complete_workflow(G, k: int = 10) -> Dict[str, Any]:
         # Collapse parallel edges for centrality
         pp_simple = nx.DiGraph()
         pp_simple.add_nodes_from((n, G.nodes[n]) for n in pp.nodes())
-        pp_simple.add_edges_from((u, v) for u, v, _ in pp.edges(keys=True))
+        pp_simple.add_edges_from((u, v) for u, v in pp.edges())
 
         n = pp_simple.number_of_nodes()
         k_sample = min(100, n) if n > 100 else None
