@@ -704,8 +704,6 @@ def _smart_asset_extract(
                 # Simple SQL parsing to extract table names
                 sql_upper = pv.upper()
                 # Extract table names after FROM clause
-                import re
-
                 from_patterns = [
                     r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # FROM table_name
                     r"JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",  # JOIN table_name
