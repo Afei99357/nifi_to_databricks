@@ -781,12 +781,18 @@ def generate_connection_analysis_reports(xml_content: str, pruned_result: dict) 
         print("🔍 [CONNECTION] Building complete NiFi workflow graph...")
         try:
             G = build_complete_nifi_graph(xml_content)
+            print(
+                f"🔍 [CONNECTION] Built graph with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges"
+            )
             networkx_analysis = analyze_complete_workflow(G, k=10)
             full_workflow_markdown = generate_complete_flow_markdown_report(
                 networkx_analysis
             )
         except Exception as e:
+            import traceback
+
             print(f"⚠️ [CONNECTION] NetworkX analysis failed: {e}")
+            print(f"⚠️ [CONNECTION] Full traceback: {traceback.format_exc()}")
             # Fallback to basic analysis
             networkx_analysis = {
                 "component_overview": {"total_components": 0, "total_connections": 0},
