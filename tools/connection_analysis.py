@@ -39,11 +39,14 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
                 "y": y,
             }
 
-    # Extract processors
+    # Extract processors - track valid processor IDs
+    valid_processor_ids = set()
     for p in root.findall(".//processors"):
         _id = (p.findtext("id") or "").strip()
         name = (p.findtext("name") or "").strip() or _id
         ptype = (p.findtext("type") or "").strip()
+        if _id:
+            valid_processor_ids.add(_id)
         pos = p.find("position")
         x = (
             float(pos.findtext("x"))
@@ -67,7 +70,7 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
             name = (pt.findtext("name") or "").strip()
             _add_node(_id, f"{label} {name}", label)
 
-    # Extract connections
+    # Extract connections - only include connections between valid processors
     for c in root.findall(".//connections"):
         src = c.find("source")
         dst = c.find("destination")
@@ -77,6 +80,12 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
         d_id = (dst.findtext("id") or "").strip()
         if not s_id or not d_id:
             continue
+
+        # CRITICAL FIX: Only include connections between actual processors
+        # Skip connections involving ports or non-processor components
+        if s_id not in valid_processor_ids or d_id not in valid_processor_ids:
+            continue
+
         if allowed_ids and (s_id not in allowed_ids or d_id not in allowed_ids):
             continue
         edges.append((s_id, d_id))
@@ -91,25 +100,11 @@ def build_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None) -> d
         present.add(s)
         present.add(d)
 
-    # Keep only nodes present in this (possibly filtered) graph
-    # Handle case where connections reference non-existent processors
+    # Keep only nodes present in connections - no phantom processors!
     filtered_nodes = {}
-    missing_nodes = set()
     for nid in present:
-        if nid in nodes:
+        if nid in nodes:  # Only include nodes that actually exist
             filtered_nodes[nid] = nodes[nid]
-        else:
-            missing_nodes.add(nid)
-
-    # If we have missing nodes, create placeholder entries to prevent crashes
-    for missing_id in missing_nodes:
-        filtered_nodes[missing_id] = {
-            "id": missing_id,
-            "name": f"Missing-{missing_id[:8]}",
-            "type": "Unknown",
-            "x": None,
-            "y": None,
-        }
 
     nodes = filtered_nodes
 
