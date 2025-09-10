@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-# import importlib.util
-# import subprocess
-# import sys
-
-
-# def ensure(pkg, import_name=None, ver=None):
-#     name = pkg if ver is None else f"{pkg}=={ver}"
-#     try:
-#         import importlib
-
-#         importlib.import_module(import_name or pkg.replace("-", "_"))
-#     except Exception:
-#         subprocess.check_call([sys.executable, "-m", "pip", "install", name])
-#         importlib.import_module(import_name or pkg.replace("-", "_"))
-
-
-# print("PYTHON:", sys.executable)
-# print("SITE-PATHS:", sys.path[:3])
-
-# ensure("databricks-langchain", "databricks_langchain", "0.5.1")
-# ensure("langchain", "langchain", "0.3.27")
 
 import os
 import sys
