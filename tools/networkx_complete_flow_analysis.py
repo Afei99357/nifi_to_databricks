@@ -6,7 +6,7 @@ import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, Optional, Set
 
-# NetworkX imported inside functions to avoid import-time dependency issues
+import networkx as nx
 
 
 def _txt(elem, *paths):
@@ -31,8 +31,6 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
     Returns:
         NetworkX MultiDiGraph with rich node and edge attributes (supports parallel edges)
     """
-    import networkx as nx
-
     root = ET.fromstring(xml_text)
     G = (
         nx.MultiDiGraph()
@@ -297,8 +295,6 @@ def analyze_complete_workflow(G, k: int = 10) -> Dict[str, Any]:
     Returns:
         Complete analysis with multiple perspectives
     """
-    import networkx as nx
-
     analysis = {}
 
     # 1. Component Overview
