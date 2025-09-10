@@ -446,7 +446,7 @@ def analyze_complete_workflow(G, k: int = 10) -> Dict[str, Any]:
         "migration_impact_breakdown": migration_impacts,
         "relationship_patterns": relationship_patterns,
         "total_parallel_edges": G.number_of_edges(),
-        "unique_node_pairs": len(set((u, v) for u, v, _ in G.edges())),
+        "unique_node_pairs": len(set((u, v) for u, v, _ in G.edges(keys=True))),
     }
 
     # 7. Path Analysis (data flow tracing)
