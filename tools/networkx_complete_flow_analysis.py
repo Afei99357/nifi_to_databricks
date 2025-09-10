@@ -525,20 +525,20 @@ def generate_complete_flow_markdown_report(analysis: Dict[str, Any]) -> str:
         "# 🕸️ Complete NiFi Flow Analysis",
         "",
         "## 📊 Migration Impact Summary",
-        f"- **Critical Components**: {analysis['component_overview']['total_components']} total components",
+        f"- **Total Components**: {analysis['component_overview']['total_components']} components analyzed",
         f"- **Total Connections**: {analysis['component_overview']['total_connections']} connections",
         "",
         "### Component Breakdown:",
     ]
 
-    # Component breakdown with migration priorities
+    # Component breakdown with descriptive labels
     component_icons = {
-        "processor": "🔧 **CRITICAL**",
-        "input_port": "📥 **CRITICAL**",
-        "output_port": "📤 **CRITICAL**",
-        "funnel": "🔀 **MEDIUM**",
-        "remote_input_port": "🌐 **HIGH**",
-        "remote_output_port": "🌍 **HIGH**",
+        "processor": "🔧 **BUSINESS LOGIC**",
+        "input_port": "📥 **PIPELINE INPUT**",
+        "output_port": "📤 **PIPELINE OUTPUT**",
+        "funnel": "🔀 **DATA ROUTING**",
+        "remote_input_port": "🌐 **EXTERNAL INPUT**",
+        "remote_output_port": "🌍 **EXTERNAL OUTPUT**",
     }
 
     for comp_type, count in analysis["component_overview"][
