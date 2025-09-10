@@ -1,0 +1,23 @@
+command: [
+  "streamlit",
+  "run",
+  "streamlit_app/app.py"
+]
+
+env:
+  - name: "DATABRICKS_HOSTNAME"
+    value: "https://your-workspace.cloud.databricks.com"
+  - name: "DATABRICKS_TOKEN"
+    value: "your-databricks-token"
+  - name: "MODEL_ENDPOINT"
+    value: "databricks-meta-llama-3-3-70b-instruct"
+  - name: "NOTIFICATION_EMAIL"
+    value: "your-email@company.com"
+  - name: "ENABLE_LLM_CODE_GENERATION"
+    value: "true"
+  - name: "MAX_PROCESSORS_PER_CHUNK"
+    value: "20"
+  - name: "LLM_SUB_BATCH_SIZE"
+    value: "5"
+  - name: "STREAMLIT_BROWSER_GATHER_USAGE_STATS"
+    value: "false"
