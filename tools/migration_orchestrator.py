@@ -251,6 +251,68 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     return analysis_result
 
 
+def _find_placeholder_dependencies(
+    essential_processors: list, all_processors: list
+) -> list:
+    """Find processors that define variables used as placeholders in essential processors."""
+    import re
+
+    # Extract all ${variable} placeholders from essential processors
+    placeholders = set()
+    for proc in essential_processors:
+        properties = proc.get("properties", {})
+        for prop_value in properties.values():
+            if isinstance(prop_value, str):
+                # Find all ${variable} patterns
+                matches = re.findall(r"\$\{([^}]+)\}", prop_value)
+                placeholders.update(matches)
+
+    if not placeholders:
+        return []
+
+    # Find processors that define these variables
+    dependency_processors = []
+    for proc in all_processors:
+        properties = proc.get("properties", {})
+        proc_name = proc.get("name", "")
+
+        # Check if this processor defines any of the needed placeholders
+        defines_placeholder = False
+        for prop_name, prop_value in properties.items():
+            # Check if property name matches a placeholder
+            if prop_name in placeholders:
+                defines_placeholder = True
+                break
+
+        # Also check for SQL-defining UpdateAttribute processors
+        proc_type = proc.get("processor_type", "")
+        if defines_placeholder or (
+            "UpdateAttribute" in proc_type
+            and any(
+                keyword in proc_name
+                for keyword in [
+                    "Add Queries",
+                    "Add Configuration",
+                    "Add Variables",
+                    "States",
+                    "Steps",
+                ]
+            )
+        ):
+            dependency_processors.append(
+                {
+                    **proc,
+                    "dependency_reason": (
+                        f"Defines variables: {', '.join(prop_name for prop_name in properties.keys() if prop_name in placeholders)}"
+                        if defines_placeholder
+                        else "Contains SQL queries/configuration"
+                    ),
+                }
+            )
+
+    return dependency_processors
+
+
 def _generate_essential_processors_report(pruned_result, output_dir: str = None) -> str:
     """Generate a clean, focused report of essential processors for manual review.
 
@@ -269,6 +331,11 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         pruned_data = pruned_result
 
     processors = pruned_data.get("pruned_processors", [])
+    removed_processors = pruned_data.get("removed_processors", [])
+
+    # Find dependency processors that define variables used by essential processors
+    all_processors = processors + removed_processors
+    dependency_processors = _find_placeholder_dependencies(processors, all_processors)
 
     # Group by classification for organization
     by_classification = {}
@@ -288,6 +355,11 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         f"- **Total Essential Processors**: {len(processors)} (after infrastructure pruning)",
     ]
 
+    if dependency_processors:
+        report_lines.append(
+            f"- **Essential Dependencies**: {len(dependency_processors)} processors (define variables used by essential processors)"
+        )
+
     # Add classification breakdown
     for classification, procs in by_classification.items():
         count = len(procs)
@@ -297,6 +369,56 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
         )
 
     report_lines.extend(["", "---", ""])
+
+    # Add Essential Dependencies section
+    if dependency_processors:
+        report_lines.extend(
+            [
+                "## Essential Dependencies",
+                "",
+                "*These processors define variables/queries used by essential processors above*",
+                "",
+            ]
+        )
+
+        processor_index = 1
+        for proc in dependency_processors:
+            name = proc.get("name", "Unknown")
+            proc_type = proc.get("processor_type", "Unknown")
+            reason = proc.get("dependency_reason", "")
+
+            report_lines.append(f'### {processor_index}. {proc_type} - "{name}"')
+            processor_index += 1
+
+            if reason:
+                report_lines.append(f"- **Purpose**: {reason}")
+
+            # Show a few key properties if they contain placeholders or SQL
+            properties = proc.get("properties", {})
+            sql_props = []
+            for prop_name, prop_value in properties.items():
+                if isinstance(prop_value, str) and len(prop_value) > 50:
+                    if any(
+                        keyword in prop_value.upper()
+                        for keyword in ["SELECT", "INSERT", "ALTER", "REFRESH"]
+                    ):
+                        sql_props.append(
+                            f"- **{prop_name}**: SQL Query (see processor for details)"
+                        )
+                    elif "${" in prop_value:
+                        preview = (
+                            prop_value[:100] + "..."
+                            if len(prop_value) > 100
+                            else prop_value
+                        )
+                        sql_props.append(f"- **{prop_name}**: `{preview}`")
+
+            if sql_props:
+                report_lines.extend(sql_props)
+
+            report_lines.append("")
+
+        report_lines.extend(["---", ""])
 
     # Detail sections by classification
     classification_order = [
@@ -414,9 +536,14 @@ def _extract_processor_key_details(proc_type: str, name: str, properties: dict) 
         working_dir = properties.get("Working Directory", "")
 
         # Combine command path and arguments to show full command line
+        # Convert semicolon-separated arguments to space-separated for proper command line
         full_command = command_path
         if args:
-            full_command = f"{command_path} {args}" if command_path else args
+            # Replace semicolons with spaces for proper command line format
+            formatted_args = args.replace(";", " ")
+            full_command = (
+                f"{command_path} {formatted_args}" if command_path else formatted_args
+            )
 
         if command_path:
             details.append(f"- **Command Path**: `{command_path}`")
