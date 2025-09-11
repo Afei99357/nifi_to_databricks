@@ -401,20 +401,32 @@ def _extract_processor_key_details(proc_type: str, name: str, properties: dict) 
             details.append(f"- **File Pattern**: `{file_filter}`")
 
     elif proc_type == "ExecuteStreamCommand":
-        command = properties.get("Command Path", "")
+        command_path = properties.get("Command Path", "")
         args = properties.get("Command Arguments", "")
         working_dir = properties.get("Working Directory", "")
 
-        if command:
-            details.append(f"- **Command**: `{command}`")
+        # Combine command path and arguments to show full command line
+        full_command = command_path
+        if args:
+            full_command = f"{command_path} {args}" if command_path else args
+
+        if command_path:
+            details.append(f"- **Command Path**: `{command_path}`")
+        if args and len(args) < 150:  # Show arguments separately for clarity
+            details.append(f"- **Arguments**: `{args}`")
+        if full_command and len(full_command) < 200:  # Show combined command line
+            details.append(f"- **Full Command**: `{full_command}`")
         if working_dir:
             details.append(f"- **Working Dir**: `{working_dir}`")
-        if args and len(args) < 150:  # Show slightly longer args
-            details.append(f"- **Arguments**: `{args}`")
-        elif "impala" in args.lower() or "sql" in args.lower():
+
+        # Add purpose detection based on command/args content
+        command_lower = (command_path + " " + args).lower()
+        if "impala" in command_lower or "sql" in command_lower:
             details.append("- **Purpose**: Database/SQL operations")
-        elif "script" in args.lower():
+        elif "script" in command_lower or command_path.endswith((".sh", ".py", ".pl")):
             details.append("- **Purpose**: Custom script execution")
+        elif any(cmd in command_lower for cmd in ["mv", "cp", "move", "copy"]):
+            details.append("- **Purpose**: File operations")
 
     elif proc_type == "PutHDFS":
         directory = properties.get("Directory", "")
