@@ -53,7 +53,7 @@ def main():
             if result.get("reports"):
                 reports = result["reports"]
 
-                # Connection Analysis Dashboard (moved to top for immediate visibility)
+                # Connection Analysis Dashboard
                 if "connection_analysis" in reports and reports["connection_analysis"]:
                     conn_analysis = reports["connection_analysis"]
 
@@ -81,17 +81,14 @@ def main():
                         )
                         st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
 
-                    # Full Workflow Analysis
-                    if conn_analysis.get("full_workflow_connections"):
-                        with st.expander("🕸️ Full Workflow Connection Analysis"):
-                            st.markdown(conn_analysis["full_workflow_connections"])
+                    if reports.get("essential_processors"):
+                        with st.expander("📋 Essential Processors Report"):
+                            st.markdown(reports["essential_processors"])
 
-                    st.divider()  # Add visual separation
-
-                # Essential Processors Report
-                if reports.get("essential_processors"):
-                    with st.expander("📋 Essential Processors Report", expanded=True):
-                        st.markdown(reports["essential_processors"])
+                # Full Workflow Analysis
+                if conn_analysis.get("full_workflow_connections"):
+                    with st.expander("🕸️ Full Workflow Connection Analysis"):
+                        st.markdown(conn_analysis["full_workflow_connections"])
 
                 # Unknown Processors Report
                 unknown_data = reports.get("unknown_processors", {})
@@ -116,9 +113,9 @@ def main():
                     with st.expander("📄 Asset Summary"):
                         st.markdown(reports["asset_summary"])
 
-            # Raw Results (for debugging)
-            with st.expander("🔍 Raw Results"):
-                st.json(result)
+            # # Raw Results (for debugging)
+            # with st.expander("🔍 Raw Results"):
+            #     st.json(result)
 
         except Exception as e:
             st.error(f"❌ Migration failed: {e}")
