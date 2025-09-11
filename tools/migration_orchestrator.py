@@ -323,7 +323,15 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
             proc_type = _extract_robust_processor_type(proc)
             properties = proc.get("properties", {})
 
-            report_lines.append(f'### {processor_index}. {proc_type} - "{name}"')
+            # Add LLM classification indicator
+            analysis_method = proc.get("analysis_method", "")
+            llm_indicator = (
+                " [LLM: Yes]" if analysis_method == "llm_batch" else " [LLM: No]"
+            )
+
+            report_lines.append(
+                f'### {processor_index}. {proc_type} - "{name}"{llm_indicator}'
+            )
             processor_index += 1
 
             # Extract key details based on processor type
