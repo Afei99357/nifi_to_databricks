@@ -344,7 +344,7 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
 
 def _extract_robust_processor_type(proc: dict) -> str:
     """Extract processor type with same robust logic as migration guide generator."""
-    raw_type = proc.get("type", "")
+    raw_type = proc.get("processor_type", "") or proc.get("type", "")
     full_type = proc.get("full_type", "")
 
     # Extract processor type with proper fallbacks
