@@ -370,8 +370,50 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
 
     report_lines.extend(["", "---", ""])
 
-    # Add Essential Dependencies section
+    # Add Essential Dependencies section (categorized)
     if dependency_processors:
+        # Categorize dependency processors
+        categories = {
+            "sql_queries": [],
+            "configuration": [],
+            "data_extraction": [],
+            "dynamic_values": [],
+            "routing_logic": [],
+        }
+
+        for proc in dependency_processors:
+            proc_name = proc.get("name", "").lower()
+            proc_type = proc.get("processor_type", "")
+            properties = proc.get("properties", {})
+
+            # Categorize based on processor name and properties
+            if "add queries" in proc_name:
+                categories["sql_queries"].append(proc)
+            elif "add configuration" in proc_name or "add config" in proc_name:
+                categories["configuration"].append(proc)
+            elif (
+                "extracttext" in proc_type.lower() or "filename breakdown" in proc_name
+            ):
+                categories["data_extraction"].append(proc)
+            elif "generateflowfile" in proc_type.lower() or any(
+                keyword in proc_name
+                for keyword in ["time", "timestamp", "current", "mem_limit"]
+            ):
+                categories["dynamic_values"].append(proc)
+            elif (
+                "routeonattribute" in proc_type.lower() or "split loaders" in proc_name
+            ):
+                categories["routing_logic"].append(proc)
+            else:
+                # Default to configuration if it defines multiple variables
+                if (
+                    len([k for k in properties.keys() if not k.startswith("Delete")])
+                    > 3
+                ):
+                    categories["configuration"].append(proc)
+                else:
+                    categories["data_extraction"].append(proc)
+
         report_lines.extend(
             [
                 "## Essential Dependencies",
@@ -381,42 +423,97 @@ def _generate_essential_processors_report(pruned_result, output_dir: str = None)
             ]
         )
 
-        processor_index = 1
-        for proc in dependency_processors:
-            name = proc.get("name", "Unknown")
-            proc_type = proc.get("processor_type", "Unknown")
-            reason = proc.get("dependency_reason", "")
+        # SQL Query Providers section
+        if categories["sql_queries"]:
+            report_lines.extend(
+                [
+                    "### SQL Query Providers",
+                    "*Define business logic SQL queries used by ExecuteStreamCommand processors*",
+                    "",
+                ]
+            )
+            for i, proc in enumerate(
+                categories["sql_queries"][:10], 1
+            ):  # Limit to top 10
+                name = proc.get("name", "Unknown")
+                proc_type = proc.get("processor_type", "Unknown").split(".")[-1]
 
-            report_lines.append(f'### {processor_index}. {proc_type} - "{name}"')
-            processor_index += 1
-
-            if reason:
-                report_lines.append(f"- **Purpose**: {reason}")
-
-            # Show a few key properties if they contain placeholders or SQL
-            properties = proc.get("properties", {})
-            sql_props = []
-            for prop_name, prop_value in properties.items():
-                if isinstance(prop_value, str) and len(prop_value) > 50:
-                    if any(
-                        keyword in prop_value.upper()
+                # Count SQL queries this processor defines
+                properties = proc.get("properties", {})
+                query_props = [
+                    k
+                    for k in properties.keys()
+                    if "query_" in k
+                    and any(
+                        keyword in str(properties[k]).upper()
                         for keyword in ["SELECT", "INSERT", "ALTER", "REFRESH"]
-                    ):
-                        sql_props.append(
-                            f"- **{prop_name}**: SQL Query (see processor for details)"
-                        )
-                    elif "${" in prop_value:
-                        preview = (
-                            prop_value[:100] + "..."
-                            if len(prop_value) > 100
-                            else prop_value
-                        )
-                        sql_props.append(f"- **{prop_name}**: `{preview}`")
+                    )
+                ]
 
-            if sql_props:
-                report_lines.extend(sql_props)
+                report_lines.append(f'{i}. **{proc_type}** - "{name}"')
+                if query_props:
+                    report_lines.append(
+                        f"   - Defines {len(query_props)} SQL queries: {', '.join(query_props[:3])}{'...' if len(query_props) > 3 else ''}"
+                    )
+                report_lines.append("")
 
-            report_lines.append("")
+        # Configuration Providers section
+        if categories["configuration"]:
+            report_lines.extend(
+                [
+                    "### Configuration Providers",
+                    "*Set infrastructure variables (tables, paths, memory) used by processing*",
+                    "",
+                ]
+            )
+            for i, proc in enumerate(
+                categories["configuration"][:10], 1
+            ):  # Limit to top 10
+                name = proc.get("name", "Unknown")
+                proc_type = proc.get("processor_type", "Unknown").split(".")[-1]
+                reason = proc.get("dependency_reason", "")
+
+                report_lines.append(f'{i}. **{proc_type}** - "{name}"')
+                if "Defines variables:" in reason:
+                    vars_part = reason.split("Defines variables: ")[1]
+                    var_list = vars_part.split(", ")
+                    if len(var_list) > 5:
+                        report_lines.append(
+                            f"   - Sets {len(var_list)} variables: {', '.join(var_list[:5])}..."
+                        )
+                    else:
+                        report_lines.append(
+                            f"   - Sets variables: {', '.join(var_list)}"
+                        )
+                report_lines.append("")
+
+        # Other categories (show only if they exist and are significant)
+        other_categories = [
+            (
+                "data_extraction",
+                "Data Extraction Processors",
+                "Extract values from file content/names for downstream processing",
+            ),
+            (
+                "dynamic_values",
+                "Dynamic Value Generators",
+                "Generate timestamps, calculations, and runtime values",
+            ),
+            (
+                "routing_logic",
+                "Routing Logic Processors",
+                "Set conditional variables based on data content",
+            ),
+        ]
+
+        for cat_key, cat_title, cat_desc in other_categories:
+            if categories[cat_key]:
+                report_lines.extend([f"### {cat_title}", f"*{cat_desc}*", ""])
+                for i, proc in enumerate(categories[cat_key][:5], 1):  # Limit to top 5
+                    name = proc.get("name", "Unknown")
+                    proc_type = proc.get("processor_type", "Unknown").split(".")[-1]
+                    report_lines.append(f'{i}. **{proc_type}** - "{name}"')
+                report_lines.append("")
 
         report_lines.extend(["---", ""])
 
