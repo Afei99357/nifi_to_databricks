@@ -331,7 +331,7 @@ def generate_essential_processors_report(
                 dependencies_report_lines.append(f'{i}. **{proc_type}** - "{name}"')
                 if query_props:
                     dependencies_report_lines.append(
-                        f"   - Defines {len(query_props)} SQL queries: {', '.join(query_props[:3])}{'...' if len(query_props) > 3 else ''}"
+                        f"    - Defines {len(query_props)} SQL queries: {', '.join(query_props[:3])}{'...' if len(query_props) > 3 else ''}"
                     )
                 dependencies_report_lines.append("")
 
@@ -357,11 +357,11 @@ def generate_essential_processors_report(
                     var_list = vars_part.split(", ")
                     if len(var_list) > 5:
                         dependencies_report_lines.append(
-                            f"   - Sets {len(var_list)} variables: {', '.join(var_list[:5])}..."
+                            f"    - Sets {len(var_list)} variables: {', '.join(var_list[:5])}..."
                         )
                     else:
                         dependencies_report_lines.append(
-                            f"   - Sets variables: {', '.join(var_list)}"
+                            f"    - Sets variables: {', '.join(var_list)}"
                         )
                 dependencies_report_lines.append("")
 
