@@ -119,9 +119,7 @@ def migrate_nifi_to_databricks_simplified(
     # Asset discovery skipped - focusing on business migration guide
 
     # Generate reports content
-    essential_processors_content, dependencies_content = (
-        generate_essential_processors_report(pruned_result)
-    )
+    essential_processors_tuple = generate_essential_processors_report(pruned_result)
     unknown_processors_content = generate_unknown_processors_json(analysis_result)
     asset_summary_content = generate_asset_summary(analysis_result)
     _log("📋 Reports generated successfully")
@@ -180,7 +178,7 @@ def migrate_nifi_to_databricks_simplified(
             "data_flow_chains": chains_result,
         },
         "reports": {
-            "essential_processors": essential_processors_content,
+            "essential_processors": essential_processors_tuple,
             "unknown_processors": unknown_processors_content,
             "asset_summary": asset_summary_content,
             "connection_analysis": connection_analysis,
