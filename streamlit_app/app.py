@@ -81,9 +81,27 @@ def main():
                         )
                         st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
 
+                    # Essential Processors Report (now returns a tuple)
                     if reports.get("essential_processors"):
-                        with st.expander("📋 Essential Processors Report"):
-                            st.markdown(reports["essential_processors"])
+                        essential_data = reports["essential_processors"]
+                        if (
+                            isinstance(essential_data, tuple)
+                            and len(essential_data) == 2
+                        ):
+                            main_report, dependencies_report = essential_data
+
+                            # Main Essential Processors Section
+                            with st.expander("📋 Essential Processors Report"):
+                                st.markdown(main_report)
+
+                            # Essential Dependencies Section (separate expander)
+                            if dependencies_report and dependencies_report.strip():
+                                with st.expander("🔗 Essential Dependencies"):
+                                    st.markdown(dependencies_report)
+                        else:
+                            # Fallback for old format
+                            with st.expander("📋 Essential Processors Report"):
+                                st.markdown(str(essential_data))
 
                 # Full Workflow Analysis
                 if conn_analysis.get("full_workflow_connections"):
