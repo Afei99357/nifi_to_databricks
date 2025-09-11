@@ -221,6 +221,9 @@ def generate_essential_processors_report(
     all_processors = processors + removed_processors
     dependency_processors = _find_placeholder_dependencies(processors, all_processors)
 
+    # Debug: Log dependency processor count
+    print(f"🔍 [DEBUG] Found {len(dependency_processors)} dependency processors")
+
     # Group by classification for organization
     by_classification = {}
     for proc in processors:
@@ -444,5 +447,9 @@ def generate_essential_processors_report(
     # Return both reports as separate strings
     main_report = "\n".join(main_report_lines)
     dependencies_report = "\n".join(dependencies_report_lines)
+
+    # Debug: Log report lengths
+    print(f"🔍 [DEBUG] Main report length: {len(main_report)} chars")
+    print(f"🔍 [DEBUG] Dependencies report length: {len(dependencies_report)} chars")
 
     return main_report, dependencies_report

@@ -84,11 +84,22 @@ def main():
                     # Essential Processors Report (now returns a tuple)
                     if reports.get("essential_processors"):
                         essential_data = reports["essential_processors"]
+                        print(f"🔍 [DEBUG] essential_data type: {type(essential_data)}")
+                        print(
+                            f"🔍 [DEBUG] essential_data length: {len(essential_data) if isinstance(essential_data, (tuple, list)) else 'N/A'}"
+                        )
+
                         if (
                             isinstance(essential_data, tuple)
                             and len(essential_data) == 2
                         ):
                             main_report, dependencies_report = essential_data
+                            print(
+                                f"🔍 [DEBUG] dependencies_report length: {len(dependencies_report)} chars"
+                            )
+                            print(
+                                f"🔍 [DEBUG] dependencies_report content preview: {dependencies_report[:100]}..."
+                            )
 
                             # Main Essential Processors Section
                             with st.expander("📋 Essential Processors Report"):
@@ -98,7 +109,12 @@ def main():
                             if dependencies_report and dependencies_report.strip():
                                 with st.expander("🔗 Essential Dependencies"):
                                     st.markdown(dependencies_report)
+                            else:
+                                print("🔍 [DEBUG] Dependencies report is empty or None")
                         else:
+                            print(
+                                f"🔍 [DEBUG] Not a tuple or wrong length. Data: {str(essential_data)[:200]}"
+                            )
                             # Fallback for old format
                             with st.expander("📋 Essential Processors Report"):
                                 st.markdown(str(essential_data))
