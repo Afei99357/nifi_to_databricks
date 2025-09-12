@@ -9,7 +9,7 @@ st.set_page_config(
 
 
 def main():
-    st.title("🔧 NiFi to Databricks Migration Tool")
+    st.title("NiFi to Databricks Migration Tools")
 
     st.markdown("Upload your NiFi XML template file to begin the migration process.")
 
