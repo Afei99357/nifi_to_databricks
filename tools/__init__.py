@@ -3,7 +3,6 @@
 
 # Import basic tools without external dependencies
 from . import (
-    simple_table_lineage,
     xml_tools,
 )
 
