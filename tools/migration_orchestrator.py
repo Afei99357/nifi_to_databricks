@@ -16,8 +16,8 @@ from tools.improved_pruning import (
     detect_data_flow_chains,
     prune_infrastructure_processors,
 )
-from tools.networkx_complete_flow_analysis import generate_connection_analysis_reports
 from tools.reporting import generate_essential_processors_report
+from tools.simple_table_lineage import generate_simple_lineage_report
 
 # Asset discovery functionality moved to tools/asset_extraction.py
 
