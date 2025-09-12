@@ -552,6 +552,29 @@ def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def generate_simple_lineage_report(analysis: Dict[str, Any]) -> str:
-    """Alias for generate_table_lineage_report for compatibility"""
-    return generate_table_lineage_report(analysis)
+def generate_simple_lineage_report(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate a compatible structure for migration orchestrator"""
+    report_text = generate_table_lineage_report(analysis)
+
+    # Return a structure compatible with the old NetworkX version
+    if "table_lineage" in analysis:
+        data = analysis["table_lineage"]
+        return {
+            "connection_analysis": report_text,
+            "connection_summary": {
+                "total_tables": data.get("total_tables", 0),
+                "lineage_chains": len(data.get("lineage_chains", [])),
+                "critical_tables": len(data.get("critical_tables", [])),
+                "complexity_reduction": f"{data.get('total_tables', 0)} tables analyzed",
+            },
+        }
+    else:
+        return {
+            "connection_analysis": report_text,
+            "connection_summary": {
+                "total_tables": 0,
+                "lineage_chains": 0,
+                "critical_tables": 0,
+                "complexity_reduction": "No analysis available",
+            },
+        }
