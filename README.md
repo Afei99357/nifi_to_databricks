@@ -410,6 +410,119 @@ The analysis provides actionable insights for migration planning:
 - **📈 Complexity Assessment**: Evaluates workflow complexity and interconnection patterns
 - **🔍 Critical Path Analysis**: Highlights high-impact processors requiring careful migration
 
+## 📊 Table Lineage Analysis (NEW)
+
+The system now includes **table-level data lineage tracking** that shows end-to-end data flow through your NiFi workflows, mapping exactly how data moves from source tables/files through processors to destination tables/files.
+
+### ✨ **Key Features**
+- **🔄 Table-to-Table Lineage**: Tracks data flow chains like `source_table → [Processor1] → [Processor2] → target_table`
+- **📁 File-to-Table Mapping**: Shows how files are transformed into database tables
+- **🌐 Cross-Group Analysis**: Handles embedded process groups and their connections properly
+- **🎯 Critical Table Identification**: Finds tables with high connectivity (important data assets)
+- **🏗️ Migration Planning**: Provides specific recommendations for Databricks Unity Catalog architecture
+
+### 🎮 **How to Use**
+
+**In Streamlit App:**
+1. Upload your NiFi XML file
+2. Click **📊 Analyze Table Lineage** button (new option alongside "Run Migration")
+3. View interactive results with:
+   - Summary metrics (tables, files, lineage chains)
+   - Data flow visualization with processor details
+   - Critical tables analysis with connectivity scores
+   - Complete downloadable markdown report
+
+**Programmatic Usage:**
+```python
+from tools.networkx_complete_flow_analysis import (
+    build_complete_nifi_graph_with_tables,
+    analyze_complete_workflow_with_tables,
+    generate_table_lineage_report
+)
+
+# Read XML content
+with open("your_nifi_file.xml", 'r') as f:
+    xml_content = f.read()
+
+# Build enhanced graph with table lineage
+G = build_complete_nifi_graph_with_tables(xml_content)
+
+# Run analysis
+analysis = analyze_complete_workflow_with_tables(G, k=10)
+
+# Generate report
+report = generate_table_lineage_report(analysis)
+```
+
+### 📋 **Example Output**
+```
+📊 End-to-End Data Flow Chains
+==============================
+
+Chain 1: /raw/input_data.csv → staging.transactions
+Data Flow Path: /raw/input_data.csv → **[GetFile]** → **[ConvertRecord]** → staging.transactions
+Complexity: 2 processing steps
+
+Chain 2: staging.transactions → curated.clean_data
+Data Flow Path: staging.transactions → **[ExecuteSQL]** → curated.clean_data
+Complexity: 1 processing steps
+
+Chain 3: curated.clean_data → analytics.summary
+Data Flow Path: curated.clean_data → **[AggregateSQL]** → **[PutHDFS]** → analytics.summary
+Complexity: 2 processing steps
+
+🎯 Critical Tables (High Connectivity)
+=====================================
+- **staging.transactions**: 4 connections (2 readers, 2 writers)
+- **curated.clean_data**: 3 connections (1 reader, 2 writers)
+```
+
+### 🔧 **Table Extraction Logic**
+
+**Smart Processor Analysis:**
+- **GetFile/ListFile**: Input files → `file:/path/to/input`
+- **PutHDFS/PutFile**: Output files → `file:/path/to/output`
+- **ExecuteSQL**: SQL parsing → `FROM table_name` (input), `INSERT INTO table_name` (output)
+- **Property Analysis**: Table name properties → `database.table_name`
+- **Path Inference**: Inferred database/table from file paths
+
+**Graph Enhancement:**
+- **Original nodes**: NiFi processors, input/output ports, funnels
+- **New nodes**: `table:database.table_name`, `file:/path/to/file`
+- **Smart edges**: `reads_from`, `writes_to`, `reads_file`, `writes_file`
+
+### 🎯 **Migration Benefits**
+
+**Architecture Planning:**
+- **Simple Chains**: Standard Databricks Jobs with table dependencies
+- **Complex Chains**: Delta Live Tables for multi-stage pipelines
+- **High-connectivity Tables**: Central data assets requiring careful Unity Catalog schema design
+
+**Migration Priorities:**
+1. **Critical Tables** → Design Unity Catalog schemas for high-connectivity tables first
+2. **Source Tables** → Plan data ingestion architecture (Auto Loader, etc.)
+3. **Sink Tables** → Design output data architecture (Delta Lake, etc.)
+4. **Complex Chains** → Multi-stage DLT pipeline dependencies
+
+**Databricks Patterns:**
+- **GetFile → ConvertRecord → PutHDFS**: Auto Loader → DataFrame transformations → Delta Lake
+- **ExecuteSQL chains**: Spark SQL operations with explicit table dependencies
+- **Multi-processor chains**: DLT pipeline stages with proper lineage
+
+### ⚠️ **Important Notes**
+
+**What It CAN Extract:**
+- ✅ Processor connection topology from XML
+- ✅ Table references from processor properties and SQL queries
+- ✅ File input/output paths and directory structures
+- ✅ Cross-group data flow patterns through embedded process groups
+
+**What It CANNOT Extract:**
+- ❌ Bronze/Silver/Gold semantic layers (business concepts not in XML)
+- ❌ Data quality rules or business logic details
+- ❌ Runtime data volumes or performance characteristics
+- ❌ Complex SQL transformation details beyond table names
+
 ## 🔍 Common Migration Patterns
 
 | NiFi Component | Databricks Equivalent | Key Considerations |

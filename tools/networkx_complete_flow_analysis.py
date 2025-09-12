@@ -3,8 +3,9 @@
 # Multi-tier connection categorization with migration-focused insights
 
 import json
+import re
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
 
@@ -18,6 +19,143 @@ def _txt(elem, *paths):
             if t:
                 return t
     return ""
+
+
+def _extract_tables_from_processor(
+    processor_type: str, properties: Dict[str, Any]
+) -> Dict[str, Set[str]]:
+    """Simple table extraction based on processor type and properties"""
+    result = {
+        "input_tables": set(),
+        "output_tables": set(),
+        "input_files": set(),
+        "output_files": set(),
+    }
+
+    processor_type = (processor_type or "").lower()
+
+    # Simple type-based extraction
+    if "getfile" in processor_type or "listfile" in processor_type:
+        # Input files only
+        directory = properties.get("Input Directory", "")
+        if directory:
+            result["input_files"].add(directory)
+
+    elif "puthdfs" in processor_type or "putfile" in processor_type:
+        # Output files
+        directory = properties.get("Directory", properties.get("Output Directory", ""))
+        if directory:
+            result["output_files"].add(directory)
+
+    elif "executesql" in processor_type:
+        # Look for SQL queries with table references
+        sql_query = properties.get("SQL Query", properties.get("SQL select query", ""))
+        if sql_query:
+            # Simple regex to find table names after FROM and INSERT INTO
+            from_tables = re.findall(
+                r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)", sql_query.upper()
+            )
+            insert_tables = re.findall(
+                r"INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_.]*)", sql_query.upper()
+            )
+
+            result["input_tables"].update(t.lower() for t in from_tables)
+            result["output_tables"].update(t.lower() for t in insert_tables)
+
+    # Look for common table property names
+    for key, value in properties.items():
+        if not value or not isinstance(value, str):
+            continue
+
+        key_lower = key.lower()
+        if "table" in key_lower and "name" in key_lower:
+            if "." in value:
+                result["output_tables"].add(value.lower())
+            elif value.replace("_", "").replace("-", "").isalnum():
+                result["output_tables"].add(f"unknown_db.{value.lower()}")
+
+    return result
+
+
+def _add_table_nodes_to_graph(
+    G: nx.MultiDiGraph, processor_id: str, tables: Dict[str, Set[str]]
+):
+    """Add table nodes and connect them to the processor"""
+
+    # Add input table nodes and edges: table → processor
+    for input_table in tables["input_tables"]:
+        table_node_id = f"table:{input_table}"
+        if table_node_id not in G:
+            G.add_node(
+                table_node_id,
+                component_type="table_reference",
+                name=input_table,
+                table_type="input",
+                migration_priority="high",
+            )
+        G.add_edge(
+            table_node_id,
+            processor_id,
+            key=f"reads:{input_table}",
+            relationship="reads_from",
+            edge_category="data_input",
+        )
+
+    # Add output table nodes and edges: processor → table
+    for output_table in tables["output_tables"]:
+        table_node_id = f"table:{output_table}"
+        if table_node_id not in G:
+            G.add_node(
+                table_node_id,
+                component_type="table_reference",
+                name=output_table,
+                table_type="output",
+                migration_priority="high",
+            )
+        G.add_edge(
+            processor_id,
+            table_node_id,
+            key=f"writes:{output_table}",
+            relationship="writes_to",
+            edge_category="data_output",
+        )
+
+    # Add file nodes similarly
+    for input_file in tables["input_files"]:
+        file_node_id = f"file:{input_file}"
+        if file_node_id not in G:
+            G.add_node(
+                file_node_id,
+                component_type="file_reference",
+                name=input_file,
+                file_type="input",
+                migration_priority="medium",
+            )
+        G.add_edge(
+            file_node_id,
+            processor_id,
+            key=f"reads_file:{input_file}",
+            relationship="reads_file",
+            edge_category="file_input",
+        )
+
+    for output_file in tables["output_files"]:
+        file_node_id = f"file:{output_file}"
+        if file_node_id not in G:
+            G.add_node(
+                file_node_id,
+                component_type="file_reference",
+                name=output_file,
+                file_type="output",
+                migration_priority="medium",
+            )
+        G.add_edge(
+            processor_id,
+            file_node_id,
+            key=f"writes_file:{output_file}",
+            relationship="writes_file",
+            edge_category="file_output",
+        )
 
 
 def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = None):
@@ -281,6 +419,68 @@ def build_complete_nifi_graph(xml_text: str, allowed_ids: Optional[Set[str]] = N
     return G
 
 
+def build_complete_nifi_graph_with_tables(
+    xml_text: str, allowed_ids: Optional[Set[str]] = None
+):
+    """
+    Enhanced version that includes table and file lineage nodes.
+
+    Args:
+        xml_text: Raw XML content from NiFi template
+        allowed_ids: Optional set of processor IDs to include
+
+    Returns:
+        NetworkX MultiDiGraph with processors, tables, files, and their connections
+    """
+    # Start with the existing graph
+    G = build_complete_nifi_graph(xml_text, allowed_ids)
+
+    # Parse XML to get processor details
+    from .xml_tools import parse_nifi_template_impl
+
+    try:
+        parsed_data = parse_nifi_template_impl(xml_text)
+        processors = parsed_data.get("processors", [])
+    except:
+        # Simple fallback parsing if xml_tools fails
+        processors = []
+        root = ET.fromstring(xml_text)
+        for proc in root.findall(".//processors"):
+            proc_id = _txt(proc, "id")
+            proc_type = _txt(proc, "type", "component/type")
+
+            # Extract properties
+            properties = {}
+            props_node = proc.find(".//properties")
+            if props_node is not None:
+                for entry in props_node.findall("entry"):
+                    k = entry.findtext("key")
+                    v = entry.findtext("value")
+                    if k is not None:
+                        properties[k] = v or ""
+
+            processors.append(
+                {"id": proc_id, "type": proc_type, "properties": properties}
+            )
+
+    # Add table and file nodes for each processor
+    for processor in processors:
+        processor_id = processor.get("id")
+        if not processor_id or processor_id not in G:
+            continue
+
+        processor_type = processor.get("type", "")
+        properties = processor.get("properties", {})
+
+        # Extract tables/files for this processor
+        tables = _extract_tables_from_processor(processor_type, properties)
+
+        # Add table/file nodes and edges to graph
+        _add_table_nodes_to_graph(G, processor_id, tables)
+
+    return G
+
+
 def _get_connection_migration_impact(src_type: str, dst_type: str) -> str:
     """Determine migration impact of a connection type"""
     if src_type == "processor" and dst_type == "processor":
@@ -515,6 +715,112 @@ def analyze_complete_workflow(G, k: int = 10) -> Dict[str, Any]:
         )[:k]
     except:
         analysis["data_flow_paths"] = []
+
+    return analysis
+
+
+def extract_table_lineage_chains(G: nx.MultiDiGraph) -> List[Dict[str, Any]]:
+    """
+    Find table-to-table lineage paths through processors.
+
+    Args:
+        G: NetworkX graph with table and processor nodes
+
+    Returns:
+        List of lineage chain dictionaries
+    """
+    # Find all table nodes
+    table_nodes = [n for n in G.nodes() if n.startswith("table:")]
+
+    lineage_chains = []
+
+    for source_table in table_nodes:
+        for target_table in table_nodes:
+            if source_table == target_table:
+                continue
+
+            try:
+                # Find path from source table to target table
+                path = nx.shortest_path(G, source_table, target_table)
+                if len(path) >= 3:  # table → processor → table (minimum)
+                    # Extract processors in the path
+                    processors = [
+                        {"id": n, "name": G.nodes[n]["name"]}
+                        for n in path
+                        if G.nodes[n]["component_type"] == "processor"
+                    ]
+
+                    if processors:  # Only include paths with processors
+                        lineage_chains.append(
+                            {
+                                "source_table": source_table.replace("table:", ""),
+                                "target_table": target_table.replace("table:", ""),
+                                "path": path,
+                                "processors": processors,
+                                "path_length": len(path),
+                                "processor_count": len(processors),
+                            }
+                        )
+
+            except nx.NetworkXNoPath:
+                continue
+
+    return sorted(
+        lineage_chains, key=lambda x: (x["processor_count"], x["path_length"])
+    )
+
+
+def analyze_complete_workflow_with_tables(
+    G: nx.MultiDiGraph, k: int = 10
+) -> Dict[str, Any]:
+    """
+    Enhanced workflow analysis including table-level lineage.
+
+    Args:
+        G: NetworkX graph with table nodes (from build_complete_nifi_graph_with_tables)
+        k: Number of top results to return
+
+    Returns:
+        Enhanced analysis with table lineage data
+    """
+    # Get base analysis
+    analysis = analyze_complete_workflow(G, k)
+
+    # Count table and file nodes
+    table_nodes = [n for n in G.nodes() if n.startswith("table:")]
+    file_nodes = [n for n in G.nodes() if n.startswith("file:")]
+
+    # Extract lineage chains
+    lineage_chains = extract_table_lineage_chains(G)
+
+    # Find most connected tables
+    table_connectivity = []
+    for table_node in table_nodes:
+        connectivity = G.in_degree(table_node) + G.out_degree(table_node)
+        table_connectivity.append(
+            {
+                "table": table_node.replace("table:", ""),
+                "connectivity": connectivity,
+                "in_degree": G.in_degree(table_node),
+                "out_degree": G.out_degree(table_node),
+            }
+        )
+
+    # Add table-specific analysis
+    analysis["table_lineage"] = {
+        "total_tables": len(table_nodes),
+        "total_files": len(file_nodes),
+        "lineage_chains": lineage_chains[:k],  # Top k chains
+        "critical_tables": sorted(
+            table_connectivity, key=lambda x: x["connectivity"], reverse=True
+        )[:k],
+        "source_tables": [
+            t["table"] for t in table_connectivity if t["in_degree"] == 0
+        ][:k],
+        "sink_tables": [t["table"] for t in table_connectivity if t["out_degree"] == 0][
+            :k
+        ],
+    }
 
     return analysis
 
@@ -786,6 +1092,110 @@ def generate_complete_flow_markdown_report(analysis: Dict[str, Any]) -> str:
             "- **High fan-out processors** → Use multiple output streams or conditional logic",
             "- **External connections** → Plan for cloud messaging or REST APIs",
             "- **Complex paths** → Design multi-stage pipelines with proper dependencies",
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
+    """Generate table-level lineage report from enhanced analysis"""
+    if "table_lineage" not in analysis:
+        return "# 📊 Table Lineage Analysis\n\nNo table lineage data available."
+
+    table_data = analysis["table_lineage"]
+    lines = [
+        "# 📊 Table-Level Data Lineage Analysis",
+        "",
+        "## Overview",
+        f"- **Total Tables**: {table_data['total_tables']} table references",
+        f"- **Total Files**: {table_data['total_files']} file references",
+        f"- **Lineage Chains**: {len(table_data['lineage_chains'])} end-to-end data flows",
+        f"- **Source Tables**: {len(table_data['source_tables'])} data sources",
+        f"- **Sink Tables**: {len(table_data['sink_tables'])} final destinations",
+        "",
+        "---",
+        "",
+    ]
+
+    # Show lineage chains
+    if table_data["lineage_chains"]:
+        lines.extend(
+            [
+                "## 🔄 End-to-End Data Flow Chains",
+                "*Table-to-table data lineage through NiFi processors*",
+                "",
+            ]
+        )
+
+        for i, chain in enumerate(table_data["lineage_chains"][:10], 1):
+            processors_text = " → ".join(
+                [f"**[{p['name']}]**" for p in chain["processors"]]
+            )
+
+            lines.extend(
+                [
+                    f"### Chain {i}: `{chain['source_table']}` → `{chain['target_table']}`",
+                    f"**Data Flow Path**: `{chain['source_table']}` → {processors_text} → `{chain['target_table']}`",
+                    f"**Complexity**: {chain['processor_count']} processing steps, {chain['path_length']} total hops",
+                    f"**Migration Impact**: {'High' if chain['processor_count'] > 3 else 'Medium' if chain['processor_count'] > 1 else 'Low'} complexity pipeline",
+                    "",
+                ]
+            )
+
+    # Show critical tables
+    if table_data["critical_tables"]:
+        lines.extend(
+            [
+                "## 🎯 Critical Tables (High Connectivity)",
+                "*Tables with the most processor connections - key data assets*",
+                "",
+            ]
+        )
+
+        for table in table_data["critical_tables"][:5]:
+            lines.extend(
+                [
+                    f"### `{table['table']}`",
+                    f"- **Total Connections**: {table['connectivity']}",
+                    f"- **Input Processors**: {table['in_degree']} (readers)",
+                    f"- **Output Processors**: {table['out_degree']} (writers)",
+                    f"- **Migration Priority**: {'Critical' if table['connectivity'] > 3 else 'High' if table['connectivity'] > 1 else 'Medium'}",
+                    "",
+                ]
+            )
+
+    # Show source and sink tables
+    if table_data["source_tables"] or table_data["sink_tables"]:
+        lines.extend(["## 🚪 Pipeline Boundaries", ""])
+
+        if table_data["source_tables"]:
+            lines.extend(["### 📥 Source Tables (Data Entry Points)", ""])
+            for table in table_data["source_tables"][:5]:
+                lines.append(f"- **`{table}`** - Primary data source")
+            lines.append("")
+
+        if table_data["sink_tables"]:
+            lines.extend(["### 📤 Sink Tables (Final Destinations)", ""])
+            for table in table_data["sink_tables"][:5]:
+                lines.append(f"- **`{table}`** - Final data destination")
+            lines.append("")
+
+    # Migration recommendations
+    lines.extend(
+        [
+            "## 🎯 Migration Recommendations",
+            "",
+            "### Immediate Actions:",
+            "1. **Critical Tables** → Design Unity Catalog schemas for high-connectivity tables",
+            "2. **Source Tables** → Plan data ingestion architecture",
+            "3. **Sink Tables** → Design output data architecture",
+            "",
+            "### Data Architecture Planning:",
+            "- **Complex Chains** → Consider Delta Live Tables for multi-stage pipelines",
+            "- **Simple Chains** → Standard Databricks Jobs with table dependencies",
+            "- **High-connectivity Tables** → Central data assets requiring careful schema design",
+            "",
         ]
     )
 

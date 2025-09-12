@@ -57,41 +57,6 @@ def _extract_sql(properties: Dict[str, Any]) -> str:
     return "\n".join(m)
 
 
-def _parse_llm_json_simple(content: str) -> dict:
-    """Simple JSON parsing with json_repair recovery and progress output."""
-    # Try direct parsing first
-    try:
-        return json.loads(content.strip())
-    except json.JSONDecodeError as e:
-        print(f"⚠️  [LLM BATCH] JSON parsing failed: {e}")
-
-    # Try json_repair first
-    try:
-        repaired = _repair_json_if_available(content.strip())
-        result = json.loads(repaired)
-        print(f"🔧 [LLM BATCH] Recovered JSON using json_repair")
-        return result
-    except (json.JSONDecodeError, Exception):
-        print(f"❌ [LLM BATCH] json_repair recovery failed")
-
-    # Try extracting from markdown code block
-    if "```json" in content:
-        try:
-            json_part = content.split("```json")[1].split("```")[0].strip()
-            repaired = _repair_json_if_available(json_part)
-            result = json.loads(repaired)
-            print(f"🔧 [LLM BATCH] Recovered JSON from markdown block with repair")
-            return result
-        except (json.JSONDecodeError, IndexError):
-            print(f"❌ [LLM BATCH] Markdown JSON recovery also failed")
-
-    # Final fallback - fail gracefully
-    print(
-        f"❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation"
-    )
-    raise ValueError(f"Unable to parse JSON from LLM response")
-
-
 # ---------- Deterministic rules WITH impact inline
 def _classify_by_rules(
     processor_type: str, name: str, properties: Dict[str, Any]
