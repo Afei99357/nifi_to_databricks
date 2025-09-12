@@ -391,22 +391,6 @@ def generate_simple_lineage_report(analysis_result: Dict[str, Any]) -> str:
             )
         lines.append("")
 
-    lines.extend(
-        [
-            "## 🎯 Migration Recommendations",
-            "",
-            "### Immediate Actions:",
-            "- **Critical Tables** → Design Unity Catalog schemas for high-connectivity tables",
-            "- **Source Tables** → Plan data ingestion architecture",
-            "- **Sink Tables** → Design output data architecture",
-            "",
-            "### Data Architecture Planning:",
-            "- **Complex Chains** → Consider Delta Live Tables for multi-stage pipelines",
-            "- **Simple Chains** → Standard Databricks Jobs with table dependencies",
-            "- **High-connectivity Tables** → Central data assets requiring careful schema design",
-        ]
-    )
-
     return "\n".join(lines)
 
 
