@@ -17,6 +17,9 @@ st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
 
 def display_migration_results(result):
     """Display migration results from either fresh run or cache"""
+    # Debug: Show what we received
+    st.write(f"**Debug - display_migration_results received:** {type(result)}")
+
     # Handle both string results (error case) and dict results
     if isinstance(result, str):
         st.error(f"❌ Migration failed: {result}")
@@ -26,13 +29,15 @@ def display_migration_results(result):
         st.error(f"❌ Migration failed: Invalid result format - {type(result)}")
         return
 
-    # Display reports
-    if result.get("reports"):
-        reports = result["reports"]
+    try:
+        # Display reports
+        if result.get("reports"):
+            reports = result["reports"]
+            st.write(f"**Debug - reports type:** {type(reports)}")
 
-        # Connection Analysis Dashboard
-        if "connection_analysis" in reports and reports["connection_analysis"]:
-            conn_analysis = reports["connection_analysis"]
+            # Connection Analysis Dashboard
+            if "connection_analysis" in reports and reports["connection_analysis"]:
+                conn_analysis = reports["connection_analysis"]
 
             # Connection Summary Metrics
             summary = conn_analysis.get("connection_summary", {})
@@ -74,24 +79,34 @@ def display_migration_results(result):
                     with st.expander("📋 Essential Processors Report"):
                         st.markdown(str(essential_data))
 
-        # Unknown Processors Report
-        unknown_data = reports.get("unknown_processors", {})
-        if unknown_data.get("count", 0) > 0:
-            with st.expander(f"❓ Unknown Processors ({unknown_data['count']})"):
-                for proc in unknown_data.get("unknown_processors", []):
-                    st.write(f"**{proc.get('name', 'Unknown')}**")
-                    st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                    st.write(f"- Reason: {proc.get('reason', 'No reason provided')}")
-                    st.write("---")
-        else:
-            st.info("✅ No unknown processors - all were successfully classified")
+            # Unknown Processors Report
+            unknown_data = reports.get("unknown_processors", {})
+            if unknown_data.get("count", 0) > 0:
+                with st.expander(f"❓ Unknown Processors ({unknown_data['count']})"):
+                    for proc in unknown_data.get("unknown_processors", []):
+                        st.write(f"**{proc.get('name', 'Unknown')}**")
+                        st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
+                        st.write(
+                            f"- Reason: {proc.get('reason', 'No reason provided')}"
+                        )
+                        st.write("---")
+            else:
+                st.info("✅ No unknown processors - all were successfully classified")
 
-        # Asset Summary Report
-        if "asset_summary" in reports and reports["asset_summary"]:
-            with st.expander("📄 Asset Summary"):
-                st.markdown(reports["asset_summary"])
-    else:
-        st.warning("⚠️ No reports found in migration result")
+            # Asset Summary Report
+            if "asset_summary" in reports and reports["asset_summary"]:
+                with st.expander("📄 Asset Summary"):
+                    st.markdown(reports["asset_summary"])
+        else:
+            st.warning("⚠️ No reports found in migration result")
+
+    except Exception as e:
+        st.error(f"❌ Error displaying migration results: {e}")
+        st.write(f"**Debug - Exception type:** {type(e)}")
+        st.write(f"**Debug - Exception details:** {str(e)}")
+        import traceback
+
+        st.code(traceback.format_exc())
 
 
 def main():
