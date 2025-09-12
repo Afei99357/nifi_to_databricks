@@ -20,15 +20,13 @@ st.set_page_config(page_title="Table Lineage Analysis", page_icon="📊", layout
 def display_lineage_results(result, uploaded_file):
     """Display table lineage results from either fresh run or cache"""
     # Display summary metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Processors", result["processors"])
     with col2:
         st.metric("Connections", result["connections"])
     with col3:
-        st.metric("All Chains", result["all_chains"])
-    with col4:
-        st.metric("Domain Chains", result["domain_chains"])
+        st.metric("Table Chains", result["all_chains"])
 
     # Display all chains table
     st.markdown("### 📋 All Table Lineage Chains")
@@ -56,68 +54,20 @@ def display_lineage_results(result, uploaded_file):
     else:
         st.info("No table lineage chains found.")
 
+    # Download button
     st.markdown("---")
-
-    # Display domain chains table
-    st.markdown("### 🎯 Domain-Only Table Lineage Chains")
-    st.caption("Excludes housekeeping schemas (root, impala, etc.)")
-    if result["domain_chains_data"]:
-        # Read CSV data to display exactly as GPT generates it
-        try:
-            domain_chains_df = pd.read_csv(result["domain_chains_csv"])
-            st.dataframe(domain_chains_df, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-            # Fallback to manual DataFrame
-            domain_df = pd.DataFrame(
-                [
-                    {
-                        "source_table": chain[0],
-                        "target_table": chain[1],
-                        "processor_ids": " -> ".join(chain[2]),
-                        "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
-                        "hop_count": len(chain[2]),
-                    }
-                    for chain in result["domain_chains_data"]
-                ]
-            )
-            st.dataframe(domain_df, use_container_width=True)
-    else:
-        st.info("No domain table lineage chains found.")
-
-    # Download buttons
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Download all chains CSV
-        try:
-            with open(result["all_chains_csv"], "r") as f:
-                all_csv_content = f.read()
-            st.download_button(
-                label="📥 Download All Chains CSV",
-                data=all_csv_content,
-                file_name=f"all_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.error(f"Error reading all chains CSV: {e}")
-
-    with col2:
-        # Download domain chains CSV
-        try:
-            with open(result["domain_chains_csv"], "r") as f:
-                domain_csv_content = f.read()
-            st.download_button(
-                label="📥 Download Domain Chains CSV",
-                data=domain_csv_content,
-                file_name=f"domain_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        except Exception as e:
-            st.error(f"Error reading domain chains CSV: {e}")
+    try:
+        with open(result["all_chains_csv"], "r") as f:
+            all_csv_content = f.read()
+        st.download_button(
+            label="📥 Download Table Lineage CSV",
+            data=all_csv_content,
+            file_name=f"table_lineage_{uploaded_file.name.replace('.xml', '')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    except Exception as e:
+        st.error(f"Error reading CSV: {e}")
 
 
 def main():
@@ -154,14 +104,6 @@ def main():
                 del st.session_state[lineage_cache_key]
             st.rerun()
 
-    # Advanced options
-    with st.expander("⚙️ Advanced Options"):
-        write_inter_chains = st.checkbox(
-            "Include inter-processor chains",
-            value=False,
-            help="Generate 2-hop chains between processors (may increase results significantly)",
-        )
-
     # Display cached results if available
     if cached_result and not run_analysis:
         st.info(
@@ -189,7 +131,7 @@ def main():
                 result = analyze_nifi_table_lineage(
                     xml_path=tmp_xml_path,
                     outdir=tmp_dir,
-                    write_inter_chains=write_inter_chains,
+                    write_inter_chains=False,
                 )
 
                 progress_bar.progress(75)
