@@ -132,11 +132,6 @@ def _is_false_positive_table_ref(name: str) -> bool:
             "update",
             "delete",
             "insert",
-            "w01",
-            "w02",
-            "w03",
-            "w04",
-            "w05",
             "row",
             "col",
             "path",
@@ -144,6 +139,10 @@ def _is_false_positive_table_ref(name: str) -> bool:
             "absolute",
         }
         if parts[-1] in colish:
+            return True
+
+        # week columns like w01, w12, w123
+        if re.fullmatch(r"w\d{1,3}", parts[-1]):
             return True
 
     # obvious non-table substrings
@@ -221,15 +220,24 @@ def _sql_snippets(ptype: str, props: Dict[str, str]) -> List[str]:
 
     if "executestreamcommand" in p:
         cmd = f"{props.get('Command Path', '')} {props.get('Command Arguments', '')}"
-        # Prefer quoted chunks (usual pattern when invoking beeline/hive/impala)
-        chunks = re.findall(r'"([^"]+)|\'([^\']+)\'', cmd)
+
+        # 1) quoted chunks (fixed regex)
+        chunks = re.findall(r'"([^"]+)"|\'([^\']+)\'', cmd)
         sqls += [c[0] or c[1] for c in chunks if (c[0] or c[1])]
-        # Fallback if raw command obviously contains SQL verbs
+
+        # 2) -e / -q one-liners (beeline/impala-shell)
+        for flag in ("-e", "-q", "--execute"):
+            m = re.search(rf"{flag}\s+([\"'])(.+?)\1", cmd)
+            if m:
+                sqls.append(m.group(2))
+
+        # 3) obvious raw SQL fallback
         if not sqls and re.search(
             r"\b(select|insert|merge|create|alter|refresh)\b", cmd, re.I
         ):
             sqls += [cmd]
-        # Any explicit sql-like props
+
+        # 4) explicit sql-like props
         for k, v in props.items():
             if (
                 isinstance(v, str)
@@ -289,6 +297,20 @@ def build_processors(root: ET.Element) -> Dict[str, Dict[str, Any]]:
             reads |= r
             writes |= w
 
+        # Handle non-SQL database processors
+        if (
+            "querydatabasetable" in ptype.lower()
+            or "generatetablefetch" in ptype.lower()
+        ):
+            t = (props.get("Table Name") or props.get("table.name") or "").strip()
+            if t:
+                reads.add(_clean_table(t))
+
+        if "putdatabaserecord" in ptype.lower():
+            t = (props.get("Table Name") or props.get("table.name") or "").strip()
+            if t:
+                writes.add(_clean_table(t))
+
         procs[pid] = {
             "id": pid,
             "type": ptype,
@@ -331,10 +353,21 @@ def resolve_from_updateattrs(
     if not text or "${" not in text:
         return text
     resolved = text
+    # build a single map of var->val from all upstream UpdateAttribute processors
+    varmap = {}
     for cp in cfg_pids:
-        for k, v in procs[cp]["props"].items():
-            if v:
-                resolved = resolved.replace(f"${{{k}}}", v)
+        varmap.update({k: v for k, v in procs[cp]["props"].items() if v})
+
+    # do a couple of passes to catch simple nesting
+    for _ in range(2):
+        changed = False
+        for k, v in varmap.items():
+            needle = f"${{{k}}}"
+            if needle in resolved:
+                resolved = resolved.replace(needle, v)
+                changed = True
+        if not changed:
+            break
     return resolved
 
 
@@ -458,7 +491,7 @@ def write_csv(
     procs: Dict[str, Dict[str, Any]],
 ):
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         w.writerow(
             [
                 "source_table",

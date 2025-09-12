@@ -88,122 +88,98 @@ def main():
                 with col4:
                     st.metric("Domain Chains", result["domain_chains"])
 
-                # Display results in tabs
-                tab1, tab2, tab3, tab4 = st.tabs(
-                    [
-                        "📋 All Chains",
-                        "🎯 Domain Chains",
-                        "🔗 Longest Paths",
-                        "📥 Downloads",
-                    ]
-                )
-
-                with tab1:
-                    st.markdown("### 📋 All Table Lineage Chains")
-                    if result["chains_data"]:
-                        # Convert to DataFrame for display
+                # Display all chains table
+                st.markdown("### 📋 All Table Lineage Chains")
+                if result["chains_data"]:
+                    # Read CSV data to display exactly as GPT generates it
+                    try:
+                        all_chains_df = pd.read_csv(result["all_chains_csv"])
+                        st.dataframe(all_chains_df, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error reading CSV: {e}")
+                        # Fallback to manual DataFrame
                         chains_df = pd.DataFrame(
                             [
                                 {
-                                    "Source Table": chain[0],
-                                    "Target Table": chain[1],
-                                    "Processor IDs": " → ".join(chain[2]),
-                                    "Hop Count": len(chain[2]),
-                                    "Chain Type": (
+                                    "source_table": chain[0],
+                                    "target_table": chain[1],
+                                    "processor_ids": " -> ".join(chain[2]),
+                                    "chain_type": (
                                         "inter" if len(chain[2]) > 1 else "intra"
                                     ),
+                                    "hop_count": len(chain[2]),
                                 }
                                 for chain in result["chains_data"]
                             ]
                         )
                         st.dataframe(chains_df, use_container_width=True)
-                    else:
-                        st.info("No table lineage chains found.")
+                else:
+                    st.info("No table lineage chains found.")
 
-                with tab2:
-                    st.markdown("### 🎯 Domain-Only Table Lineage Chains")
-                    st.caption("Excludes housekeeping schemas (root, impala, etc.)")
-                    if result["domain_chains_data"]:
-                        # Convert to DataFrame for display
+                st.markdown("---")
+
+                # Display domain chains table
+                st.markdown("### 🎯 Domain-Only Table Lineage Chains")
+                st.caption("Excludes housekeeping schemas (root, impala, etc.)")
+                if result["domain_chains_data"]:
+                    # Read CSV data to display exactly as GPT generates it
+                    try:
+                        domain_chains_df = pd.read_csv(result["domain_chains_csv"])
+                        st.dataframe(domain_chains_df, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error reading CSV: {e}")
+                        # Fallback to manual DataFrame
                         domain_df = pd.DataFrame(
                             [
                                 {
-                                    "Source Table": chain[0],
-                                    "Target Table": chain[1],
-                                    "Processor IDs": " → ".join(chain[2]),
-                                    "Hop Count": len(chain[2]),
-                                    "Chain Type": (
+                                    "source_table": chain[0],
+                                    "target_table": chain[1],
+                                    "processor_ids": " -> ".join(chain[2]),
+                                    "chain_type": (
                                         "inter" if len(chain[2]) > 1 else "intra"
                                     ),
+                                    "hop_count": len(chain[2]),
                                 }
                                 for chain in result["domain_chains_data"]
                             ]
                         )
                         st.dataframe(domain_df, use_container_width=True)
-                    else:
-                        st.info("No domain table lineage chains found.")
+                else:
+                    st.info("No domain table lineage chains found.")
 
-                with tab3:
-                    st.markdown("### 🔗 Longest Composed Paths")
+                # Download buttons
+                st.markdown("---")
+                col1, col2 = st.columns(2)
 
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("**All Tables:**")
-                        st.metric(
-                            "Max Path Length",
-                            f"{result['longest_path_all']['length']} hops",
+                with col1:
+                    # Download all chains CSV
+                    try:
+                        with open(result["all_chains_csv"], "r") as f:
+                            all_csv_content = f.read()
+                        st.download_button(
+                            label="📥 Download All Chains CSV",
+                            data=all_csv_content,
+                            file_name=f"all_chains_{uploaded_file.name.replace('.xml', '')}.csv",
+                            mime="text/csv",
+                            use_container_width=True,
                         )
-                        for i, path in enumerate(
-                            result["longest_path_all"]["paths"][:3], 1
-                        ):
-                            st.write(f"**Path {i}:** {' → '.join(path)}")
+                    except Exception as e:
+                        st.error(f"Error reading all chains CSV: {e}")
 
-                    with col2:
-                        st.markdown("**Domain Tables Only:**")
-                        st.metric(
-                            "Max Path Length",
-                            f"{result['longest_path_domain']['length']} hops",
+                with col2:
+                    # Download domain chains CSV
+                    try:
+                        with open(result["domain_chains_csv"], "r") as f:
+                            domain_csv_content = f.read()
+                        st.download_button(
+                            label="📥 Download Domain Chains CSV",
+                            data=domain_csv_content,
+                            file_name=f"domain_chains_{uploaded_file.name.replace('.xml', '')}.csv",
+                            mime="text/csv",
+                            use_container_width=True,
                         )
-                        for i, path in enumerate(
-                            result["longest_path_domain"]["paths"][:3], 1
-                        ):
-                            st.write(f"**Path {i}:** {' → '.join(path)}")
-
-                with tab4:
-                    st.markdown("### 📥 Download CSV Files")
-
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        # Read and offer download for all chains
-                        try:
-                            with open(result["all_chains_csv"], "r") as f:
-                                all_csv_content = f.read()
-                            st.download_button(
-                                label="📥 Download All Chains CSV",
-                                data=all_csv_content,
-                                file_name=f"all_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                                mime="text/csv",
-                                use_container_width=True,
-                            )
-                        except Exception as e:
-                            st.error(f"Error reading all chains CSV: {e}")
-
-                    with col2:
-                        # Read and offer download for domain chains
-                        try:
-                            with open(result["domain_chains_csv"], "r") as f:
-                                domain_csv_content = f.read()
-                            st.download_button(
-                                label="📥 Download Domain Chains CSV",
-                                data=domain_csv_content,
-                                file_name=f"domain_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                                mime="text/csv",
-                                use_container_width=True,
-                            )
-                        except Exception as e:
-                            st.error(f"Error reading domain chains CSV: {e}")
+                    except Exception as e:
+                        st.error(f"Error reading domain chains CSV: {e}")
 
             except Exception as e:
                 st.error(f"❌ Table lineage analysis failed: {e}")
