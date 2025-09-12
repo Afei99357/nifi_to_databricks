@@ -113,8 +113,12 @@ def main():
         if st.button(
             "🗑️ Clear Results", use_container_width=True, disabled=analysis_running
         ):
+            # Clear table lineage results cache
             if lineage_cache_key in st.session_state:
                 del st.session_state[lineage_cache_key]
+            # Clear uploaded file cache
+            if "uploaded_file" in st.session_state:
+                del st.session_state["uploaded_file"]
             st.rerun()
 
     # Show warning if analysis is running
