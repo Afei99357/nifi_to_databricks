@@ -18,25 +18,26 @@ st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
 def main():
     st.title("🚀 NiFi to Databricks Migration")
 
-    st.markdown(
-        """
-    Upload your NiFi XML template file and convert it to a Databricks pipeline.
-    The migration system will analyze your workflow and generate optimized Databricks Jobs.
-    """
-    )
+    # Check for uploaded file from Dashboard
+    uploaded_file = st.session_state.get("uploaded_file", None)
 
-    # File upload
-    uploaded_file = st.file_uploader(
-        "Upload NiFi XML file",
-        type=["xml"],
-        help="Select your NiFi template (.xml) file to begin the migration process",
-    )
+    if uploaded_file:
+        st.success(f"✅ Processing file: {uploaded_file.name}")
+    else:
+        st.warning("⚠️ No file selected. Please go back to Dashboard to upload a file.")
+        if st.button("🔙 Back to Dashboard"):
+            st.switch_page("Dashboard.py")
+        return
 
     # Migration options
     col1, col2 = st.columns(2)
 
     with col1:
         run_migration = st.button("🚀 Run Migration", use_container_width=True)
+
+    with col2:
+        if st.button("🔙 Back to Dashboard"):
+            st.switch_page("Dashboard.py")
 
     # Run migration
     if uploaded_file and run_migration:
