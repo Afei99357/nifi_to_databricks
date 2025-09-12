@@ -121,14 +121,133 @@ def _extract_tables_from_processor(
             # Add the script as a file reference
             result["input_files"].add(command_path)
 
-    # Look for table references in ALL properties for ExecuteStreamCommand
-    # since SQL statements might be in variables
+    # Enhanced table extraction using techniques from asset_extraction.py
+    def _is_false_positive_table_ref(table_name: str) -> bool:
+        """Filter out false positive table names (not property values)"""
+        if not table_name:
+            return True
+        # Skip obvious false positives in table names themselves
+        if any(
+            pattern in table_name.lower()
+            for pattern in [
+                ".sh",
+                ".py",
+                ".jar",
+                ".class",
+                ".xml",
+                ".keytab",
+                ".na",
+                ".com",
+                ".error",
+                "impala.",
+                "execution.",
+                "nxp.",
+            ]
+        ):
+            return True
+        return False
+
+    # Look for table references using enhanced extraction
     if "executestreamcommand" in processor_type:
+        # First pass: Environment-specific table properties
+        env_tables = {}
         for key, value in properties.items():
             if not value or not isinstance(value, str):
                 continue
 
-            # Look for schema.table patterns that look like database tables
+            key_lower = key.lower()
+            # Look for environment-prefixed properties
+            for env_prefix in [
+                "prod_",
+                "staging_",
+                "dev_",
+                "test_",
+                "source_",
+                "target_",
+            ]:
+                if key_lower.startswith(env_prefix):
+                    env_key = env_prefix.rstrip("_")
+                    if env_key not in env_tables:
+                        env_tables[env_key] = {}
+
+                    prop_suffix = key_lower[len(env_prefix) :]
+                    if prop_suffix in ["table", "table_name"]:
+                        env_tables[env_key]["table"] = value
+                    elif prop_suffix in ["database", "db", "schema"]:
+                        env_tables[env_key]["database"] = value
+                    break
+
+        # Process environment-specific tables
+        for env, info in env_tables.items():
+            table = info.get("table", "")
+            database = info.get("database", "")
+            if table:
+                if "." in table and len(table.split(".")) == 2:
+                    # Already in database.table format
+                    result["input_tables"].add(table.lower())
+                    result["output_tables"].add(table.lower())
+                elif database:
+                    # Combine database and table
+                    full_table = f"{database}.{table}"
+                    result["input_tables"].add(full_table.lower())
+                    result["output_tables"].add(full_table.lower())
+
+        # Second pass: SQL query extraction
+        for key, value in properties.items():
+            if not value or not isinstance(value, str):
+                continue
+
+            key_lower = key.lower()
+            # Look for SQL queries in properties
+            if any(
+                sql_keyword in key_lower
+                for sql_keyword in ["sql", "query", "statement"]
+            ):
+                if len(value) > 10 and any(
+                    keyword in value.upper()
+                    for keyword in [
+                        "SELECT",
+                        "FROM",
+                        "INSERT",
+                        "UPDATE",
+                        "DELETE",
+                        "JOIN",
+                        "CREATE",
+                        "ALTER",
+                        "REFRESH",
+                    ]
+                ):
+
+                    # Extract table names from SQL
+                    sql_upper = value.upper()
+                    sql_patterns = [
+                        r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"UPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"CREATE\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"ALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                        r"REFRESH\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+                    ]
+
+                    for pattern in sql_patterns:
+                        matches = re.findall(pattern, sql_upper)
+                        for match in matches:
+                            table_name = match.strip()
+                            if table_name and not any(
+                                skip in table_name.lower()
+                                for skip in ["select", "where", "order", "group"]
+                            ):
+                                if "." in table_name:
+                                    result["input_tables"].add(table_name.lower())
+                                    result["output_tables"].add(table_name.lower())
+
+        # Third pass: General schema.table pattern matching with smart filtering
+        for key, value in properties.items():
+            if not value or not isinstance(value, str):
+                continue
+
+            # Look for schema.table patterns
             table_patterns = re.findall(
                 r"\b([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\b", value
             )
@@ -136,7 +255,7 @@ def _extract_tables_from_processor(
             for table in table_patterns:
                 table_lower = table.lower()
 
-                # Only include patterns that look like actual database schemas
+                # Enhanced filtering - only include valid database schemas and exclude false positives
                 if any(
                     db_schema in table_lower
                     for db_schema in [
@@ -147,24 +266,8 @@ def _extract_tables_from_processor(
                         "temp.",
                         "data.",
                     ]
-                ) and not any(
-                    skip in table_lower
-                    for skip in [
-                        ".sh",
-                        ".py",
-                        ".jar",
-                        ".class",
-                        ".xml",
-                        ".keytab",
-                        ".na",
-                        ".com",
-                        ".error",
-                        "impala.",
-                        "execution.",
-                        "nxp.",
-                    ]
-                ):
-                    # Determine if it's input or output based on context
+                ) and not _is_false_positive_table_ref(table_lower):
+                    # Determine direction based on property context
                     key_lower = key.lower()
                     if (
                         "output" in key_lower
@@ -175,7 +278,6 @@ def _extract_tables_from_processor(
                     elif "input" in key_lower or "source" in key_lower:
                         result["input_tables"].add(table_lower)
                     else:
-                        # If unsure, add to both (common for ExecuteStreamCommand)
                         result["input_tables"].add(table_lower)
                         result["output_tables"].add(table_lower)
 
