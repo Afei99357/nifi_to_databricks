@@ -142,27 +142,16 @@ def main():
             tmp_file.write(uploaded_file.getvalue())
             tmp_xml_path = tmp_file.name
 
-        # Show progress with live logs
-        log_container = st.empty()
-        progress_bar = st.progress(0)
-
-        # Capture logs and update UI
-        logs = []
-
-        def log_callback(message):
-            logs.append(message)
-            log_container.text_area(
-                "Migration Progress", "\n".join(logs[-10:]), height=200
-            )
-
         try:
-            result = migrate_nifi_to_databricks_simplified(
-                xml_path=tmp_xml_path,
-                out_dir="/tmp",
-                project=f"migration_{uploaded_file.name.replace('.xml', '')}",
-                progress_callback=log_callback,
-            )
-            progress_bar.progress(100)
+            # Show spinner during migration
+            with st.spinner("🔄 Running NiFi to Databricks migration..."):
+                result = migrate_nifi_to_databricks_simplified(
+                    xml_path=tmp_xml_path,
+                    out_dir="/tmp",
+                    project=f"migration_{uploaded_file.name.replace('.xml', '')}",
+                    progress_callback=None,  # Disable verbose logging
+                )
+
             st.success("✅ Migration completed!")
 
             # Cache the result
