@@ -166,8 +166,8 @@ def main():
         st.info("🔍 Analyzing table lineage in your NiFi workflow...")
 
         try:
-            # Import table lineage functions
-            from tools.networkx_complete_flow_analysis import (
+            # Import simple table lineage functions (no NetworkX dependency)
+            from tools.simple_table_lineage import (
                 analyze_complete_workflow_with_tables,
                 build_complete_nifi_graph_with_tables,
                 generate_table_lineage_report,
