@@ -840,10 +840,10 @@ def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
         )
         for i, chain in enumerate(data["lineage_chains"], 1):
             proc_info = chain["processors"][0]
-            proc_num = proc_info.get("number", "?")
+            proc_type = chain.get("processor_type", "unknown")
 
-            # Format: table → Processor Name (number) → table
-            chain_text = f"{chain['source_table']} → {proc_info['name']} ({proc_num}) → {chain['target_table']}"
+            # Format: table → Processor Name [Type] → table (much clearer than meaningless numbers)
+            chain_text = f"{chain['source_table']} → {proc_info['name']} [{proc_type}] → {chain['target_table']}"
             lines.append(f"{i}. {chain_text}")
 
             # Add resolved SQL if available
