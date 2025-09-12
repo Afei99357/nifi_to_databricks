@@ -17,9 +17,6 @@ st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
 
 def display_migration_results(result):
     """Display migration results from either fresh run or cache"""
-    # Debug: Show what we received
-    st.write(f"**Debug - display_migration_results received:** {type(result)}")
-
     # Handle both string results (error case) and dict results
     if isinstance(result, str):
         st.error(f"❌ Migration failed: {result}")
@@ -33,7 +30,6 @@ def display_migration_results(result):
         # Display reports
         if result.get("reports"):
             reports = result["reports"]
-            st.write(f"**Debug - reports type:** {type(reports)}")
 
             # Essential Processors Report (now returns a tuple)
             if reports.get("essential_processors"):
@@ -153,13 +149,6 @@ def main():
                     out_dir="/tmp",
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                     progress_callback=None,  # Disable verbose logging
-                )
-
-            # Debug the result type and structure
-            st.write(f"**Debug - Result type:** {type(result)}")
-            if hasattr(result, "keys"):
-                st.write(
-                    f"**Debug - Result keys:** {list(result.keys()) if result else 'None'}"
                 )
 
             st.success("✅ Migration completed!")
