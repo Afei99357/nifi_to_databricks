@@ -88,21 +88,40 @@ def main():
     lineage_cache_key = f"lineage_results_{uploaded_file.name}"
     cached_result = st.session_state.get(lineage_cache_key, None)
 
+    # Check if analysis is running
+    analysis_running = st.session_state.get("lineage_running", False)
+
     # Analysis options
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        run_analysis = st.button("📊 Analyze Table Lineage", use_container_width=True)
+        run_analysis = st.button(
+            "📊 Analyze Table Lineage",
+            use_container_width=True,
+            disabled=analysis_running,
+        )
 
     with col2:
-        if st.button("🔙 Back to Dashboard"):
+        if st.button(
+            "🔙 Back to Dashboard",
+            disabled=analysis_running,
+            help="Cannot navigate during analysis" if analysis_running else None,
+        ):
             st.switch_page("Dashboard.py")
 
     with col3:
-        if st.button("🗑️ Clear Results", use_container_width=True):
+        if st.button(
+            "🗑️ Clear Results", use_container_width=True, disabled=analysis_running
+        ):
             if lineage_cache_key in st.session_state:
                 del st.session_state[lineage_cache_key]
             st.rerun()
+
+    # Show warning if analysis is running
+    if analysis_running:
+        st.warning(
+            "⚠️ Analysis in progress. Please wait and do not navigate away from this page."
+        )
 
     # Display cached results if available
     if cached_result and not run_analysis:
@@ -112,32 +131,27 @@ def main():
         display_lineage_results(cached_result, uploaded_file)
 
     # Run analysis
-    if uploaded_file and run_analysis:
+    if uploaded_file and run_analysis and not analysis_running:
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_xml_path = tmp_file.name
 
+        # Set analysis running flag
+        st.session_state["lineage_running"] = True
+
         # Create temp output directory
         with tempfile.TemporaryDirectory() as tmp_dir:
             try:
-                # Show progress
-                progress_bar = st.progress(0)
-                st.info("🔍 Analyzing NiFi table lineage...")
-
-                progress_bar.progress(25)
-
-                # Run analysis
-                result = analyze_nifi_table_lineage(
-                    xml_path=tmp_xml_path,
-                    outdir=tmp_dir,
-                    write_inter_chains=False,
-                )
-
-                progress_bar.progress(75)
+                # Show spinner during analysis
+                with st.spinner("🔍 Analyzing NiFi table lineage..."):
+                    result = analyze_nifi_table_lineage(
+                        xml_path=tmp_xml_path,
+                        outdir=tmp_dir,
+                        write_inter_chains=False,
+                    )
 
                 st.success("✅ Table lineage analysis completed!")
-                progress_bar.progress(100)
 
                 # Cache the result
                 st.session_state[lineage_cache_key] = result
@@ -150,6 +164,8 @@ def main():
                 st.write("**Debug info:**")
                 st.code(str(e))
             finally:
+                # Clear analysis running flag
+                st.session_state["lineage_running"] = False
                 # Clean up temp file
                 if os.path.exists(tmp_xml_path):
                     os.unlink(tmp_xml_path)

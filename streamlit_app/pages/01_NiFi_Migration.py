@@ -112,21 +112,38 @@ def main():
     migration_cache_key = f"migration_results_{uploaded_file.name}"
     cached_result = st.session_state.get(migration_cache_key, None)
 
+    # Check if migration is running
+    migration_running = st.session_state.get("migration_running", False)
+
     # Migration options
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        run_migration = st.button("🚀 Run Migration", use_container_width=True)
+        run_migration = st.button(
+            "🚀 Run Migration", use_container_width=True, disabled=migration_running
+        )
 
     with col2:
-        if st.button("🔙 Back to Dashboard"):
+        if st.button(
+            "🔙 Back to Dashboard",
+            disabled=migration_running,
+            help="Cannot navigate during migration" if migration_running else None,
+        ):
             st.switch_page("Dashboard.py")
 
     with col3:
-        if st.button("🗑️ Clear Results", use_container_width=True):
+        if st.button(
+            "🗑️ Clear Results", use_container_width=True, disabled=migration_running
+        ):
             if migration_cache_key in st.session_state:
                 del st.session_state[migration_cache_key]
             st.rerun()
+
+    # Show warning if migration is running
+    if migration_running:
+        st.warning(
+            "⚠️ Migration in progress. Please wait and do not navigate away from this page."
+        )
 
     # Display cached results if available
     if cached_result and not run_migration:
@@ -136,11 +153,14 @@ def main():
         display_migration_results(cached_result)
 
     # Run migration
-    if uploaded_file and run_migration:
+    if uploaded_file and run_migration and not migration_running:
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_xml_path = tmp_file.name
+
+        # Set migration running flag
+        st.session_state["migration_running"] = True
 
         try:
             # Show spinner during migration
@@ -150,6 +170,13 @@ def main():
                     out_dir="/tmp",
                     project=f"migration_{uploaded_file.name.replace('.xml', '')}",
                     progress_callback=None,  # Disable verbose logging
+                )
+
+            # Debug the result type and structure
+            st.write(f"**Debug - Result type:** {type(result)}")
+            if hasattr(result, "keys"):
+                st.write(
+                    f"**Debug - Result keys:** {list(result.keys()) if result else 'None'}"
                 )
 
             st.success("✅ Migration completed!")
@@ -169,6 +196,8 @@ def main():
             # Cache the error for consistency
             st.session_state[migration_cache_key] = error_msg
         finally:
+            # Clear migration running flag
+            st.session_state["migration_running"] = False
             os.unlink(tmp_xml_path)
 
 
