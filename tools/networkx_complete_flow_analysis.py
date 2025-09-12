@@ -62,6 +62,65 @@ def _extract_tables_from_processor(
             result["input_tables"].update(t.lower() for t in from_tables)
             result["output_tables"].update(t.lower() for t in insert_tables)
 
+    elif "executestreamcommand" in processor_type:
+        # Look for SQL/Impala commands in ExecuteStreamCommand properties
+        command_path = properties.get("Command Path", "")
+        command_args = properties.get("Command Arguments", "")
+
+        # Check if this is an Impala, Hive, or other SQL command
+        if any(
+            sql_cmd in command_path.lower()
+            for sql_cmd in ["impala", "hive", "beeline", "sql"]
+        ):
+            # Look for SQL in command arguments
+            full_command = f"{command_args}"
+            if full_command:
+                # Extract table names from SQL commands (including variable references)
+                from_tables = re.findall(
+                    r"FROM\s+([a-zA-Z_${][a-zA-Z0-9_.${}]*)", full_command.upper()
+                )
+                insert_tables = re.findall(
+                    r"INSERT\s+INTO\s+([a-zA-Z_${][a-zA-Z0-9_.${}]*)",
+                    full_command.upper(),
+                )
+                create_tables = re.findall(
+                    r"CREATE\s+TABLE\s+([a-zA-Z_${][a-zA-Z0-9_.${}]*)",
+                    full_command.upper(),
+                )
+                alter_tables = re.findall(
+                    r"ALTER\s+TABLE\s+([a-zA-Z_${][a-zA-Z0-9_.${}]*)",
+                    full_command.upper(),
+                )
+                refresh_tables = re.findall(
+                    r"REFRESH\s+([a-zA-Z_${][a-zA-Z0-9_.${}]*)", full_command.upper()
+                )
+
+                # Clean variable names (remove ${} wrapper but keep the variable name for tracking)
+                all_input_tables = from_tables
+                all_output_tables = (
+                    insert_tables + create_tables + alter_tables + refresh_tables
+                )
+
+                # Add tables (including variable references like ${prod_table})
+                for table in all_input_tables:
+                    if table.startswith("${") and table.endswith("}"):
+                        # Keep variable name for reference
+                        result["input_tables"].add(f"variable:{table}")
+                    else:
+                        result["input_tables"].add(table.lower())
+
+                for table in all_output_tables:
+                    if table.startswith("${") and table.endswith("}"):
+                        # Keep variable name for reference
+                        result["output_tables"].add(f"variable:{table}")
+                    else:
+                        result["output_tables"].add(table.lower())
+
+        # Check if this is a script file that might contain SQL
+        elif command_path.endswith((".sh", ".sql", ".py")):
+            # Add the script as a file reference
+            result["input_files"].add(command_path)
+
     # Look for common table property names
     for key, value in properties.items():
         if not value or not isinstance(value, str):
