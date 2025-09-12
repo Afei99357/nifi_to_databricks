@@ -30,6 +30,18 @@ The system provides programmatic APIs for automating the migration process.
 
 # Migration approaches removed - use simplified_migration.py for direct function calls
 
+- **Streamlit Web Application**: Interactive user interface for migrations
+  - `streamlit_app/Dashboard.py`: Main dashboard for file upload and navigation
+  - `streamlit_app/pages/01_NiFi_Migration.py`: Migration analysis and execution page
+  - `streamlit_app/pages/02_Table_Lineage.py`: Dedicated table lineage analysis page
+  - Features result caching, navigation protection, and error handling
+
+- **Table Lineage Analysis**: Dedicated data flow analysis system
+  - `tools/nifi_table_lineage.py`: Analyzes NiFi XML to extract table-to-table data flows
+  - Identifies SQL operations, variable resolution, and data dependencies
+  - Filters column aliases vs real table references for accurate lineage
+  - Outputs CSV reports with processor chains and hop counts
+
 - **Configuration**: Environment and settings management
   - `config/settings.py`: Environment variable loading and logging setup
   - Requires `.env` file with DATABRICKS_HOSTNAME, DATABRICKS_TOKEN, MODEL_ENDPOINT
@@ -335,3 +347,27 @@ except (SpecificError, AnotherError) as e:
 - File operations on files you just created rarely need exception handling
 - If you must catch `Exception`, log it and provide meaningful fallback behavior
 - When catching multiple exception types, group them: `except (IOError, OSError):`
+
+## Recent Streamlit App Improvements
+
+### ✅ **Completed Enhancements (Dec 2024)**
+- **Table Lineage Analysis**: Implemented GPT-suggested table lineage extraction approach
+- **Result Caching**: Added session state caching for both migration and lineage results
+- **Navigation Protection**: Disabled buttons during processing to prevent user interruption
+- **Clean UI**: Removed redundant sections (Advanced Options, Domain-Only chains, Back buttons)
+- **Error Handling**: Fixed "'str' object has no attribute 'get'" errors with proper type checking
+- **Clear Results Fix**: Clear Results button now resets both results and uploaded file cache
+- **Spinner Progress**: Replaced verbose logging with clean rotating spinner indicators
+
+### 🎯 **Key UI Patterns**
+- **Session State Management**: Use `st.session_state` for caching results across page navigation
+- **Navigation Protection**: Set running flags (`migration_running`, `lineage_running`) to disable UI during processing
+- **Error Display**: Use `st.error()` for failures, `st.warning()` for non-critical issues, `st.success()` for completions
+- **File Handling**: Always clean up temporary files in `finally` blocks
+- **Progress Indication**: Use `st.spinner()` for long-running operations instead of progress bars
+
+### ⚠️ **Common Issues to Avoid**
+- **Don't assume data types**: Always check if objects are strings vs dicts before calling `.get()`
+- **Clear all caches**: Clear Results should remove both result cache AND uploaded file cache
+- **Handle edge cases**: Table lineage may return error strings instead of analysis objects
+- **Avoid redundant UI**: Don't add back navigation buttons when sidebar navigation exists

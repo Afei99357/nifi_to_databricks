@@ -186,20 +186,35 @@ env:
 
 ## 🖥️ Using the Streamlit App
 
-1. **Upload NiFi XML**: Use the file uploader to select your NiFi template XML file
-2. **Run Migration**: Click "Run Migration" to start the analysis and conversion process
-3. **View Results**: The app will display:
-   - **Essential Processors Report**: Shows the core data processing logic identified
-   - **Migration Guide**: Comprehensive analysis and recommendations
-   - **Unknown Processors**: Any processors that need manual review
-   - **Asset Summary**: Overview of generated Databricks assets
+### 🎯 **Migration Analysis Page**
+1. **Upload NiFi XML**: Use the Dashboard to upload your NiFi template XML file
+2. **Run Migration**: Click "🚀 Run Migration" button with clean spinner progress indicator
+3. **View Results**: The app displays focused migration analysis:
+   - **Essential Processors Report**: Core data processing logic with dependency chains
+   - **Unknown Processors Report**: Processors requiring manual review with classification reasons
+   - **Asset Summary**: Overview of generated Databricks migration assets
+4. **Clear Results**: Use "🗑️ Clear Results" to reset both results and uploaded file cache
+
+### 📊 **Table Lineage Analysis Page**
+1. **Analyze Data Flow**: Click "📊 Analyze Table Lineage" for dedicated data lineage analysis
+2. **View Lineage Results**:
+   - **Summary Metrics**: Processors, connections, and discovered table chains
+   - **Table Lineage Chains**: Direct table-to-table data flow relationships
+   - **Download CSV**: Export lineage results for external analysis
+3. **Navigation Protection**: UI prevents navigation during long-running analysis
+
+### ✨ **Key Features**
+- **Result Caching**: Analysis results persist when switching between pages
+- **Navigation Protection**: Buttons disabled during processing to prevent interruption
+- **Clean Interface**: Streamlined UI focusing on essential functionality
+- **Error Handling**: Graceful handling of analysis errors with detailed feedback
 
 The app automatically:
 - Analyzes and classifies all NiFi processors using AI
 - Prunes infrastructure-only processors (logging, routing, flow control)
-- Detects semantic data transformation chains
-- Generates Databricks migration recommendations
-- Creates detailed reports for manual review
+- Detects semantic data transformation chains and table lineage
+- Generates comprehensive migration analysis and recommendations
+- Provides separate dedicated pages for migration and lineage analysis
 
 ## 🔧 Programmatic API Usage
 

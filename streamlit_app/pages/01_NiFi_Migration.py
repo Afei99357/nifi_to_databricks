@@ -103,7 +103,7 @@ def main():
     migration_running = st.session_state.get("migration_running", False)
 
     # Migration options
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         run_migration = st.button(
@@ -111,6 +111,14 @@ def main():
         )
 
     with col2:
+        if st.button(
+            "🔙 Back to Dashboard",
+            disabled=migration_running,
+            help="Cannot navigate during analysis" if migration_running else None,
+        ):
+            st.switch_page("Dashboard.py")
+
+    with col3:
         if st.button(
             "🗑️ Clear Results", use_container_width=True, disabled=migration_running
         ):
