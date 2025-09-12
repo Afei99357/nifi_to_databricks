@@ -121,6 +121,64 @@ def _extract_tables_from_processor(
             # Add the script as a file reference
             result["input_files"].add(command_path)
 
+    # Look for table references in ALL properties for ExecuteStreamCommand
+    # since SQL statements might be in variables
+    if "executestreamcommand" in processor_type:
+        for key, value in properties.items():
+            if not value or not isinstance(value, str):
+                continue
+
+            # Look for schema.table patterns that look like database tables
+            table_patterns = re.findall(
+                r"\b([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\b", value
+            )
+
+            for table in table_patterns:
+                table_lower = table.lower()
+
+                # Only include patterns that look like actual database schemas
+                if any(
+                    db_schema in table_lower
+                    for db_schema in [
+                        "mfg_",
+                        "bqa.",
+                        "staging",
+                        "prod_",
+                        "temp.",
+                        "data.",
+                    ]
+                ) and not any(
+                    skip in table_lower
+                    for skip in [
+                        ".sh",
+                        ".py",
+                        ".jar",
+                        ".class",
+                        ".xml",
+                        ".keytab",
+                        ".na",
+                        ".com",
+                        ".error",
+                        "impala.",
+                        "execution.",
+                        "nxp.",
+                    ]
+                ):
+                    # Determine if it's input or output based on context
+                    key_lower = key.lower()
+                    if (
+                        "output" in key_lower
+                        or "target" in key_lower
+                        or "destination" in key_lower
+                    ):
+                        result["output_tables"].add(table_lower)
+                    elif "input" in key_lower or "source" in key_lower:
+                        result["input_tables"].add(table_lower)
+                    else:
+                        # If unsure, add to both (common for ExecuteStreamCommand)
+                        result["input_tables"].add(table_lower)
+                        result["output_tables"].add(table_lower)
+
     # Look for common table property names
     for key, value in properties.items():
         if not value or not isinstance(value, str):
