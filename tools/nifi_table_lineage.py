@@ -98,51 +98,20 @@ def _is_false_positive_table_ref(name: str) -> bool:
         return True
     n = name.lower()
 
-    # single-letter alias schemas (p.cnt, t.before, y.w01)
+    # Allow more permissive extraction like GPT - only filter very obvious non-tables
     parts = n.split(".")
     if len(parts) >= 2:
-        if len(parts[0]) == 1 and parts[0].isalpha():
-            return True
-        if len(parts[0]) <= 2 and parts[0] in tuple("abcdefghijklmnopqrstuvwxyz"):
+        # Only filter single letters that are obviously not schemas (like p.cnt, t.before)
+        if (
+            len(parts[0]) == 1 and parts[0] in "abcdefghijkmpqrtuvwxyz"
+        ):  # exclude common aliases like 'nll', 'nlt', 'scp'
             return True
 
-    # obvious column-ish tails
+    # Be much more permissive - only filter the most obvious non-tables like GPT does
     if len(parts) >= 2:
-        colish = {
-            "cnt",
-            "count",
-            "sum",
-            "avg",
-            "min",
-            "max",
-            "before",
-            "after",
-            "date",
-            "time",
-            "timestamp",
-            "id",
-            "name",
-            "value",
-            "status",
-            "type",
-            "code",
-            "desc",
-            "description",
-            "create",
-            "update",
-            "delete",
-            "insert",
-            "row",
-            "col",
-            "path",
-            "file",
-            "absolute",
-        }
-        if parts[-1] in colish:
-            return True
-
-        # week columns like w01, w12, w123
-        if re.fullmatch(r"w\d{1,3}", parts[-1]):
+        # Only filter very obvious file/path patterns
+        obvious_files = {"path", "file", "absolute", "sh", "py", "jar", "xml"}
+        if parts[-1] in obvious_files:
             return True
 
     # obvious non-table substrings
@@ -269,9 +238,11 @@ KNOWN_GOOD_SCHEMAS = {
     "mfg_icn8_staging",
     "mfg_icn8_apps",
     "mfg_icn8_temp",
+    "nll",
+    "nlt",
 }
 
-CONTROL_SCHEMAS = {"nll", "nlt", "root", "absolute", "file", "text", "impala"}
+CONTROL_SCHEMAS = {"root", "absolute", "file", "text", "impala"}
 
 SKIP_PROCESSOR_TYPES = ("updateattribute", "logmessage", "wait", "routeonattribute")
 

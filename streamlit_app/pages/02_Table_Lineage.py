@@ -17,6 +17,109 @@ from tools.nifi_table_lineage import analyze_nifi_table_lineage
 st.set_page_config(page_title="Table Lineage Analysis", page_icon="📊", layout="wide")
 
 
+def display_lineage_results(result, uploaded_file):
+    """Display table lineage results from either fresh run or cache"""
+    # Display summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Processors", result["processors"])
+    with col2:
+        st.metric("Connections", result["connections"])
+    with col3:
+        st.metric("All Chains", result["all_chains"])
+    with col4:
+        st.metric("Domain Chains", result["domain_chains"])
+
+    # Display all chains table
+    st.markdown("### 📋 All Table Lineage Chains")
+    if result["chains_data"]:
+        # Read CSV data to display exactly as GPT generates it
+        try:
+            all_chains_df = pd.read_csv(result["all_chains_csv"])
+            st.dataframe(all_chains_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error reading CSV: {e}")
+            # Fallback to manual DataFrame
+            chains_df = pd.DataFrame(
+                [
+                    {
+                        "source_table": chain[0],
+                        "target_table": chain[1],
+                        "processor_ids": " -> ".join(chain[2]),
+                        "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
+                        "hop_count": len(chain[2]),
+                    }
+                    for chain in result["chains_data"]
+                ]
+            )
+            st.dataframe(chains_df, use_container_width=True)
+    else:
+        st.info("No table lineage chains found.")
+
+    st.markdown("---")
+
+    # Display domain chains table
+    st.markdown("### 🎯 Domain-Only Table Lineage Chains")
+    st.caption("Excludes housekeeping schemas (root, impala, etc.)")
+    if result["domain_chains_data"]:
+        # Read CSV data to display exactly as GPT generates it
+        try:
+            domain_chains_df = pd.read_csv(result["domain_chains_csv"])
+            st.dataframe(domain_chains_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error reading CSV: {e}")
+            # Fallback to manual DataFrame
+            domain_df = pd.DataFrame(
+                [
+                    {
+                        "source_table": chain[0],
+                        "target_table": chain[1],
+                        "processor_ids": " -> ".join(chain[2]),
+                        "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
+                        "hop_count": len(chain[2]),
+                    }
+                    for chain in result["domain_chains_data"]
+                ]
+            )
+            st.dataframe(domain_df, use_container_width=True)
+    else:
+        st.info("No domain table lineage chains found.")
+
+    # Download buttons
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Download all chains CSV
+        try:
+            with open(result["all_chains_csv"], "r") as f:
+                all_csv_content = f.read()
+            st.download_button(
+                label="📥 Download All Chains CSV",
+                data=all_csv_content,
+                file_name=f"all_chains_{uploaded_file.name.replace('.xml', '')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.error(f"Error reading all chains CSV: {e}")
+
+    with col2:
+        # Download domain chains CSV
+        try:
+            with open(result["domain_chains_csv"], "r") as f:
+                domain_csv_content = f.read()
+            st.download_button(
+                label="📥 Download Domain Chains CSV",
+                data=domain_csv_content,
+                file_name=f"domain_chains_{uploaded_file.name.replace('.xml', '')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.error(f"Error reading domain chains CSV: {e}")
+
+
 def main():
     st.title("📊 NiFi Table Lineage Analysis")
 
@@ -31,8 +134,12 @@ def main():
             st.switch_page("Dashboard.py")
         return
 
+    # Check for cached lineage results
+    lineage_cache_key = f"lineage_results_{uploaded_file.name}"
+    cached_result = st.session_state.get(lineage_cache_key, None)
+
     # Analysis options
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         run_analysis = st.button("📊 Analyze Table Lineage", use_container_width=True)
@@ -41,6 +148,12 @@ def main():
         if st.button("🔙 Back to Dashboard"):
             st.switch_page("Dashboard.py")
 
+    with col3:
+        if st.button("🗑️ Clear Results", use_container_width=True):
+            if lineage_cache_key in st.session_state:
+                del st.session_state[lineage_cache_key]
+            st.rerun()
+
     # Advanced options
     with st.expander("⚙️ Advanced Options"):
         write_inter_chains = st.checkbox(
@@ -48,6 +161,13 @@ def main():
             value=False,
             help="Generate 2-hop chains between processors (may increase results significantly)",
         )
+
+    # Display cached results if available
+    if cached_result and not run_analysis:
+        st.info(
+            "📋 Showing cached table lineage results. Click 'Analyze Table Lineage' to regenerate."
+        )
+        display_lineage_results(cached_result, uploaded_file)
 
     # Run analysis
     if uploaded_file and run_analysis:
@@ -77,109 +197,11 @@ def main():
                 st.success("✅ Table lineage analysis completed!")
                 progress_bar.progress(100)
 
-                # Display summary metrics
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Processors", result["processors"])
-                with col2:
-                    st.metric("Connections", result["connections"])
-                with col3:
-                    st.metric("All Chains", result["all_chains"])
-                with col4:
-                    st.metric("Domain Chains", result["domain_chains"])
+                # Cache the result
+                st.session_state[lineage_cache_key] = result
 
-                # Display all chains table
-                st.markdown("### 📋 All Table Lineage Chains")
-                if result["chains_data"]:
-                    # Read CSV data to display exactly as GPT generates it
-                    try:
-                        all_chains_df = pd.read_csv(result["all_chains_csv"])
-                        st.dataframe(all_chains_df, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Error reading CSV: {e}")
-                        # Fallback to manual DataFrame
-                        chains_df = pd.DataFrame(
-                            [
-                                {
-                                    "source_table": chain[0],
-                                    "target_table": chain[1],
-                                    "processor_ids": " -> ".join(chain[2]),
-                                    "chain_type": (
-                                        "inter" if len(chain[2]) > 1 else "intra"
-                                    ),
-                                    "hop_count": len(chain[2]),
-                                }
-                                for chain in result["chains_data"]
-                            ]
-                        )
-                        st.dataframe(chains_df, use_container_width=True)
-                else:
-                    st.info("No table lineage chains found.")
-
-                st.markdown("---")
-
-                # Display domain chains table
-                st.markdown("### 🎯 Domain-Only Table Lineage Chains")
-                st.caption("Excludes housekeeping schemas (root, impala, etc.)")
-                if result["domain_chains_data"]:
-                    # Read CSV data to display exactly as GPT generates it
-                    try:
-                        domain_chains_df = pd.read_csv(result["domain_chains_csv"])
-                        st.dataframe(domain_chains_df, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Error reading CSV: {e}")
-                        # Fallback to manual DataFrame
-                        domain_df = pd.DataFrame(
-                            [
-                                {
-                                    "source_table": chain[0],
-                                    "target_table": chain[1],
-                                    "processor_ids": " -> ".join(chain[2]),
-                                    "chain_type": (
-                                        "inter" if len(chain[2]) > 1 else "intra"
-                                    ),
-                                    "hop_count": len(chain[2]),
-                                }
-                                for chain in result["domain_chains_data"]
-                            ]
-                        )
-                        st.dataframe(domain_df, use_container_width=True)
-                else:
-                    st.info("No domain table lineage chains found.")
-
-                # Download buttons
-                st.markdown("---")
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    # Download all chains CSV
-                    try:
-                        with open(result["all_chains_csv"], "r") as f:
-                            all_csv_content = f.read()
-                        st.download_button(
-                            label="📥 Download All Chains CSV",
-                            data=all_csv_content,
-                            file_name=f"all_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                            mime="text/csv",
-                            use_container_width=True,
-                        )
-                    except Exception as e:
-                        st.error(f"Error reading all chains CSV: {e}")
-
-                with col2:
-                    # Download domain chains CSV
-                    try:
-                        with open(result["domain_chains_csv"], "r") as f:
-                            domain_csv_content = f.read()
-                        st.download_button(
-                            label="📥 Download Domain Chains CSV",
-                            data=domain_csv_content,
-                            file_name=f"domain_chains_{uploaded_file.name.replace('.xml', '')}.csv",
-                            mime="text/csv",
-                            use_container_width=True,
-                        )
-                    except Exception as e:
-                        st.error(f"Error reading domain chains CSV: {e}")
+                # Display the results
+                display_lineage_results(result, uploaded_file)
 
             except Exception as e:
                 st.error(f"❌ Table lineage analysis failed: {e}")

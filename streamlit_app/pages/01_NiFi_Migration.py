@@ -15,6 +15,85 @@ from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
 st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
 
 
+def display_migration_results(result):
+    """Display migration results from either fresh run or cache"""
+    # Handle both string results (error case) and dict results
+    if isinstance(result, str):
+        st.error(f"❌ Migration failed: {result}")
+        return
+
+    if not isinstance(result, dict):
+        st.error(f"❌ Migration failed: Invalid result format - {type(result)}")
+        return
+
+    # Display reports
+    if result.get("reports"):
+        reports = result["reports"]
+
+        # Connection Analysis Dashboard
+        if "connection_analysis" in reports and reports["connection_analysis"]:
+            conn_analysis = reports["connection_analysis"]
+
+            # Connection Summary Metrics
+            summary = conn_analysis.get("connection_summary", {})
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Processors", summary.get("total_processors", 0))
+            with col2:
+                st.metric(
+                    "Essential Processors", summary.get("essential_processors", 0)
+                )
+            with col3:
+                st.metric(
+                    "Complexity Reduction", summary.get("complexity_reduction", "0%")
+                )
+            with col4:
+                effectiveness = summary.get("pruning_effectiveness", "Unknown")
+                color = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(
+                    effectiveness, "⚪"
+                )
+                st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
+
+            # Essential Processors Report (now returns a tuple)
+            if reports.get("essential_processors"):
+                essential_data = reports["essential_processors"]
+
+                if isinstance(essential_data, tuple) and len(essential_data) == 2:
+                    main_report, dependencies_report = essential_data
+
+                    # Main Essential Processors Section
+                    with st.expander("📋 Essential Processors Report"):
+                        st.markdown(main_report)
+
+                    # Essential Dependencies Section (separate expander)
+                    if dependencies_report and dependencies_report.strip():
+                        with st.expander("🔗 Essential Dependencies"):
+                            st.markdown(dependencies_report)
+                else:
+                    # Fallback for old format
+                    with st.expander("📋 Essential Processors Report"):
+                        st.markdown(str(essential_data))
+
+        # Unknown Processors Report
+        unknown_data = reports.get("unknown_processors", {})
+        if unknown_data.get("count", 0) > 0:
+            with st.expander(f"❓ Unknown Processors ({unknown_data['count']})"):
+                for proc in unknown_data.get("unknown_processors", []):
+                    st.write(f"**{proc.get('name', 'Unknown')}**")
+                    st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
+                    st.write(f"- Reason: {proc.get('reason', 'No reason provided')}")
+                    st.write("---")
+        else:
+            st.info("✅ No unknown processors - all were successfully classified")
+
+        # Asset Summary Report
+        if "asset_summary" in reports and reports["asset_summary"]:
+            with st.expander("📄 Asset Summary"):
+                st.markdown(reports["asset_summary"])
+    else:
+        st.warning("⚠️ No reports found in migration result")
+
+
 def main():
     st.title("🚀 NiFi to Databricks Migration")
 
@@ -29,8 +108,12 @@ def main():
             st.switch_page("Dashboard.py")
         return
 
+    # Check for cached migration results
+    migration_cache_key = f"migration_results_{uploaded_file.name}"
+    cached_result = st.session_state.get(migration_cache_key, None)
+
     # Migration options
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         run_migration = st.button("🚀 Run Migration", use_container_width=True)
@@ -38,6 +121,19 @@ def main():
     with col2:
         if st.button("🔙 Back to Dashboard"):
             st.switch_page("Dashboard.py")
+
+    with col3:
+        if st.button("🗑️ Clear Results", use_container_width=True):
+            if migration_cache_key in st.session_state:
+                del st.session_state[migration_cache_key]
+            st.rerun()
+
+    # Display cached results if available
+    if cached_result and not run_migration:
+        st.info(
+            "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
+        )
+        display_migration_results(cached_result)
 
     # Run migration
     if uploaded_file and run_migration:
@@ -69,88 +165,20 @@ def main():
             progress_bar.progress(100)
             st.success("✅ Migration completed!")
 
-            # Display reports
-            if result.get("reports"):
-                reports = result["reports"]
+            # Cache the result
+            st.session_state[migration_cache_key] = result
 
-                # Connection Analysis Dashboard
-                if "connection_analysis" in reports and reports["connection_analysis"]:
-                    conn_analysis = reports["connection_analysis"]
-
-                    # Connection Summary Metrics
-                    summary = conn_analysis.get("connection_summary", {})
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric(
-                            "Total Processors", summary.get("total_processors", 0)
-                        )
-                    with col2:
-                        st.metric(
-                            "Essential Processors",
-                            summary.get("essential_processors", 0),
-                        )
-                    with col3:
-                        st.metric(
-                            "Complexity Reduction",
-                            summary.get("complexity_reduction", "0%"),
-                        )
-                    with col4:
-                        effectiveness = summary.get("pruning_effectiveness", "Unknown")
-                        color = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(
-                            effectiveness, "⚪"
-                        )
-                        st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
-
-                    # Essential Processors Report (now returns a tuple)
-                    if reports.get("essential_processors"):
-                        essential_data = reports["essential_processors"]
-
-                        if (
-                            isinstance(essential_data, tuple)
-                            and len(essential_data) == 2
-                        ):
-                            main_report, dependencies_report = essential_data
-
-                            # Main Essential Processors Section
-                            with st.expander("📋 Essential Processors Report"):
-                                st.markdown(main_report)
-
-                            # Essential Dependencies Section (separate expander)
-                            if dependencies_report and dependencies_report.strip():
-                                with st.expander("🔗 Essential Dependencies"):
-                                    st.markdown(dependencies_report)
-                        else:
-                            # Fallback for old format
-                            with st.expander("📋 Essential Processors Report"):
-                                st.markdown(str(essential_data))
-
-                # Unknown Processors Report
-                unknown_data = reports.get("unknown_processors", {})
-                if unknown_data.get("count", 0) > 0:
-                    with st.expander(
-                        f"❓ Unknown Processors ({unknown_data['count']})"
-                    ):
-                        for proc in unknown_data.get("unknown_processors", []):
-                            st.write(f"**{proc.get('name', 'Unknown')}**")
-                            st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                            st.write(
-                                f"- Reason: {proc.get('reason', 'No reason provided')}"
-                            )
-                            st.write("---")
-                else:
-                    st.info(
-                        "✅ No unknown processors - all were successfully classified"
-                    )
-
-                # Asset Summary Report
-                if "asset_summary" in reports and reports["asset_summary"]:
-                    with st.expander("📄 Asset Summary"):
-                        st.markdown(reports["asset_summary"])
+            # Display the results
+            display_migration_results(result)
 
         except Exception as e:
-            st.error(f"❌ Migration failed: {e}")
+            error_msg = str(e)
+            st.error(f"❌ Migration failed: {error_msg}")
             st.write("**Debug info:**")
-            st.code(str(e))
+            st.code(error_msg)
+
+            # Cache the error for consistency
+            st.session_state[migration_cache_key] = error_msg
         finally:
             os.unlink(tmp_xml_path)
 
