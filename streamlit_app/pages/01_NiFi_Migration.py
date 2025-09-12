@@ -5,30 +5,38 @@ import sys
 import tempfile
 
 # Add parent directory to Python path to find tools and config (MUST be before imports)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import streamlit as st
 
 from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
 
+# Configure the page
+st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
+
 
 def main():
-
     st.title("🚀 NiFi to Databricks Migration")
 
-    # File upload
-    uploaded_file = st.file_uploader("Upload NiFi XML file", type=["xml"])
+    st.markdown(
+        """
+    Upload your NiFi XML template file and convert it to a Databricks pipeline.
+    The migration system will analyze your workflow and generate optimized Databricks Jobs.
+    """
+    )
 
-    # Analysis options
+    # File upload
+    uploaded_file = st.file_uploader(
+        "Upload NiFi XML file",
+        type=["xml"],
+        help="Select your NiFi template (.xml) file to begin the migration process",
+    )
+
+    # Migration options
     col1, col2 = st.columns(2)
 
     with col1:
         run_migration = st.button("🚀 Run Migration", use_container_width=True)
-
-    # with col2:
-    #     run_table_lineage = st.button(
-    #         "📊 Analyze Table Lineage", use_container_width=True
-    #     )
 
     # Run migration
     if uploaded_file and run_migration:
@@ -138,19 +146,12 @@ def main():
                     with st.expander("📄 Asset Summary"):
                         st.markdown(reports["asset_summary"])
 
-            # # Raw Results (for debugging)
-            # with st.expander("🔍 Raw Results"):
-            #     st.json(result)
-
         except Exception as e:
             st.error(f"❌ Migration failed: {e}")
             st.write("**Debug info:**")
             st.code(str(e))
         finally:
             os.unlink(tmp_xml_path)
-
-    # # Run table lineage analysis (REMOVED - reimplementing in other way)
-    # if uploaded_file and run_table_lineage:
 
 
 if __name__ == "__main__":
