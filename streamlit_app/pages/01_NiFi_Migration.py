@@ -95,6 +95,8 @@ def main():
         st.success(f"✅ Processing file: {uploaded_file.name}")
     else:
         st.warning("⚠️ No file selected. Please go back to Dashboard to upload a file.")
+        if st.button("🔙 Back to Dashboard"):
+            st.switch_page("Dashboard.py")
         return
 
     # Check for cached migration results
