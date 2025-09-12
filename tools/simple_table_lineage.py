@@ -201,9 +201,43 @@ def _extract_sql_tables(sql_text: str) -> Tuple[Set[str], Set[str]]:
     return reads, writes
 
 
+def _sql_snippets(ptype: str, props: Dict[str, str]) -> List[str]:
+    """Extract SQL snippets from processor properties"""
+    p = (ptype or "").lower()
+    sqls = []
+    if "executesql" in p:
+        sqls += [props.get("SQL select query") or props.get("SQL Query") or ""]
+    if "putsql" in p or "puthiveql" in p:
+        sqls += [
+            props.get("SQL statement") or props.get("sql") or props.get("HiveQL") or ""
+        ]
+    if "executestreamcommand" in p:
+        cmd = f"{props.get('Command Path', '')} {props.get('Command Arguments', '')}"
+        # prefer quoted chunks; fall back if we see SQL verbs
+        chunks = re.findall(r'"([^"]+)"|\'([^\']+)\'', cmd)
+        sqls += [c[0] or c[1] for c in chunks if (c[0] or c[1])]
+        if not sqls and re.search(r"\b(select|insert|merge|create)\b", cmd, re.I):
+            sqls += [cmd]
+        # any explicit sql/* keys
+        for k, v in props.items():
+            if (
+                isinstance(v, str)
+                and len(v) > 10
+                and any(w in k.lower() for w in ("sql", "query", "statement", "hql"))
+            ):
+                sqls.append(v)
+    return [s for s in sqls if s and s.strip()]
+
+
+def _pairs_from_sql(sql: str) -> Set[Tuple[str, str]]:
+    """Extract read→write pairs from SQL"""
+    r, w = _extract_sql_tables(sql)
+    return {(rr, ww) for rr in r for ww in w if rr != ww}
+
+
 def _extract_tables_from_processor(
     ptype: str, props: Dict[str, Any], strict_sql_only: bool = True
-) -> Tuple[Set[str], Set[str]]:
+) -> Tuple[Set[str], Set[str], Set[Tuple[str, str]]]:
     """Return (reads, writes) tables for a processor."""
     p = (ptype or "").lower()
     reads, writes = set(), set()
@@ -328,7 +362,13 @@ def _extract_tables_from_processor(
                     reads.add(t)
                     writes.add(t)
 
-    return reads, writes
+    # Extract evidence-based pairs from SQL snippets
+    sqls = _sql_snippets(ptype, props)
+    pairs = set()
+    for sql in sqls:
+        pairs |= _pairs_from_sql(sql)
+
+    return reads, writes, pairs
 
 
 # ---------- Main: parse & lineage ----------
@@ -364,7 +404,7 @@ def analyze_nifi_table_lineage(
                     if key:
                         props[key] = value
 
-        reads, writes = _extract_tables_from_processor(
+        reads, writes, pairs = _extract_tables_from_processor(
             ptype, props, strict_sql_only=True
         )
         procs[pid] = {
@@ -373,6 +413,7 @@ def analyze_nifi_table_lineage(
             "type": ptype,
             "reads": reads,
             "writes": writes,
+            "pairs": pairs,
         }
 
     # Connections (processor graph) - NiFi templates use <connections> containers
@@ -405,6 +446,26 @@ def analyze_nifi_table_lineage(
         if count >= min_schema_frequency
     }
 
+    # Seed known good schemas so we don't drop legitimate one-offs
+    schema_allowlist |= {
+        "bq",
+        "bqa",
+        "bws",
+        "dia",
+        "e3s",
+        "e3u",
+        "edc",
+        "pcm",
+        "ps",
+        "ovl",
+        "nts",
+        "proc_bws",
+        "mfg_icn8_data",
+        "mfg_icn8_staging",
+        "mfg_icn8_apps",
+        "mfg_icn8_temp",
+    }
+
     # Apply schema filtering to processor tables
     def _filter_table_by_schema(table: str) -> bool:
         if "." not in table:
@@ -422,159 +483,78 @@ def analyze_nifi_table_lineage(
     for p in procs.values():
         all_tables |= p["reads"] | p["writes"]
 
-    # Build edges: (1) intra-processor FROM→INTO
+    # Build REAL processing chains: Focus on evidence-based flows
     chains: List[Dict[str, Any]] = []
-    for p in procs.values():
-        if p["reads"] and p["writes"]:
-            if use_statement_pairs and len(p["reads"]) > 1 and len(p["writes"]) > 1:
-                # Use statement pairs: pair tables 1:1 instead of cross-product
-                # This reduces artificial explosion of lineage chains
-                reads_list = sorted(list(p["reads"]))
-                writes_list = sorted(list(p["writes"]))
 
-                # Pair up to min(reads, writes), then handle remainder
-                min_pairs = min(len(reads_list), len(writes_list))
-                for i in range(min_pairs):
-                    r, w = reads_list[i], writes_list[i]
-                    if r == w:
-                        continue  # skip trivial loops
+    # Filter out configuration-only processors (UpdateAttribute, etc.)
+    processing_procs = {
+        pid: p
+        for pid, p in procs.items()
+        if not any(
+            config_type in p["type"].lower()
+            for config_type in [
+                "updateattribute",
+                "logmessage",
+                "wait",
+                "routeonattribute",
+            ]
+        )
+        and (p["reads"] or p["writes"])
+    }
+
+    processing_ids = set(processing_procs.keys())
+    print(
+        f"🔧 Filtered to {len(processing_procs)} actual processing processors (from {len(procs)} total)"
+    )
+
+    # Build bridged adjacency over non-processing hops (depth = 1)
+    bridged_adj = {pid: [] for pid in processing_ids}
+    for src, outs in adj.items():
+        if src not in processing_ids:
+            continue
+        for mid in outs:
+            if mid in processing_ids:
+                bridged_adj[src].append(mid)
+            else:
+                # hop over non-processing node
+                for dst in adj.get(mid, []):
+                    if dst in processing_ids:
+                        bridged_adj[src].append(dst)
+
+    # Build intra-processor chains from evidence-based pairs (no cross-product)
+    for pid, p in processing_procs.items():
+        for r, w in p["pairs"]:
+            chains.append(
+                {
+                    "source_table": r,
+                    "target_table": w,
+                    "processors": [{"id": p["id"], "name": p["name"]}],
+                    "processor_count": 1,
+                    "kind": "data-processing",
+                    "processor_type": p["type"].split(".")[-1],
+                }
+            )
+
+    # (2) Inter-processor chains with bridged adjacency and evidence-based pairs
+    for src_pid, dst_pids in bridged_adj.items():
+        src = processing_procs[src_pid]
+        for dst_pid in dst_pids:
+            dst = processing_procs[dst_pid]
+            for r, w in dst["pairs"]:
+                if r in src["writes"] and r != w:
                     chains.append(
                         {
                             "source_table": r,
                             "target_table": w,
-                            "processors": [{"id": p["id"], "name": p["name"]}],
-                            "processor_count": 1,
-                            "kind": "intra-paired",
+                            "processors": [
+                                {"id": src_pid, "name": src["name"]},
+                                {"id": dst_pid, "name": dst["name"]},
+                            ],
+                            "processor_count": 2,
+                            "kind": "real-processing-chain",
+                            "flow_description": f"{src['name']} writes {r} → {dst['name']} reads {r} → outputs {w}",
                         }
                     )
-
-                # Handle remainder tables (if reads != writes count)
-                if len(reads_list) > min_pairs:
-                    # More reads than writes - connect excess reads to last write
-                    for i in range(min_pairs, len(reads_list)):
-                        r = reads_list[i]
-                        w = writes_list[-1] if writes_list else None
-                        if w and r != w:
-                            chains.append(
-                                {
-                                    "source_table": r,
-                                    "target_table": w,
-                                    "processors": [{"id": p["id"], "name": p["name"]}],
-                                    "processor_count": 1,
-                                    "kind": "intra-remainder",
-                                }
-                            )
-                elif len(writes_list) > min_pairs:
-                    # More writes than reads - connect last read to excess writes
-                    r = reads_list[-1] if reads_list else None
-                    if r:
-                        for i in range(min_pairs, len(writes_list)):
-                            w = writes_list[i]
-                            if r != w:
-                                chains.append(
-                                    {
-                                        "source_table": r,
-                                        "target_table": w,
-                                        "processors": [
-                                            {"id": p["id"], "name": p["name"]}
-                                        ],
-                                        "processor_count": 1,
-                                        "kind": "intra-remainder",
-                                    }
-                                )
-            else:
-                # Use full cross-product for simple cases or when statement_pairs is disabled
-                for r in p["reads"]:
-                    for w in p["writes"]:
-                        if r == w:
-                            # skip trivial loops; keep if you prefer
-                            continue
-                        chains.append(
-                            {
-                                "source_table": r,
-                                "target_table": w,
-                                "processors": [{"id": p["id"], "name": p["name"]}],
-                                "processor_count": 1,
-                                "kind": "intra",
-                            }
-                        )
-
-    # (2) inter-processor: upstream writes X -> downstream reads X (via direct edges and shallow BFS)
-    # Precompute reverse maps
-    writes_by_table: Dict[str, Set[str]] = {}
-    reads_by_table: Dict[str, Set[str]] = {}
-    for pid, p in procs.items():
-        for t in p["writes"]:
-            writes_by_table.setdefault(t, set()).add(pid)
-        for t in p["reads"]:
-            reads_by_table.setdefault(t, set()).add(pid)
-
-    # direct neighbor linkage
-    for src_pid, outs in adj.items():
-        for dst_pid in outs:
-            # if src writes a table that dst reads, connect them
-            common = procs[src_pid]["writes"] & procs[dst_pid]["reads"]
-            if common:
-                # if dst also writes something, link to that; otherwise just record the consumption
-                if procs[dst_pid]["writes"]:
-                    for t_in in common:
-                        for t_out in procs[dst_pid]["writes"]:
-                            if t_in == t_out:
-                                continue
-                            chains.append(
-                                {
-                                    "source_table": t_in,
-                                    "target_table": t_out,
-                                    "processors": [
-                                        {"id": src_pid, "name": procs[src_pid]["name"]},
-                                        {"id": dst_pid, "name": procs[dst_pid]["name"]},
-                                    ],
-                                    "processor_count": 2,
-                                    "kind": "inter",
-                                }
-                            )
-                else:
-                    for t_in in common:
-                        chains.append(
-                            {
-                                "source_table": t_in,
-                                "target_table": t_in,  # consumed but not re-written yet
-                                "processors": [
-                                    {"id": src_pid, "name": procs[src_pid]["name"]},
-                                    {"id": dst_pid, "name": procs[dst_pid]["name"]},
-                                ],
-                                "processor_count": 2,
-                                "kind": "inter-consume",
-                            }
-                        )
-
-    # (Optional) shallow BFS to hop over one intermediate processor that doesn't touch tables
-    # src -> mid -> dst; if src writes X, dst reads X, and mid neither reads nor writes, connect src->dst.
-    for src_pid, outs in adj.items():
-        for mid in outs:
-            for dst in adj.get(mid, []):
-                if procs[mid]["reads"] or procs[mid]["writes"]:
-                    continue  # mid touches tables; we already covered direct cases
-                common = procs[src_pid]["writes"] & procs[dst]["reads"]
-                if common:
-                    for t in common:
-                        writes = procs[dst]["writes"] or set()
-                        for w in writes or {t}:
-                            if t == w and writes:
-                                continue
-                            chains.append(
-                                {
-                                    "source_table": t,
-                                    "target_table": w,
-                                    "processors": [
-                                        {"id": src_pid, "name": procs[src_pid]["name"]},
-                                        {"id": mid, "name": procs[mid]["name"]},
-                                        {"id": dst, "name": procs[dst]["name"]},
-                                    ],
-                                    "processor_count": 3,
-                                    "kind": "inter-hop1",
-                                }
-                            )
 
     # De-dup chains by (src,tgt,proc_ids)
     def key(c):
