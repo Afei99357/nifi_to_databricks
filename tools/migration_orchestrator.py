@@ -106,12 +106,12 @@ def migrate_nifi_to_databricks_simplified(
 
     # Step 6: Analyze connection architecture (fan-in/fan-out hotspots)
     _log("🕸️  Analyzing connection architecture and hotspots...")
-    connection_analysis = generate_connection_analysis_reports(
-        xml_content, pruned_result
-    )
-    _log(
-        f"🎯 Connection analysis complete: {connection_analysis['connection_summary']['complexity_reduction']} complexity reduction"
-    )
+    # Generate table lineage analysis
+    from tools.simple_table_lineage import analyze_nifi_table_lineage
+
+    lineage_analysis = analyze_nifi_table_lineage(xml_content)
+    connection_analysis = generate_simple_lineage_report(lineage_analysis)
+    _log("🎯 Table lineage analysis complete")
 
     # Step 7: Extract and catalog all workflow assets for manual review
     _log("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
@@ -235,9 +235,11 @@ def analyze_nifi_workflow_only(xml_path: str) -> Dict[str, Any]:
     # Process the analysis result through the pipeline
     pruned_result = prune_infrastructure_processors(json.dumps(analysis_result))
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
-    connection_analysis = generate_connection_analysis_reports(
-        xml_content, pruned_result
-    )
+    # Generate table lineage analysis
+    from tools.simple_table_lineage import analyze_nifi_table_lineage
+
+    lineage_analysis = analyze_nifi_table_lineage(xml_content)
+    connection_analysis = generate_simple_lineage_report(lineage_analysis)
 
     # Package all results together
     analysis_result = {
