@@ -79,6 +79,69 @@ def _is_false_positive_table_ref(name: str) -> bool:
     if not name:
         return True
     n = name.lower()
+
+    # Filter out single-letter aliases (p.cnt, t.before, y.w01, etc.)
+    parts = n.split(".")
+    if len(parts) >= 2:
+        # Check if first part is a single letter (common alias pattern)
+        if len(parts[0]) == 1 and parts[0].isalpha():
+            return True
+        # Check for common alias patterns like p., t., y., etc.
+        if len(parts[0]) <= 2 and parts[0] in (
+            "p",
+            "t",
+            "y",
+            "s",
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+        ):
+            return True
+
+    # Filter out column-like patterns (before, after, cnt, avg, sum, etc.)
+    if len(parts) >= 2:
+        # Common column names that shouldn't be tables
+        column_patterns = {
+            "cnt",
+            "count",
+            "sum",
+            "avg",
+            "min",
+            "max",
+            "before",
+            "after",
+            "date",
+            "time",
+            "timestamp",
+            "id",
+            "name",
+            "value",
+            "status",
+            "type",
+            "code",
+            "desc",
+            "description",
+            "create",
+            "update",
+            "delete",
+            "insert",
+            "w01",
+            "w02",
+            "w03",
+            "w04",
+            "w05",
+            "absolute",
+            "path",
+            "file",
+            "row",
+            "col",
+        }
+        if parts[-1] in column_patterns:
+            return True
+
     # obvious non-table substrings
     for pat in (
         ".sh",
@@ -139,7 +202,7 @@ def _extract_sql_tables(sql_text: str) -> Tuple[Set[str], Set[str]]:
 
 
 def _extract_tables_from_processor(
-    ptype: str, props: Dict[str, Any]
+    ptype: str, props: Dict[str, Any], strict_sql_only: bool = True
 ) -> Tuple[Set[str], Set[str]]:
     """Return (reads, writes) tables for a processor."""
     p = (ptype or "").lower()
@@ -242,26 +305,28 @@ def _extract_tables_from_processor(
                         writes.add(t)
 
     # Generic schema.table mentions in properties (for any other processor types)
-    for k, v in props.items():
-        if not isinstance(v, str):
-            continue
-        for m in re.finditer(rf"\b({_IDENT}\.{_IDENT}(?:\.{_IDENT})?)\b", v):
-            t = _clean_table(m.group(1))
-            if _is_false_positive_table_ref(t):
+    # Skip this noisy pattern matching if strict_sql_only is True
+    if not strict_sql_only:
+        for k, v in props.items():
+            if not isinstance(v, str):
                 continue
-            kl = k.lower()
-            if any(s in kl for s in ("output", "target", "destination", "prod")):
-                writes.add(t)
-            elif any(s in kl for s in ("input", "source", "external")):
-                reads.add(t)
-            elif "staging" in kl:
-                # Staging context suggests intermediate processing
-                reads.add(t)
-                writes.add(t)
-            else:
-                # Conservative: if we can't determine direction, include both
-                reads.add(t)
-                writes.add(t)
+            for m in re.finditer(rf"\b({_IDENT}\.{_IDENT}(?:\.{_IDENT})?)\b", v):
+                t = _clean_table(m.group(1))
+                if _is_false_positive_table_ref(t):
+                    continue
+                kl = k.lower()
+                if any(s in kl for s in ("output", "target", "destination", "prod")):
+                    writes.add(t)
+                elif any(s in kl for s in ("input", "source", "external")):
+                    reads.add(t)
+                elif "staging" in kl:
+                    # Staging context suggests intermediate processing
+                    reads.add(t)
+                    writes.add(t)
+                else:
+                    # Conservative: if we can't determine direction, include both
+                    reads.add(t)
+                    writes.add(t)
 
     return reads, writes
 
@@ -269,7 +334,9 @@ def _extract_tables_from_processor(
 # ---------- Main: parse & lineage ----------
 
 
-def analyze_nifi_table_lineage(xml_content: str, max_depth: int = 4) -> Dict[str, Any]:
+def analyze_nifi_table_lineage(
+    xml_content: str, max_depth: int = 4, use_statement_pairs: bool = True
+) -> Dict[str, Any]:
     try:
         root = ET.fromstring(xml_content)
     except ET.ParseError as e:
@@ -297,7 +364,9 @@ def analyze_nifi_table_lineage(xml_content: str, max_depth: int = 4) -> Dict[str
                     if key:
                         props[key] = value
 
-        reads, writes = _extract_tables_from_processor(ptype, props)
+        reads, writes = _extract_tables_from_processor(
+            ptype, props, strict_sql_only=True
+        )
         procs[pid] = {
             "id": pid,
             "name": pname,
@@ -315,7 +384,40 @@ def analyze_nifi_table_lineage(xml_content: str, max_depth: int = 4) -> Dict[str
             continue
         adj.setdefault(src, []).append(dst)
 
-    # Collect all tables/files/counts
+    # Collect all initial tables (before schema filtering)
+    all_initial_tables: Set[str] = set()
+    for p in procs.values():
+        all_initial_tables |= p["reads"] | p["writes"]
+
+    # Dynamic schema allowlist - count schema frequency
+    schema_counts: Dict[str, int] = {}
+    for table in all_initial_tables:
+        if "." in table:
+            schema = table.split(".")[0]
+            schema_counts[schema] = schema_counts.get(schema, 0) + 1
+
+    # Build allowlist of schemas that appear at least twice (minimum frequency)
+    # This helps filter out one-off alias captures while keeping real schemas
+    min_schema_frequency = 2
+    schema_allowlist = {
+        schema
+        for schema, count in schema_counts.items()
+        if count >= min_schema_frequency
+    }
+
+    # Apply schema filtering to processor tables
+    def _filter_table_by_schema(table: str) -> bool:
+        if "." not in table:
+            return False  # Single-part names are likely not real tables
+        schema = table.split(".")[0]
+        return schema in schema_allowlist
+
+    # Re-filter processor tables based on schema allowlist
+    for p in procs.values():
+        p["reads"] = {t for t in p["reads"] if _filter_table_by_schema(t)}
+        p["writes"] = {t for t in p["writes"] if _filter_table_by_schema(t)}
+
+    # Collect final filtered tables
     all_tables: Set[str] = set()
     for p in procs.values():
         all_tables |= p["reads"] | p["writes"]
@@ -324,20 +426,78 @@ def analyze_nifi_table_lineage(xml_content: str, max_depth: int = 4) -> Dict[str
     chains: List[Dict[str, Any]] = []
     for p in procs.values():
         if p["reads"] and p["writes"]:
-            for r in p["reads"]:
-                for w in p["writes"]:
+            if use_statement_pairs and len(p["reads"]) > 1 and len(p["writes"]) > 1:
+                # Use statement pairs: pair tables 1:1 instead of cross-product
+                # This reduces artificial explosion of lineage chains
+                reads_list = sorted(list(p["reads"]))
+                writes_list = sorted(list(p["writes"]))
+
+                # Pair up to min(reads, writes), then handle remainder
+                min_pairs = min(len(reads_list), len(writes_list))
+                for i in range(min_pairs):
+                    r, w = reads_list[i], writes_list[i]
                     if r == w:
-                        # skip trivial loops; keep if you prefer
-                        continue
+                        continue  # skip trivial loops
                     chains.append(
                         {
                             "source_table": r,
                             "target_table": w,
                             "processors": [{"id": p["id"], "name": p["name"]}],
                             "processor_count": 1,
-                            "kind": "intra",
+                            "kind": "intra-paired",
                         }
                     )
+
+                # Handle remainder tables (if reads != writes count)
+                if len(reads_list) > min_pairs:
+                    # More reads than writes - connect excess reads to last write
+                    for i in range(min_pairs, len(reads_list)):
+                        r = reads_list[i]
+                        w = writes_list[-1] if writes_list else None
+                        if w and r != w:
+                            chains.append(
+                                {
+                                    "source_table": r,
+                                    "target_table": w,
+                                    "processors": [{"id": p["id"], "name": p["name"]}],
+                                    "processor_count": 1,
+                                    "kind": "intra-remainder",
+                                }
+                            )
+                elif len(writes_list) > min_pairs:
+                    # More writes than reads - connect last read to excess writes
+                    r = reads_list[-1] if reads_list else None
+                    if r:
+                        for i in range(min_pairs, len(writes_list)):
+                            w = writes_list[i]
+                            if r != w:
+                                chains.append(
+                                    {
+                                        "source_table": r,
+                                        "target_table": w,
+                                        "processors": [
+                                            {"id": p["id"], "name": p["name"]}
+                                        ],
+                                        "processor_count": 1,
+                                        "kind": "intra-remainder",
+                                    }
+                                )
+            else:
+                # Use full cross-product for simple cases or when statement_pairs is disabled
+                for r in p["reads"]:
+                    for w in p["writes"]:
+                        if r == w:
+                            # skip trivial loops; keep if you prefer
+                            continue
+                        chains.append(
+                            {
+                                "source_table": r,
+                                "target_table": w,
+                                "processors": [{"id": p["id"], "name": p["name"]}],
+                                "processor_count": 1,
+                                "kind": "intra",
+                            }
+                        )
 
     # (2) inter-processor: upstream writes X -> downstream reads X (via direct edges and shallow BFS)
     # Precompute reverse maps
