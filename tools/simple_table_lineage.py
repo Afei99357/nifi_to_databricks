@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """
-Simple table lineage analysis without NetworkX dependency.
-Focuses on table extraction from NiFi XML workflows.
+Simple but useful NiFi table lineage (no NetworkX).
+- Handles namespaces
+- Parses processors, properties, and connections
+- Extracts read/write tables across common DB processors
+- Builds directional table->table chains (intra- and inter-processor)
 """
 
-import json
 import re
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
+
+# ---------- XML helpers ----------
 
 
-def _txt(elem, *paths):
-    """Helper for safe text extraction with component/* fallbacks"""
+def _strip_namespaces(root: ET.Element):
+    for el in root.iter():
+        if "}" in el.tag:
+            el.tag = el.tag.split("}", 1)[1]
+
+
+def _txt(elem: ET.Element, *paths: str) -> str:
     for p in paths:
         n = elem.find(p)
         if n is not None:
@@ -21,370 +30,519 @@ def _txt(elem, *paths):
     return ""
 
 
+def _extract_properties(proc: ET.Element) -> Dict[str, str]:
+    """Handle both component-scoped and direct properties, and entry[@key]."""
+    props: Dict[str, str] = {}
+    props_node = (
+        proc.find("./component/properties")
+        or proc.find("./properties")
+        or proc.find(".//properties")
+    )
+    if props_node is None:
+        return props
+    for entry in props_node.findall("./entry"):
+        k = (
+            entry.findtext("key") or entry.get("key") or entry.findtext("name") or ""
+        ).strip()
+        v = (entry.findtext("value") or "").strip()
+        if k:
+            props[k] = v
+    return props
+
+
+# ---------- Table extraction ----------
+
+# Accept db.table or db.schema.table, allow quoted/backticked/bracketed parts
+_IDENT = r'(?:[`"\[]?[A-Za-z_][\w$]*[`"\]]?)'
+TABLE_IDENT = rf"(?:{_IDENT}\.)?{_IDENT}(?:\.{_IDENT})?"  # up to 3-part
+
+_READ_PATTERNS = [
+    rf"\bfrom\s+({TABLE_IDENT})",
+    rf"\bjoin\s+({TABLE_IDENT})",
+    rf"\bmerge\s+into\s+({TABLE_IDENT})",  # merge reads target too
+]
+_WRITE_PATTERNS = [
+    rf"\binsert\s+(?:into|overwrite\s+table)\s+({TABLE_IDENT})",
+    rf"\bcreate\s+(?:or\s+replace\s+)?table\s+({TABLE_IDENT})",
+    rf"\btruncate\s+table\s+({TABLE_IDENT})",
+    rf"\brefresh\s+({TABLE_IDENT})",
+    rf"\balter\s+table\s+({TABLE_IDENT})",
+    rf"\bmerge\s+into\s+({TABLE_IDENT})",
+]
+
+
+def _clean_table(name: str) -> str:
+    return name.strip('`"[]').lower()
+
+
+def _is_false_positive_table_ref(name: str) -> bool:
+    if not name:
+        return True
+    n = name.lower()
+    # obvious non-table substrings
+    for pat in (
+        ".sh",
+        ".py",
+        ".jar",
+        ".class",
+        ".xml",
+        ".keytab",
+        ".com",
+        ".error",
+        ".log",
+        ".txt",
+        ".csv",
+    ):
+        if pat in n:
+            return True
+    # guard against keywords accidentally captured
+    for kw in (
+        "select",
+        "where",
+        "order",
+        "group",
+        "by",
+        "join",
+        "from",
+        "when",
+        "case",
+        "then",
+        "else",
+        "end",
+    ):
+        if n == kw:
+            return True
+    # skip variable references and multi-line content
+    if any(pattern in n for pattern in ["${", "}", "\n", "\r", "--", "/*"]):
+        return True
+    # skip obvious paths or long descriptive content
+    if len(n) > 100 or n.count("/") > 2:
+        return True
+    return False
+
+
+def _extract_sql_tables(sql_text: str) -> Tuple[Set[str], Set[str]]:
+    reads, writes = set(), set()
+    if not sql_text or len(sql_text) < 5:
+        return reads, writes
+    for pat in _READ_PATTERNS:
+        for m in re.finditer(pat, sql_text, flags=re.IGNORECASE):
+            t = _clean_table(m.group(1))
+            if not _is_false_positive_table_ref(t):
+                reads.add(t)
+    for pat in _WRITE_PATTERNS:
+        for m in re.finditer(pat, sql_text, flags=re.IGNORECASE):
+            t = _clean_table(m.group(1))
+            if not _is_false_positive_table_ref(t):
+                writes.add(t)
+    return reads, writes
+
+
 def _extract_tables_from_processor(
-    processor_type: str, properties: Dict[str, Any]
-) -> Dict[str, Set[str]]:
-    """Enhanced table extraction based on processor type and properties"""
-    result = {
-        "input_tables": set(),
-        "output_tables": set(),
-        "input_files": set(),
-        "output_files": set(),
-    }
+    ptype: str, props: Dict[str, Any]
+) -> Tuple[Set[str], Set[str]]:
+    """Return (reads, writes) tables for a processor."""
+    p = (ptype or "").lower()
+    reads, writes = set(), set()
 
-    processor_type = (processor_type or "").lower()
-
-    # Enhanced table extraction for ExecuteStreamCommand processors
-    def _is_false_positive_table_ref(table_name: str) -> bool:
-        """Filter out false positive table names"""
-        if not table_name:
-            return True
-        # Skip obvious false positives in table names themselves
-        if any(
-            pattern in table_name.lower()
-            for pattern in [
-                ".sh",
-                ".py",
-                ".jar",
-                ".class",
-                ".xml",
-                ".keytab",
-                ".na",
-                ".com",
-                ".error",
-                "impala.",
-                "execution.",
-                "nxp.",
-            ]
-        ):
-            return True
-        return False
-
-    # Look for table references using enhanced extraction
-    if "executestreamcommand" in processor_type:
-        # First pass: Environment-specific table properties
-        env_tables = {}
-        for key, value in properties.items():
-            if not value or not isinstance(value, str):
+    # UpdateAttribute processors (NiFi configuration processors)
+    if "updateattribute" in p:
+        # These processors define table mappings in their properties
+        for key, value in props.items():
+            if not isinstance(value, str) or not value.strip():
                 continue
 
             key_lower = key.lower()
-            # Look for environment-prefixed properties
-            for env_prefix in [
-                "prod_",
-                "staging_",
-                "dev_",
-                "test_",
-                "source_",
-                "target_",
-            ]:
-                if key_lower.startswith(env_prefix):
-                    env_key = env_prefix.rstrip("_")
-                    if env_key not in env_tables:
-                        env_tables[env_key] = {}
-
-                    prop_suffix = key_lower[len(env_prefix) :]
-                    if prop_suffix in ["table", "table_name"]:
-                        env_tables[env_key]["table"] = value
-                    elif prop_suffix in ["database", "db", "schema"]:
-                        env_tables[env_key]["database"] = value
-                    break
-
-        # Process environment-specific tables
-        for env, info in env_tables.items():
-            table = info.get("table", "")
-            database = info.get("database", "")
-            if table:
-                if "." in table and len(table.split(".")) == 2:
-                    # Already in database.table format
-                    result["input_tables"].add(table.lower())
-                    result["output_tables"].add(table.lower())
-                elif database:
-                    # Combine database and table
-                    full_table = f"{database}.{table}"
-                    result["input_tables"].add(full_table.lower())
-                    result["output_tables"].add(full_table.lower())
-
-        # Second pass: SQL query extraction
-        for key, value in properties.items():
-            if not value or not isinstance(value, str):
-                continue
-
-            key_lower = key.lower()
-            # Look for SQL queries in properties
+            # Look for explicit table definition properties
             if any(
-                sql_keyword in key_lower
-                for sql_keyword in ["sql", "query", "statement"]
+                pattern in key_lower
+                for pattern in [
+                    "table",
+                    "prod_table",
+                    "staging_table",
+                    "external_table",
+                    "source_table",
+                    "target_table",
+                    "destination_table",
+                ]
             ):
-                if len(value) > 10 and any(
-                    keyword in value.upper()
-                    for keyword in [
-                        "SELECT",
-                        "FROM",
-                        "INSERT",
-                        "UPDATE",
-                        "DELETE",
-                        "JOIN",
-                        "CREATE",
-                        "ALTER",
-                        "REFRESH",
-                    ]
-                ):
-
-                    # Extract table names from SQL
-                    sql_upper = value.upper()
-                    sql_patterns = [
-                        r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"UPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"CREATE\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"ALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                        r"REFRESH\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-                    ]
-
-                    for pattern in sql_patterns:
-                        matches = re.findall(pattern, sql_upper)
-                        for match in matches:
-                            table_name = match.strip()
-                            if table_name and not any(
-                                skip in table_name.lower()
-                                for skip in ["select", "where", "order", "group"]
-                            ):
-                                if "." in table_name:
-                                    result["input_tables"].add(table_name.lower())
-                                    result["output_tables"].add(table_name.lower())
-
-        # Third pass: General schema.table pattern matching with smart filtering
-        for key, value in properties.items():
-            if not value or not isinstance(value, str):
-                continue
-
-            # Look for schema.table patterns
-            table_patterns = re.findall(
-                r"\b([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\b", value
-            )
-
-            for table in table_patterns:
-                table_lower = table.lower()
-
-                # Enhanced filtering - only include valid database schemas and exclude false positives
-                if any(
-                    db_schema in table_lower
-                    for db_schema in [
-                        "mfg_",
-                        "bqa.",
-                        "staging",
-                        "prod_",
-                        "temp.",
-                        "data.",
-                    ]
-                ) and not _is_false_positive_table_ref(table_lower):
-                    # Determine direction based on property context
-                    key_lower = key.lower()
-                    if (
-                        "output" in key_lower
-                        or "target" in key_lower
-                        or "destination" in key_lower
+                table = _clean_table(value)
+                if not _is_false_positive_table_ref(table) and "." in table:
+                    if any(
+                        s in key_lower
+                        for s in ("prod", "target", "destination", "output")
                     ):
-                        result["output_tables"].add(table_lower)
-                    elif "input" in key_lower or "source" in key_lower:
-                        result["input_tables"].add(table_lower)
+                        writes.add(table)
+                    elif any(s in key_lower for s in ("external", "source", "input")):
+                        reads.add(table)
+                    elif "staging" in key_lower:
+                        # Staging tables are typically intermediate (both read and written)
+                        reads.add(table)
+                        writes.add(table)
                     else:
-                        result["input_tables"].add(table_lower)
-                        result["output_tables"].add(table_lower)
+                        # Default to both if unclear
+                        reads.add(table)
+                        writes.add(table)
 
-    # Handle other processor types with simple extraction
-    elif "executesql" in processor_type:
-        # Look for SQL queries with table references
-        sql_query = properties.get("SQL Query", properties.get("SQL select query", ""))
-        if sql_query:
-            # Simple regex to find table names after FROM and INSERT INTO
-            from_tables = re.findall(
-                r"FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)", sql_query.upper()
-            )
-            insert_tables = re.findall(
-                r"INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_.]*)", sql_query.upper()
-            )
+    # Common DB processors
+    # ExecuteSQL (reads)
+    if "executesql" in p:
+        sql = props.get("SQL select query") or props.get("SQL Query") or ""
+        r, _ = _extract_sql_tables(sql)
+        reads |= r
 
-            result["input_tables"].update(t.lower() for t in from_tables)
-            result["output_tables"].update(t.lower() for t in insert_tables)
+    # PutSQL / PutHiveQL (writes)
+    if "putsql" in p or "puthiveql" in p:
+        sql = (
+            props.get("SQL statement") or props.get("sql") or props.get("HiveQL") or ""
+        )
+        r, w = _extract_sql_tables(sql)
+        # PutSQL often has only INSERT/CREATE etc.
+        reads |= r
+        writes |= w
+        # also honor explicit table name when present
+        tname = (props.get("Table Name") or props.get("table.name") or "").strip()
+        if tname:
+            writes.add(_clean_table(tname))
 
-    elif "getfile" in processor_type or "listfile" in processor_type:
-        # Input files only
-        directory = properties.get("Input Directory", "")
-        if directory:
-            result["input_files"].add(directory)
+    # PutDatabaseRecord (writes)
+    if "putdatabaserecord" in p:
+        tname = (props.get("Table Name") or props.get("table.name") or "").strip()
+        if tname:
+            writes.add(_clean_table(tname))
 
-    elif "puthdfs" in processor_type or "putfile" in processor_type:
-        # Output files
-        directory = properties.get("Directory", properties.get("Output Directory", ""))
-        if directory:
-            result["output_files"].add(directory)
+    # QueryDatabaseTable / GenerateTableFetch (reads)
+    if "querydatabasetable" in p or "generatetablefetch" in p:
+        tname = (props.get("Table Name") or props.get("table.name") or "").strip()
+        if tname:
+            reads.add(_clean_table(tname))
 
-    return result
+    # ExecuteStreamCommand (reads/writes inferred from embedded SQL and Command Arguments)
+    if "executestreamcommand" in p:
+        cmd = f"{props.get('Command Path', '')} {props.get('Command Arguments', '')}"
+        r, w = _extract_sql_tables(cmd)
+        reads |= r
+        writes |= w
+        # also scan any property that looks like SQL or contains table references
+        for k, v in props.items():
+            if not isinstance(v, str) or len(v) < 5:
+                continue
+            kl = k.lower()
+            if any(x in kl for x in ("sql", "query", "statement", "hql")):
+                r2, w2 = _extract_sql_tables(v)
+                reads |= r2
+                writes |= w2
+            else:
+                # Look for direct table references in Command Arguments
+                for m in re.finditer(rf"\b({_IDENT}\.{_IDENT}(?:\.{_IDENT})?)\b", v):
+                    t = _clean_table(m.group(1))
+                    if not _is_false_positive_table_ref(t):
+                        # ExecuteStreamCommand typically both reads and writes
+                        reads.add(t)
+                        writes.add(t)
+
+    # Generic schema.table mentions in properties (for any other processor types)
+    for k, v in props.items():
+        if not isinstance(v, str):
+            continue
+        for m in re.finditer(rf"\b({_IDENT}\.{_IDENT}(?:\.{_IDENT})?)\b", v):
+            t = _clean_table(m.group(1))
+            if _is_false_positive_table_ref(t):
+                continue
+            kl = k.lower()
+            if any(s in kl for s in ("output", "target", "destination", "prod")):
+                writes.add(t)
+            elif any(s in kl for s in ("input", "source", "external")):
+                reads.add(t)
+            elif "staging" in kl:
+                # Staging context suggests intermediate processing
+                reads.add(t)
+                writes.add(t)
+            else:
+                # Conservative: if we can't determine direction, include both
+                reads.add(t)
+                writes.add(t)
+
+    return reads, writes
 
 
-def analyze_nifi_table_lineage(xml_content: str) -> Dict[str, Any]:
-    """Analyze table lineage without NetworkX dependency"""
+# ---------- Main: parse & lineage ----------
+
+
+def analyze_nifi_table_lineage(xml_content: str, max_depth: int = 4) -> Dict[str, Any]:
     try:
         root = ET.fromstring(xml_content)
     except ET.ParseError as e:
         return {"error": f"Failed to parse XML: {e}"}
+    _strip_namespaces(root)
 
-    # Extract all processors
-    all_processors = []
+    # Processors (NiFi templates use <processors> containers, not <processor> elements)
+    procs: Dict[str, Dict[str, Any]] = {}
+    for proc_container in root.findall(".//processors"):
+        pid = _txt(proc_container, "id")
+        if not pid:
+            continue
+        ptype = _txt(proc_container, "type")
+        pname = _txt(proc_container, "name") or f"processor-{pid[:8]}"
 
-    # Find processors at all levels
-    for proc in root.findall(".//processors"):
-        proc_id = proc.get("id", "unknown")
-        proc_type = _txt(proc, "type", "class")
-        proc_name = _txt(proc, "name")
-
-        # Extract properties
-        properties = {}
-        config = proc.find("config")
-        if config is not None:
-            props_elem = config.find("properties")
+        # Extract properties from the container
+        props = {}
+        config_elem = proc_container.find("config")
+        if config_elem is not None:
+            props_elem = config_elem.find("properties")
             if props_elem is not None:
                 for entry in props_elem.findall("entry"):
-                    key_elem = entry.find("key")
-                    value_elem = entry.find("value")
-                    if key_elem is not None and value_elem is not None:
-                        key = key_elem.text or ""
-                        value = value_elem.text or ""
-                        properties[key] = value
+                    key = _txt(entry, "key")
+                    value = _txt(entry, "value")
+                    if key:
+                        props[key] = value
 
-        all_processors.append(
-            {
-                "id": proc_id,
-                "type": proc_type,
-                "name": proc_name,
-                "properties": properties,
-            }
+        reads, writes = _extract_tables_from_processor(ptype, props)
+        procs[pid] = {
+            "id": pid,
+            "name": pname,
+            "type": ptype,
+            "reads": reads,
+            "writes": writes,
+        }
+
+    # Connections (processor graph) - NiFi templates use <connections> containers
+    adj: Dict[str, List[str]] = {}
+    for conn_container in root.findall(".//connections"):
+        src = _txt(conn_container, "source/id")
+        dst = _txt(conn_container, "destination/id")
+        if not src or not dst or src not in procs or dst not in procs:
+            continue
+        adj.setdefault(src, []).append(dst)
+
+    # Collect all tables/files/counts
+    all_tables: Set[str] = set()
+    for p in procs.values():
+        all_tables |= p["reads"] | p["writes"]
+
+    # Build edges: (1) intra-processor FROM→INTO
+    chains: List[Dict[str, Any]] = []
+    for p in procs.values():
+        if p["reads"] and p["writes"]:
+            for r in p["reads"]:
+                for w in p["writes"]:
+                    if r == w:
+                        # skip trivial loops; keep if you prefer
+                        continue
+                    chains.append(
+                        {
+                            "source_table": r,
+                            "target_table": w,
+                            "processors": [{"id": p["id"], "name": p["name"]}],
+                            "processor_count": 1,
+                            "kind": "intra",
+                        }
+                    )
+
+    # (2) inter-processor: upstream writes X -> downstream reads X (via direct edges and shallow BFS)
+    # Precompute reverse maps
+    writes_by_table: Dict[str, Set[str]] = {}
+    reads_by_table: Dict[str, Set[str]] = {}
+    for pid, p in procs.items():
+        for t in p["writes"]:
+            writes_by_table.setdefault(t, set()).add(pid)
+        for t in p["reads"]:
+            reads_by_table.setdefault(t, set()).add(pid)
+
+    # direct neighbor linkage
+    for src_pid, outs in adj.items():
+        for dst_pid in outs:
+            # if src writes a table that dst reads, connect them
+            common = procs[src_pid]["writes"] & procs[dst_pid]["reads"]
+            if common:
+                # if dst also writes something, link to that; otherwise just record the consumption
+                if procs[dst_pid]["writes"]:
+                    for t_in in common:
+                        for t_out in procs[dst_pid]["writes"]:
+                            if t_in == t_out:
+                                continue
+                            chains.append(
+                                {
+                                    "source_table": t_in,
+                                    "target_table": t_out,
+                                    "processors": [
+                                        {"id": src_pid, "name": procs[src_pid]["name"]},
+                                        {"id": dst_pid, "name": procs[dst_pid]["name"]},
+                                    ],
+                                    "processor_count": 2,
+                                    "kind": "inter",
+                                }
+                            )
+                else:
+                    for t_in in common:
+                        chains.append(
+                            {
+                                "source_table": t_in,
+                                "target_table": t_in,  # consumed but not re-written yet
+                                "processors": [
+                                    {"id": src_pid, "name": procs[src_pid]["name"]},
+                                    {"id": dst_pid, "name": procs[dst_pid]["name"]},
+                                ],
+                                "processor_count": 2,
+                                "kind": "inter-consume",
+                            }
+                        )
+
+    # (Optional) shallow BFS to hop over one intermediate processor that doesn't touch tables
+    # src -> mid -> dst; if src writes X, dst reads X, and mid neither reads nor writes, connect src->dst.
+    for src_pid, outs in adj.items():
+        for mid in outs:
+            for dst in adj.get(mid, []):
+                if procs[mid]["reads"] or procs[mid]["writes"]:
+                    continue  # mid touches tables; we already covered direct cases
+                common = procs[src_pid]["writes"] & procs[dst]["reads"]
+                if common:
+                    for t in common:
+                        writes = procs[dst]["writes"] or set()
+                        for w in writes or {t}:
+                            if t == w and writes:
+                                continue
+                            chains.append(
+                                {
+                                    "source_table": t,
+                                    "target_table": w,
+                                    "processors": [
+                                        {"id": src_pid, "name": procs[src_pid]["name"]},
+                                        {"id": mid, "name": procs[mid]["name"]},
+                                        {"id": dst, "name": procs[dst]["name"]},
+                                    ],
+                                    "processor_count": 3,
+                                    "kind": "inter-hop1",
+                                }
+                            )
+
+    # De-dup chains by (src,tgt,proc_ids)
+    def key(c):
+        return (
+            c["source_table"],
+            c["target_table"],
+            tuple(p["id"] for p in c["processors"]),
         )
 
-    # Extract table information from each processor
-    all_tables = set()
-    all_files = set()
-    processor_table_map = {}
+    uniq = {}
+    for c in chains:
+        uniq[key(c)] = c
+    chains = list(uniq.values())
 
-    for proc in all_processors:
-        table_info = _extract_tables_from_processor(proc["type"], proc["properties"])
-
-        tables = table_info["input_tables"].union(table_info["output_tables"])
-        files = table_info["input_files"].union(table_info["output_files"])
-
-        if tables or files:
-            processor_table_map[proc["name"]] = {
-                "tables": tables,
-                "files": files,
-                "input_tables": table_info["input_tables"],
-                "output_tables": table_info["output_tables"],
+    # Critical tables by connectivity
+    table_usage: Dict[str, Dict[str, Any]] = {}
+    for p in procs.values():
+        for t in p["reads"]:
+            table_usage.setdefault(t, {"readers": set(), "writers": set()})
+            table_usage[t]["readers"].add(p["name"])
+        for t in p["writes"]:
+            table_usage.setdefault(t, {"readers": set(), "writers": set()})
+            table_usage[t]["writers"].add(p["name"])
+    critical = []
+    for t, u in table_usage.items():
+        connectivity = len(u["readers"]) + len(u["writers"])
+        critical.append(
+            {
+                "table": t,
+                "connectivity": connectivity,
+                "in_degree": len(u["readers"]),
+                "out_degree": len(u["writers"]),
+                "processors": sorted(list(u["readers"] | u["writers"])),
             }
-
-        all_tables.update(tables)
-        all_files.update(files)
-
-    # Generate simple lineage analysis
-    table_usage = {}
-    for proc_name, info in processor_table_map.items():
-        for table in info["tables"]:
-            if table not in table_usage:
-                table_usage[table] = {"processors": [], "in_degree": 0, "out_degree": 0}
-            table_usage[table]["processors"].append(proc_name)
-
-            if table in info["input_tables"]:
-                table_usage[table]["in_degree"] += 1
-            if table in info["output_tables"]:
-                table_usage[table]["out_degree"] += 1
-
-    # Find critical tables (most connected)
-    critical_tables = []
-    for table, usage in table_usage.items():
-        connectivity = usage["in_degree"] + usage["out_degree"]
-        if connectivity > 0:
-            critical_tables.append(
-                {
-                    "table": table,
-                    "connectivity": connectivity,
-                    "in_degree": usage["in_degree"],
-                    "out_degree": usage["out_degree"],
-                    "processors": usage["processors"],
-                }
-            )
-
-    critical_tables.sort(key=lambda x: x["connectivity"], reverse=True)
-
-    # Simple lineage chains (same table in different processors)
-    lineage_chains = []
-    for table in all_tables:
-        processors_using_table = [
-            proc_name
-            for proc_name, info in processor_table_map.items()
-            if table in info["tables"]
-        ]
-        if len(processors_using_table) > 1:
-            lineage_chains.append(
-                {
-                    "source_table": table,
-                    "target_table": table,
-                    "processors": [{"name": name} for name in processors_using_table],
-                    "processor_count": len(processors_using_table),
-                }
-            )
+        )
+    critical.sort(key=lambda x: x["connectivity"], reverse=True)
 
     return {
         "table_lineage": {
             "total_tables": len(all_tables),
-            "total_files": len(all_files),
-            "lineage_chains": lineage_chains,
-            "critical_tables": critical_tables[:10],  # Top 10
+            "total_files": 0,  # For compatibility with old interface
+            "lineage_chains": sorted(
+                chains,
+                key=lambda c: (
+                    c["processor_count"],
+                    c["source_table"],
+                    c["target_table"],
+                ),
+            ),
+            "critical_tables": critical[:10],
             "all_tables": sorted(all_tables),
-            "all_files": sorted(all_files),
-        }
+            "all_files": [],  # For compatibility with old interface
+        },
+        "debug": {
+            "processor_count": len(procs),
+            "connection_count": sum(len(v) for v in adj.values()),
+            "procs_with_reads": sum(1 for p in procs.values() if p["reads"]),
+            "procs_with_writes": sum(1 for p in procs.values() if p["writes"]),
+        },
     }
 
 
-def generate_simple_lineage_report(analysis_result: Dict[str, Any]) -> str:
-    """Generate a simple table lineage report"""
-    if "table_lineage" not in analysis_result:
-        return "No table lineage data available."
+# ---------- Compatibility functions for existing code ----------
 
-    data = analysis_result["table_lineage"]
 
+def build_complete_nifi_graph_with_tables(xml_content: str):
+    """Compatibility function - returns a mock graph object"""
+
+    class MockGraph:
+        def __init__(self, analysis):
+            self.analysis = analysis
+
+        def number_of_nodes(self):
+            return self.analysis.get("debug", {}).get("processor_count", 0)
+
+        def number_of_edges(self):
+            return self.analysis.get("debug", {}).get("connection_count", 0)
+
+    analysis = analyze_nifi_table_lineage(xml_content)
+    return MockGraph(analysis)
+
+
+def analyze_complete_workflow_with_tables(graph, k=10):
+    """Compatibility function - extracts analysis from mock graph"""
+    return graph.analysis
+
+
+def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
+    """Generate a simple markdown report from table lineage analysis"""
+    if "table_lineage" not in analysis:
+        return "# Table Lineage Report\n\nNo table lineage data available."
+
+    data = analysis["table_lineage"]
     lines = [
-        "# 📊 Table-Level Data Lineage Analysis",
+        "# 🗄️ Table Lineage Analysis Report",
         "",
-        "## Overview",
-        f"- **Total Tables**: {data['total_tables']} table references",
-        f"- **Total Files**: {data['total_files']} file references",
-        f"- **Lineage Chains**: {len(data['lineage_chains'])} data flows",
-        f"- **Critical Tables**: {len(data['critical_tables'])} high-connectivity tables",
+        f"**Analysis Summary:**",
+        f"- **Total Tables**: {data['total_tables']}",
+        f"- **Lineage Chains**: {len(data['lineage_chains'])}",
+        f"- **Critical Tables**: {len(data['critical_tables'])}",
         "",
     ]
 
+    # All Tables
     if data["all_tables"]:
-        lines.extend(["## 🗄️ Database Tables Found", ""])
-        for table in data["all_tables"]:
+        lines.extend(
+            [
+                "## 📋 Tables Found",
+                "",
+            ]
+        )
+        for table in sorted(data["all_tables"]):
             lines.append(f"- `{table}`")
         lines.append("")
 
-    if data["critical_tables"]:
-        lines.extend(["## 🎯 Critical Tables", ""])
-        for table in data["critical_tables"][:5]:
-            lines.append(f"- **`{table['table']}`**")
-            lines.append(
-                f"  - Connectivity: {table['connectivity']} ({table['in_degree']} readers, {table['out_degree']} writers)"
-            )
-            lines.append(f"  - Used in: {', '.join(table['processors'])}")
-        lines.append("")
-
+    # Lineage chains
     if data["lineage_chains"]:
-        lines.extend(["## 🔄 Data Flow Analysis", ""])
+        lines.extend(
+            [
+                "## 🔄 Data Flow Chains",
+                "",
+            ]
+        )
         for chain in data["lineage_chains"][:5]:
             processors_text = " → ".join([p["name"] for p in chain["processors"]])
-            lines.append(f"- **Table**: `{chain['source_table']}`")
+            lines.append(
+                f"- **Table**: `{chain['source_table']}` → `{chain['target_table']}`"
+            )
             lines.append(f"  - **Flow**: {processors_text}")
             lines.append(
                 f"  - **Complexity**: {chain['processor_count']} processing steps"
@@ -394,28 +552,6 @@ def generate_simple_lineage_report(analysis_result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-# Alias functions for compatibility with Streamlit app
-def build_complete_nifi_graph_with_tables(xml_content: str):
-    """Compatibility function - returns analysis result instead of graph"""
-    return analyze_nifi_table_lineage(xml_content)
-
-
-def analyze_complete_workflow_with_tables(analysis_result, k: int = 10):
-    """Compatibility function - returns the analysis result"""
-    if isinstance(analysis_result, dict) and "table_lineage" in analysis_result:
-        return analysis_result
-    else:
-        # If it's not already analyzed, analyze it
-        return {
-            "table_lineage": {
-                "total_tables": 0,
-                "total_files": 0,
-                "lineage_chains": [],
-                "critical_tables": [],
-            }
-        }
-
-
-def generate_table_lineage_report(analysis_result):
-    """Generate table lineage report"""
-    return generate_simple_lineage_report(analysis_result)
+def generate_simple_lineage_report(analysis: Dict[str, Any]) -> str:
+    """Alias for generate_table_lineage_report for compatibility"""
+    return generate_table_lineage_report(analysis)
