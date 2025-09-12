@@ -115,11 +115,6 @@ def main():
                             with st.expander("📋 Essential Processors Report"):
                                 st.markdown(str(essential_data))
 
-                # # Full Workflow Analysis
-                # if conn_analysis.get("full_workflow_connections"):
-                #     with st.expander("🕸️ Full Workflow Connection Analysis"):
-                #         st.markdown(conn_analysis["full_workflow_connections"])
-
                 # Unknown Processors Report
                 unknown_data = reports.get("unknown_processors", {})
                 if unknown_data.get("count", 0) > 0:
