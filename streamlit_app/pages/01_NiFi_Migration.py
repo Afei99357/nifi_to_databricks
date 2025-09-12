@@ -38,26 +38,40 @@ def display_migration_results(result):
             # Connection Analysis Dashboard
             if "connection_analysis" in reports and reports["connection_analysis"]:
                 conn_analysis = reports["connection_analysis"]
+                st.write(f"**Debug - conn_analysis type:** {type(conn_analysis)}")
 
-            # Connection Summary Metrics
-            summary = conn_analysis.get("connection_summary", {})
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Processors", summary.get("total_processors", 0))
-            with col2:
-                st.metric(
-                    "Essential Processors", summary.get("essential_processors", 0)
-                )
-            with col3:
-                st.metric(
-                    "Complexity Reduction", summary.get("complexity_reduction", "0%")
-                )
-            with col4:
-                effectiveness = summary.get("pruning_effectiveness", "Unknown")
-                color = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(
-                    effectiveness, "⚪"
-                )
-                st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
+                # Handle case where connection_analysis is a string (error message) instead of dict
+                if isinstance(conn_analysis, str):
+                    st.warning("⚠️ Connection analysis returned an error message:")
+                    st.code(conn_analysis)
+                elif not isinstance(conn_analysis, dict):
+                    st.warning(
+                        f"⚠️ Unexpected connection_analysis type: {type(conn_analysis)}"
+                    )
+                else:
+                    # Connection Summary Metrics
+                    summary = conn_analysis.get("connection_summary", {})
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric(
+                            "Total Processors", summary.get("total_processors", 0)
+                        )
+                    with col2:
+                        st.metric(
+                            "Essential Processors",
+                            summary.get("essential_processors", 0),
+                        )
+                    with col3:
+                        st.metric(
+                            "Complexity Reduction",
+                            summary.get("complexity_reduction", "0%"),
+                        )
+                    with col4:
+                        effectiveness = summary.get("pruning_effectiveness", "Unknown")
+                        color = {"High": "🟢", "Medium": "🟡", "Low": "🔴"}.get(
+                            effectiveness, "⚪"
+                        )
+                        st.metric("Pruning Effectiveness", f"{color} {effectiveness}")
 
             # Essential Processors Report (now returns a tuple)
             if reports.get("essential_processors"):
@@ -179,7 +193,7 @@ def main():
 
         try:
             # Show spinner during migration
-            with st.spinner("🔄 Running NiFi to Databricks migration..."):
+            with st.spinner("Running NiFi to Databricks migration..."):
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
                     out_dir="/tmp",
