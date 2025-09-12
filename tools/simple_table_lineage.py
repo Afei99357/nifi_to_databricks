@@ -483,10 +483,18 @@ def analyze_nifi_table_lineage(
     for p in procs.values():
         all_tables |= p["reads"] | p["writes"]
 
-    # Build REAL processing chains: Focus on evidence-based flows
+    # Build OPTION 3: Variable Resolution chains with processor references
     chains: List[Dict[str, Any]] = []
 
-    # Filter out configuration-only processors (UpdateAttribute, etc.)
+    # Step 1: Build variable resolution map and identify config processors
+    config_processors = {}  # pid -> processor info for UpdateAttribute
+    for pid, p in procs.items():
+        if "updateattribute" in p["type"].lower():
+            config_processors[pid] = p
+
+    print(f"🔧 Found {len(config_processors)} UpdateAttribute config processors")
+
+    # Step 2: Get processing processors
     processing_procs = {
         pid: p
         for pid, p in procs.items()
@@ -502,59 +510,209 @@ def analyze_nifi_table_lineage(
         and (p["reads"] or p["writes"])
     }
 
-    processing_ids = set(processing_procs.keys())
-    print(
-        f"🔧 Filtered to {len(processing_procs)} actual processing processors (from {len(procs)} total)"
-    )
+    print(f"🔧 Found {len(processing_procs)} actual processing processors")
 
-    # Build bridged adjacency over non-processing hops (depth = 1)
-    bridged_adj = {pid: [] for pid in processing_ids}
-    for src, outs in adj.items():
-        if src not in processing_ids:
-            continue
-        for mid in outs:
-            if mid in processing_ids:
-                bridged_adj[src].append(mid)
-            else:
-                # hop over non-processing node
-                for dst in adj.get(mid, []):
-                    if dst in processing_ids:
-                        bridged_adj[src].append(dst)
+    # Step 3: Build processor numbering for chain display
+    processor_numbers = {}
+    counter = 1
+    for pid, p in procs.items():
+        processor_numbers[pid] = counter
+        counter += 1
 
-    # Build intra-processor chains from evidence-based pairs (no cross-product)
+    # Step 4: Variable resolution function
+    def resolve_variables_in_text(text: str, connected_configs: List[str]) -> str:
+        """Resolve ${variable} references using connected UpdateAttribute processors"""
+        resolved = text
+        for config_pid in connected_configs:
+            config_proc = procs.get(config_pid, {})
+            # Get properties, handling the nested structure
+            config_props = {}
+            config_elem = None
+            for proc_container in root.findall(".//processors"):
+                if _txt(proc_container, "id") == config_pid:
+                    config_elem = proc_container.find("config")
+                    break
+
+            if config_elem is not None:
+                props_elem = config_elem.find("properties")
+                if props_elem is not None:
+                    for entry in props_elem.findall("entry"):
+                        key = _txt(entry, "key")
+                        value = _txt(entry, "value")
+                        if key and value:
+                            config_props[key] = value
+
+            # Replace variables
+            for prop_key, prop_value in config_props.items():
+                if isinstance(prop_value, str) and prop_value.strip():
+                    resolved = resolved.replace(f"${{{prop_key}}}", prop_value)
+
+        return resolved
+
+    # Step 5: Build chains with variable resolution
     for pid, p in processing_procs.items():
-        for r, w in p["pairs"]:
-            chains.append(
-                {
-                    "source_table": r,
-                    "target_table": w,
-                    "processors": [{"id": p["id"], "name": p["name"]}],
-                    "processor_count": 1,
-                    "kind": "data-processing",
-                    "processor_type": p["type"].split(".")[-1],
-                }
+        # Find connected UpdateAttribute processors (via NiFi connections)
+        connected_configs = []
+        for src_pid, dst_pids in adj.items():
+            if pid in dst_pids and src_pid in config_processors:
+                connected_configs.append(src_pid)
+
+        processor_props = p.get("properties", {})
+
+        # Extract properties directly from XML for this processor
+        direct_props = {}
+        for proc_container in root.findall(".//processors"):
+            if _txt(proc_container, "id") == pid:
+                config_elem = proc_container.find("config")
+                if config_elem is not None:
+                    props_elem = config_elem.find("properties")
+                    if props_elem is not None:
+                        for entry in props_elem.findall("entry"):
+                            key = _txt(entry, "key")
+                            value = _txt(entry, "value")
+                            if key and value:
+                                direct_props[key] = value
+                break
+
+        # Process ExecuteStreamCommand with variable resolution
+        if "executestreamcommand" in p["type"].lower():
+            cmd_path = direct_props.get("Command Path", "")
+            cmd_args = direct_props.get("Command Arguments", "")
+            full_command = f"{cmd_path} {cmd_args}"
+
+            # Resolve variables in command
+            resolved_command = resolve_variables_in_text(
+                full_command, connected_configs
             )
 
-    # (2) Inter-processor chains with bridged adjacency and evidence-based pairs
-    for src_pid, dst_pids in bridged_adj.items():
-        src = processing_procs[src_pid]
-        for dst_pid in dst_pids:
-            dst = processing_procs[dst_pid]
-            for r, w in dst["pairs"]:
-                if r in src["writes"] and r != w:
-                    chains.append(
-                        {
-                            "source_table": r,
-                            "target_table": w,
-                            "processors": [
-                                {"id": src_pid, "name": src["name"]},
-                                {"id": dst_pid, "name": dst["name"]},
-                            ],
-                            "processor_count": 2,
-                            "kind": "real-processing-chain",
-                            "flow_description": f"{src['name']} writes {r} → {dst['name']} reads {r} → outputs {w}",
-                        }
+            # Extract tables from resolved command
+            resolved_reads, resolved_writes = _extract_sql_tables(resolved_command)
+
+            # Filter by schema allowlist
+            resolved_reads = {t for t in resolved_reads if _filter_table_by_schema(t)}
+            resolved_writes = {t for t in resolved_writes if _filter_table_by_schema(t)}
+
+            # Create resolved chains
+            if resolved_reads or resolved_writes:
+                # If both reads and writes, create transformation chain
+                if resolved_reads and resolved_writes:
+                    for r_table in resolved_reads:
+                        for w_table in resolved_writes:
+                            if r_table != w_table:
+                                proc_ref = processor_numbers[pid]
+                                chains.append(
+                                    {
+                                        "source_table": r_table,
+                                        "target_table": w_table,
+                                        "processors": [
+                                            {
+                                                "id": pid,
+                                                "name": p["name"],
+                                                "number": proc_ref,
+                                            }
+                                        ],
+                                        "processor_count": 1,
+                                        "kind": "resolved-processing",
+                                        "processor_type": p["type"].split(".")[-1],
+                                        "resolved_sql": (
+                                            resolved_command[:150] + "..."
+                                            if len(resolved_command) > 150
+                                            else resolved_command
+                                        ),
+                                        "config_processors": [
+                                            {
+                                                "id": cp,
+                                                "number": processor_numbers[cp],
+                                                "name": config_processors[cp]["name"],
+                                            }
+                                            for cp in connected_configs
+                                        ],
+                                    }
+                                )
+                # If only writes (like REFRESH), create self-referencing chain
+                elif resolved_writes:
+                    for w_table in resolved_writes:
+                        proc_ref = processor_numbers[pid]
+                        chains.append(
+                            {
+                                "source_table": w_table,
+                                "target_table": w_table,
+                                "processors": [
+                                    {"id": pid, "name": p["name"], "number": proc_ref}
+                                ],
+                                "processor_count": 1,
+                                "kind": "resolved-processing",
+                                "processor_type": p["type"].split(".")[-1],
+                                "resolved_sql": (
+                                    resolved_command[:150] + "..."
+                                    if len(resolved_command) > 150
+                                    else resolved_command
+                                ),
+                                "config_processors": [
+                                    {
+                                        "id": cp,
+                                        "number": processor_numbers[cp],
+                                        "name": config_processors[cp]["name"],
+                                    }
+                                    for cp in connected_configs
+                                ],
+                            }
+                        )
+
+        # Also handle direct SQL processors with variable resolution
+        elif any(
+            sql_type in p["type"].lower() for sql_type in ["executesql", "putsql"]
+        ):
+            for prop_key, prop_value in direct_props.items():
+                if isinstance(prop_value, str) and any(
+                    sql_term in prop_key.lower()
+                    for sql_term in ["sql", "query", "statement"]
+                ):
+                    resolved_sql = resolve_variables_in_text(
+                        prop_value, connected_configs
                     )
+                    resolved_reads, resolved_writes = _extract_sql_tables(resolved_sql)
+
+                    resolved_reads = {
+                        t for t in resolved_reads if _filter_table_by_schema(t)
+                    }
+                    resolved_writes = {
+                        t for t in resolved_writes if _filter_table_by_schema(t)
+                    }
+
+                    for r_table in resolved_reads:
+                        for w_table in resolved_writes:
+                            if r_table != w_table:
+                                proc_ref = processor_numbers[pid]
+                                chains.append(
+                                    {
+                                        "source_table": r_table,
+                                        "target_table": w_table,
+                                        "processors": [
+                                            {
+                                                "id": pid,
+                                                "name": p["name"],
+                                                "number": proc_ref,
+                                            }
+                                        ],
+                                        "processor_count": 1,
+                                        "kind": "resolved-processing",
+                                        "processor_type": p["type"].split(".")[-1],
+                                        "resolved_sql": (
+                                            resolved_sql[:150] + "..."
+                                            if len(resolved_sql) > 150
+                                            else resolved_sql
+                                        ),
+                                        "config_processors": [
+                                            {
+                                                "id": cp,
+                                                "number": processor_numbers[cp],
+                                                "name": config_processors[cp]["name"],
+                                            }
+                                            for cp in connected_configs
+                                        ],
+                                    }
+                                )
 
     # De-dup chains by (src,tgt,proc_ids)
     def key(c):
@@ -643,7 +801,7 @@ def analyze_complete_workflow_with_tables(graph, k=10):
 
 
 def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
-    """Generate a simple markdown report from table lineage analysis"""
+    """Generate a detailed markdown report from table lineage analysis with processor numbers"""
     if "table_lineage" not in analysis:
         return "# Table Lineage Report\n\nNo table lineage data available."
 
@@ -653,7 +811,7 @@ def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
         "",
         f"**Analysis Summary:**",
         f"- **Total Tables**: {data['total_tables']}",
-        f"- **Lineage Chains**: {len(data['lineage_chains'])}",
+        f"- **Resolved Chains**: {len(data['lineage_chains'])}",
         f"- **Critical Tables**: {len(data['critical_tables'])}",
         "",
     ]
@@ -670,24 +828,47 @@ def generate_table_lineage_report(analysis: Dict[str, Any]) -> str:
             lines.append(f"- `{table}`")
         lines.append("")
 
-    # Lineage chains
+    # Resolved lineage chains with processor numbers
     if data["lineage_chains"]:
         lines.extend(
             [
-                "## 🔄 Data Flow Chains",
+                "## 🔄 Resolved Data Processing Chains",
+                "",
+                "End-to-end table lineage with resolved SQL operations:",
                 "",
             ]
         )
-        for chain in data["lineage_chains"][:5]:
-            processors_text = " → ".join([p["name"] for p in chain["processors"]])
+        for i, chain in enumerate(data["lineage_chains"], 1):
+            proc_info = chain["processors"][0]
+            proc_num = proc_info.get("number", "?")
+
+            # Format: table → Processor Name (number) → table
+            chain_text = f"{chain['source_table']} → {proc_info['name']} ({proc_num}) → {chain['target_table']}"
+            lines.append(f"{i}. {chain_text}")
+
+            # Add resolved SQL if available
+            if "resolved_sql" in chain and chain["resolved_sql"]:
+                sql_preview = (
+                    chain["resolved_sql"][:100] + "..."
+                    if len(chain["resolved_sql"]) > 100
+                    else chain["resolved_sql"]
+                )
+                lines.append(f"   - **Resolved SQL**: `{sql_preview}`")
+
+            # Add config processors if available
+            if "config_processors" in chain and chain["config_processors"]:
+                config_info = ", ".join(
+                    [
+                        f"{cp['name']} ({cp['number']})"
+                        for cp in chain["config_processors"]
+                    ]
+                )
+                lines.append(f"   - **Configuration**: {config_info}")
+
             lines.append(
-                f"- **Table**: `{chain['source_table']}` → `{chain['target_table']}`"
+                f"   - **Complexity**: {chain['processor_count']} processing steps"
             )
-            lines.append(f"  - **Flow**: {processors_text}")
-            lines.append(
-                f"  - **Complexity**: {chain['processor_count']} processing steps"
-            )
-        lines.append("")
+            lines.append("")
 
     return "\n".join(lines)
 
