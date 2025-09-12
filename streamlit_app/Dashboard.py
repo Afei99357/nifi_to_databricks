@@ -35,10 +35,10 @@ def main():
 
         with col2:
             if st.button("📊 Analyze Table Lineage", use_container_width=True):
-                st.info("Table lineage analysis coming soon...")
+                st.switch_page("pages/02_Table_Lineage.py")
 
     else:
-        st.info("👆 Upload a NiFi XML file to get started")
+        st.info("Upload a NiFi XML file to get started")
 
 
 if __name__ == "__main__":
