@@ -13,6 +13,26 @@
    - **Root Cause**: Classification logic isn't aggressive enough in filtering infrastructure vs business logic
    - **Impact**: Over-complicated migrations, unnecessary LLM API calls, inconsistent code generation
 
+2. **Enhance Asset Extraction to Include SQL Queries and Scripts**
+   - **Problem**: Asset extraction may not be capturing actual SQL queries and embedded scripts within workflow processors
+   - **Current State**: Asset extraction focuses on file paths, database connections, and external scripts but may miss inline queries
+   - **Gap Analysis Needed**:
+     - **SQL Queries**: Check if ExecuteSQL, ExecuteStreamCommand, UpdateAttribute processors with SQL content are extracted
+     - **Embedded Scripts**: Verify if script content within ExecuteScript, ExecuteProcess processors is captured
+     - **Query Templates**: Ensure parameterized queries and query builders are identified
+     - **Dynamic SQL**: Check if runtime-generated SQL from UpdateAttribute processors is detected
+   - **Investigation Required**:
+     - Review actual asset extraction results vs manual inspection of workflow processors
+     - Verify if SQL content from processor properties is being extracted and categorized
+     - Check if script content embedded in processor configurations is captured
+     - Ensure query dependencies and parameterization are tracked
+   - **Expected Enhancements**:
+     - Extract and list all SQL queries found in ExecuteSQL processors
+     - Capture script content from ExecuteScript and ExecuteStreamCommand processors
+     - Identify query-building logic in UpdateAttribute processors
+     - Provide query complexity analysis and dependency mapping
+   - **Impact**: Critical for migration planning - missing queries/scripts means incomplete dependency analysis
+
 <!-- 2. **Background Migration Progress Lost on Page Navigation**
    - **Problem**: When user navigates away during migration, background process continues but results are lost
    - **Technical Issue**: Streamlit execution model causes page context loss during navigation
