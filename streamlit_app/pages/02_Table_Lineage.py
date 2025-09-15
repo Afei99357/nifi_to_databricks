@@ -91,20 +91,6 @@ def main():
     # Check if analysis is running
     analysis_running = st.session_state.get("lineage_running", False)
 
-    # Disable sidebar navigation during analysis
-    if analysis_running:
-        # Clear sidebar content and show warning
-        with st.sidebar:
-            st.warning("🚫 Navigation disabled during analysis")
-            st.info(
-                "Please wait for analysis to complete before navigating to other pages."
-            )
-        # Also try to collapse sidebar programmatically
-        st.markdown(
-            '<script>document.querySelector("[data-testid=stSidebar]").style.display="none";</script>',
-            unsafe_allow_html=True,
-        )
-
     # Analysis options
     col1, col2 = st.columns(2)
 
@@ -126,7 +112,7 @@ def main():
     # Show warning if analysis is running
     if analysis_running:
         st.warning(
-            "⚠️ Analysis in progress. Please wait and do not navigate away from this page."
+            "⚠️ Analysis in progress. If you switch pages, the progress will not be saved. Please wait for completion."
         )
 
     # Display cached results if available

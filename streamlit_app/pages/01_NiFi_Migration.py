@@ -102,20 +102,6 @@ def main():
     # Check if migration is running
     migration_running = st.session_state.get("migration_running", False)
 
-    # Disable sidebar navigation during migration
-    if migration_running:
-        # Clear sidebar content and show warning
-        with st.sidebar:
-            st.warning("🚫 Navigation disabled during migration")
-            st.info(
-                "Please wait for migration to complete before navigating to other pages."
-            )
-        # Also try to collapse sidebar programmatically
-        st.markdown(
-            '<script>document.querySelector("[data-testid=stSidebar]").style.display="none";</script>',
-            unsafe_allow_html=True,
-        )
-
     # Check for auto-start flag from Dashboard
     auto_start = st.session_state.get("auto_start_migration", False)
 
@@ -159,7 +145,7 @@ def main():
     # Show warning if migration is running
     if migration_running:
         st.warning(
-            "⚠️ Migration in progress. Please wait and do not navigate away from this page."
+            "⚠️ Migration in progress. If you switch pages, the progress will not be saved. Please wait for completion."
         )
 
     # Display cached results if available
