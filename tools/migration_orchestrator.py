@@ -7,7 +7,6 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-from tools.asset_extraction import generate_asset_summary
 from tools.improved_classifier import (
     analyze_workflow_patterns,
     generate_unknown_processors_json,
@@ -64,16 +63,44 @@ def extract_nifi_assets_only(
 
         _log(f"📋 Found {len(processors)} processors, extracting assets...")
 
-        # Step 2: Extract assets from ALL processors using existing function
-        asset_summary_content = generate_asset_summary({"processors": processors})
+        # Step 2: Extract assets from ALL processors - get structured data
+        from tools.asset_extraction import extract_assets_from_properties
+
+        # Extract key assets with high confidence
+        script_files = set()
+        hdfs_paths = set()
+        database_hosts = set()
+        external_hosts = set()
+        table_references = set()
+
+        for proc in processors:
+            extract_assets_from_properties(
+                proc.get("properties", {}),
+                script_files,
+                hdfs_paths,
+                database_hosts,
+                external_hosts,
+                table_references,
+            )
 
         _log("✅ Pure asset extraction completed!")
 
         return {
-            "reports": {
-                "asset_summary": asset_summary_content,
+            "assets": {
+                "script_files": sorted(list(script_files)),
+                "hdfs_paths": sorted(list(hdfs_paths)),
+                "database_hosts": sorted(list(database_hosts)),
+                "external_hosts": sorted(list(external_hosts)),
+                "table_references": sorted(list(table_references)),
             },
-            "total_processors": len(processors),
+            "summary": {
+                "total_processors": len(processors),
+                "script_files_count": len(script_files),
+                "hdfs_paths_count": len(hdfs_paths),
+                "database_hosts_count": len(database_hosts),
+                "external_hosts_count": len(external_hosts),
+                "table_references_count": len(table_references),
+            },
         }
 
     except Exception as e:
@@ -162,16 +189,7 @@ def migrate_nifi_to_databricks_simplified(
     _log("🔗 Detecting data flow chains...")
     chains_result = detect_data_flow_chains(xml_content, pruned_result)
 
-    # Step 6: Analyze connection architecture (fan-in/fan-out hotspots)
-    _log("🕸️  Analyzing connection architecture and hotspots...")
-    # Generate table lineage analysis (REMOVED - will reimplement differently)
-    # from tools.simple_table_lineage import analyze_nifi_table_lineage
-    # lineage_analysis = analyze_nifi_table_lineage(xml_content)
-    # connection_analysis = generate_simple_lineage_report(lineage_analysis)
-    connection_analysis = (
-        "Table lineage analysis temporarily disabled - will be reimplemented"
-    )
-    _log("🎯 Table lineage analysis skipped (to be reimplemented)")
+    # Connection analysis moved to Table Lineage page (03_Table_Lineage.py)
 
     # Step 7: Extract and catalog all workflow assets for manual review
     _log("📋 Extracting workflow assets (scripts, paths, tables) for manual review...")
@@ -245,7 +263,6 @@ def migrate_nifi_to_databricks_simplified(
         "reports": {
             "essential_processors": essential_processors_report,
             "unknown_processors": unknown_processors_content,
-            "connection_analysis": connection_analysis,
         },
         "configuration": {
             "xml_path": xml_path,

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import sys
 import tempfile
+
+import pandas as pd
 
 # Add parent directory to Python path to find tools and config (MUST be before imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -28,17 +31,71 @@ def display_asset_results(result, uploaded_file):
 
     try:
         # Display summary metrics
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total Processors", result.get("total_processors", 0))
-        with col2:
-            st.metric("Asset Categories", "Scripts, Paths, Hosts, Tables")
+        if result.get("summary"):
+            summary = result["summary"]
 
-        # Display asset summary report
-        if result.get("reports") and result["reports"].get("asset_summary"):
-            st.markdown("### 📦 Discovered Assets")
-            with st.expander("📄 Asset Summary", expanded=True):
-                st.markdown(result["reports"]["asset_summary"])
+            # Top row metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Processors", summary.get("total_processors", 0))
+            with col2:
+                st.metric("Script Files", summary.get("script_files_count", 0))
+            with col3:
+                st.metric("Table References", summary.get("table_references_count", 0))
+
+            # Bottom row metrics
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                st.metric("HDFS Paths", summary.get("hdfs_paths_count", 0))
+            with col5:
+                st.metric("Database Hosts", summary.get("database_hosts_count", 0))
+            with col6:
+                st.metric("External Hosts", summary.get("external_hosts_count", 0))
+
+        # Create consolidated table data
+        if result.get("assets"):
+            assets = result["assets"]
+            table_data = []
+
+            # Add script files
+            for script in assets.get("script_files", []):
+                table_data.append({"Asset Type": "Script File", "Asset Value": script})
+
+            # Add table references
+            for table in assets.get("table_references", []):
+                table_data.append(
+                    {"Asset Type": "Table Reference", "Asset Value": table}
+                )
+
+            # Add HDFS paths
+            for path in assets.get("hdfs_paths", []):
+                table_data.append({"Asset Type": "HDFS Path", "Asset Value": path})
+
+            # Add database hosts
+            for host in assets.get("database_hosts", []):
+                table_data.append({"Asset Type": "Database Host", "Asset Value": host})
+
+            # Add external hosts
+            for host in assets.get("external_hosts", []):
+                table_data.append({"Asset Type": "External Host", "Asset Value": host})
+
+            # Display table
+            if table_data:
+                st.markdown("### 📦 Discovered Assets")
+                df = pd.DataFrame(table_data)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                # Download button for CSV
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Assets CSV",
+                    data=csv,
+                    file_name=f"nifi_assets_{uploaded_file.name.replace('.xml', '')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.info("No assets found in the workflow.")
         else:
             st.info("No assets found in the workflow.")
 
