@@ -18,22 +18,23 @@ The system provides programmatic APIs for automating the migration process.
 
 ### Core Components
 
-- **Simplified Migration System**: Direct function call approach without agent complexity
-  - `tools/simplified_migration.py`: Main migration functions for complete workflows
-  - `convert_nifi_using_agent.py`: Databricks notebook interface for direct function usage
+- **Migration System**: Direct function call approach without agent complexity
+  - `tools/migration_orchestrator.py`: Main migration functions for complete workflows
+  - Entry point: `migrate_nifi_to_databricks_simplified()` and `analyze_nifi_workflow_only()`
 
 - **Migration Tools**: Modular tools for different aspects of NiFi conversion
   - `tools/xml_tools.py`: NiFi XML parsing and template extraction
-  - `tools/migration_tools.py`: Core conversion logic from NiFi to Databricks with intelligent migration orchestration
-  - `tools/job_tools.py`: Databricks Jobs API integration and job creation
-  - `tools/generator_tools.py`: Code generation utilities with LLM-powered PySpark code creation
-
-# Migration approaches removed - use simplified_migration.py for direct function calls
+  - `tools/improved_classifier.py`: AI-powered processor classification using hybrid rule-based + LLM approach
+  - `tools/improved_pruning.py`: Smart pruning that identifies essential data processing logic
+  - `tools/asset_extraction.py`: Comprehensive scanning for scripts, databases, file paths, and external dependencies
+  - `tools/dependency_extraction.py`: Complete dependency analysis across ALL processors with variable tracking, impact analysis, and circular dependency detection
 
 - **Streamlit Web Application**: Interactive user interface for migrations
   - `streamlit_app/Dashboard.py`: Main dashboard for file upload and navigation
-  - `streamlit_app/pages/01_NiFi_Migration.py`: Migration analysis and execution page
-  - `streamlit_app/pages/02_Table_Lineage.py`: Dedicated table lineage analysis page
+  - `streamlit_app/pages/01_Processor_Classification.py`: Migration analysis and execution page
+  - `streamlit_app/pages/02_Processor_Dependencies.py`: Comprehensive dependency analysis (development branch)
+  - `streamlit_app/pages/03_Asset_Extraction.py`: Asset discovery and migration planning
+  - `streamlit_app/pages/04_Lineage_Connections.py`: Table lineage analysis page
   - Features result caching, navigation protection, and error handling
 
 - **Table Lineage Analysis**: Dedicated data flow analysis system
@@ -41,10 +42,6 @@ The system provides programmatic APIs for automating the migration process.
   - Identifies SQL operations, variable resolution, and data dependencies
   - Filters column aliases vs real table references for accurate lineage
   - Outputs CSV reports with processor chains and hop counts
-
-- **Configuration**: Environment and settings management
-  - `config/settings.py`: Environment variable loading and logging setup
-  - Requires `.env` file with DATABRICKS_HOSTNAME, DATABRICKS_TOKEN, MODEL_ENDPOINT
 
 ### Migration Process
 
@@ -63,59 +60,93 @@ The system provides programmatic APIs for automating the migration process.
 
 ## Common Development Tasks
 
-### Testing the Migration System
+### Environment Setup
 
-#### Simplified Migration (Recommended)
-Direct function call approach without agent complexity:
+Required environment variables:
+- `DATABRICKS_HOSTNAME`: Your Databricks workspace URL
+- `DATABRICKS_TOKEN`: Personal access token or service principal token
+- `MODEL_ENDPOINT`: Foundation model endpoint (default: databricks-meta-llama-3-3-70b-instruct)
+- `NOTIFICATION_EMAIL`: Optional email for job failure notifications
 
-```python
-# In Databricks notebook - Direct Function Pipeline
-from tools.simplified_migration import migrate_nifi_to_databricks_simplified, analyze_nifi_workflow_only
+**Performance Configuration (v2.1):**
+- `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM generation (default: true)
+- `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30)
+- `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5)
 
-# Complete migration with semantic analysis
-result = migrate_nifi_to_databricks_simplified(
-    xml_path="<path>",
-    out_dir="<dir>",
-    project="<name>",
-    notebook_path="<notebook_path>",
-    deploy=False
-)
-
-# Or analysis only (fast, no migration)
-analysis = analyze_nifi_workflow_only("<path>")
+**Optimal deployment configuration:**
+```bash
+DATABRICKS_TOKEN=your-token
+DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
+MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
+ENABLE_LLM_CODE_GENERATION=true
+MAX_PROCESSORS_PER_CHUNK=20
+LLM_SUB_BATCH_SIZE=5
 ```
 
-This will:
-1. Analyze the NiFi XML and classify processors
-2. Prune infrastructure-only processors (logging, routing, flow control)
-3. Detect semantic data flow chains
-4. Create optimized semantic flows
-5. Execute **FOCUSED migration on essential processors only**:
-   - **LLM generation**: Only for `data_transformation` + `external_processing` processors
-   - **Simple templates**: For `data_movement` processors (read/write operations)
-   - **Complete skip**: All `infrastructure` processors (Databricks handles natively)
-6. Return comprehensive results focusing on real data processing logic
+**Batch Size Tuning Guidelines:**
+- **Complex processors** (lots of properties): Use `MAX_PROCESSORS_PER_CHUNK=15`
+- **Simple processors**: Use `MAX_PROCESSORS_PER_CHUNK=25`
+- **Better fallback success**: Use `LLM_SUB_BATCH_SIZE=5` instead of default 10
+- **JSON parsing issues**: Reduce both batch sizes for higher success rates
 
-#### Alternative Direct Tool Usage
-For when you need granular control over specific migration steps:
+### Development Environment Setup
 
-```python
-# Individual migration tools
-from tools.migration_tools import orchestrate_intelligent_nifi_migration
+```bash
+# Quick setup (recommended)
+./scripts/setup_dev.sh
 
-# Direct tool usage
-result = orchestrate_intelligent_nifi_migration(
-    xml_path="<path>",
-    out_dir="<dir>",
-    project="<name>"
-)
+# Manual setup
+uv sync --group dev
+uv run pre-commit install
+```
+
+### Running the Application
+
+**Streamlit App:**
+```bash
+streamlit run streamlit_app/Dashboard.py
+```
+
+**Databricks Deployment:**
+The application uses `app.yaml` for Databricks Apps deployment. Update the environment variables in `app.yaml` for your workspace.
+
+### Testing and Validation
+
+**Run Tests:**
+```bash
+# All tests
+uv run pytest
+
+# Unit tests only
+uv run pytest -m unit
+
+# Integration tests only
+uv run pytest -m integration
+
+# Exclude slow tests
+uv run pytest -m "not slow"
+```
+
+**Code Quality:**
+```bash
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+
+# Check MyPy progress
+./scripts/mypy_progress.sh
+
+# Individual tools
+uv run black .
+uv run isort .
+uv run flake8 .
+uv run mypy .
 ```
 
 ### Running Migrations Programmatically
 
-#### Simplified Migration (Recommended)
+**Simplified Migration (Recommended):**
 ```python
-from tools.simplified_migration import migrate_nifi_to_databricks_simplified
+from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
 
 # Complete migration with semantic analysis pipeline
 result = migrate_nifi_to_databricks_simplified(
@@ -132,54 +163,13 @@ print("Analysis:", result['analysis'])
 print("Configuration:", result['configuration'])
 ```
 
-#### Direct Migration Tools
+**Analysis Only (Fast):**
 ```python
-from tools.migration_tools import orchestrate_intelligent_nifi_migration
+from tools.migration_orchestrator import analyze_nifi_workflow_only
 
-# Direct tool usage - automatically chooses best architecture
-result = orchestrate_intelligent_nifi_migration(
-    xml_path="nifi_pipeline_file/example.xml",
-    out_dir="output_results/intelligent_project",
-    project="my_intelligent_project",
-    notebook_path="/Workspace/Users/me@company.com/project/main",
-    deploy=False  # Set to True to deploy automatically
-)
+# Fast analysis without migration
+analysis = analyze_nifi_workflow_only("path/to/workflow.xml")
 ```
-
-
-#### Manual Migration (Legacy)
-The legacy chunked migration approach has been deprecated in favor of the intelligent batching system. The new batch size limits handle large workflows automatically.
-
-# Pattern Registry Operations removed - generates fresh code each time
-
-## Environment Setup
-
-Required environment variables:
-- `DATABRICKS_HOSTNAME`: Your Databricks workspace URL
-- `DATABRICKS_TOKEN`: Personal access token or service principal token
-- `MODEL_ENDPOINT`: Foundation model endpoint (default: databricks-meta-llama-3-3-70b-instruct)
-- `NOTIFICATION_EMAIL`: Optional email for job failure notifications
-
-**Performance Configuration (v2.1):**
-- `ENABLE_LLM_CODE_GENERATION`: Enable batched LLM generation (default: true)
-- `MAX_PROCESSORS_PER_CHUNK`: Processors per batch (default: 20, tune 15-30)
-- `LLM_SUB_BATCH_SIZE`: Sub-batch size for fallbacks (default: 10, recommended: 5)
-
-**Optimal `.env` configuration:**
-```bash
-DATABRICKS_TOKEN=your-token
-DATABRICKS_HOSTNAME=https://your-workspace.cloud.databricks.com
-MODEL_ENDPOINT=databricks-meta-llama-3-3-70b-instruct
-ENABLE_LLM_CODE_GENERATION=true
-MAX_PROCESSORS_PER_CHUNK=20
-LLM_SUB_BATCH_SIZE=5
-```
-
-**Batch Size Tuning Guidelines:**
-- **Complex processors** (lots of properties): Use `MAX_PROCESSORS_PER_CHUNK=15`
-- **Simple processors**: Use `MAX_PROCESSORS_PER_CHUNK=25`
-- **Better fallback success**: Use `LLM_SUB_BATCH_SIZE=5` instead of default 10
-- **JSON parsing issues**: Reduce both batch sizes for higher success rates
 
 ## Key Migration Patterns
 
@@ -202,46 +192,6 @@ output_results/project_name/
 ├── databricks.yml       # Asset bundle configuration
 └── README.md           # Project documentation
 ```
-
-
-## Progress Tracking (v2.0)
-
-The migration system now provides comprehensive progress tracking:
-
-**Agent Level:**
-```
-🔧 [TOOL REQUEST] migrate_nifi_to_databricks_simplified
-🔄 [AGENT ROUND 1/5] Model requested tool call
-✅ [AGENT COMPLETE] Migration finished successfully after 1 rounds
-```
-
-**Migration Level:**
-```
-📋 [MIGRATION] Processing 87 total processors in batches
-📦 [BATCH 1/4] Processing 25 processors...
-🎉 [MIGRATION COMPLETE] 87 processors → 45 semantic tasks
-```
-
-**LLM Batch Level:**
-```
-🧠 [LLM BATCH] Generating code for 15 processors in batch_0
-🔍 [LLM BATCH] Processor types: GetFile, EvaluateJsonPath, RouteOnAttribute
-🚀 [LLM BATCH] Sending batch request to databricks-meta-llama-3-3-70b-instruct...
-✅ [LLM BATCH] Received response, parsing generated code...
-🎯 [LLM BATCH] Successfully parsed 15 code snippets
-✨ [LLM BATCH] Generated 15 processor tasks for batch_0
-```
-
-**JSON Parsing Recovery (v2.1):**
-```
-⚠️  [LLM BATCH] JSON parsing failed: Invalid \escape: line 18 column 1066
-🔧 [LLM BATCH] Recovered JSON from markdown block
-❌ [LLM BATCH] All JSON recovery attempts failed, falling back to individual generation
-```
-
-## Testing and Validation
-
-**Performance Monitoring**: Track API call efficiency with the new progress indicators to ensure optimal resource usage.
 
 ## JSON Parsing Improvements (v2.1)
 
@@ -286,26 +236,6 @@ try:
         content = f.read()
 except:
     pass  # ❌ NEVER DO THIS - hides all errors including syntax errors
-
-# Don't wrap simple operations unnecessarily
-try:
-    value = int(os.environ.get("VAR", "10"))
-except Exception:
-    value = 10
-
-# Don't create complex nested try-except blocks
-try:
-    # complex operation
-    try:
-        # nested operation
-        try:
-            # deeply nested operation
-        except Exception:
-            pass
-    except Exception:
-        pass
-except Exception:
-    pass
 ```
 
 **✅ Use these patterns instead:**
@@ -327,13 +257,6 @@ try:
 except (IOError, OSError, UnicodeDecodeError):
     # Skip files that can't be read, but don't fail the operation
     continue
-
-# Use single-level exception handling with specific recovery
-try:
-    result = complex_operation()
-except (SpecificError, AnotherError) as e:
-    logger.error(f"Operation failed: {e}")
-    result = fallback_value
 ```
 
 **Guidelines:**
@@ -343,31 +266,55 @@ except (SpecificError, AnotherError) as e:
 - **NEVER use bare `except:` or `except: pass`** - this hides all errors including syntax errors
 - Log warnings/errors instead of silently ignoring with `pass`
 - Avoid deep nesting of try-except blocks
-- Simple operations like `os.environ.get()` or basic arithmetic rarely need exception handling
-- File operations on files you just created rarely need exception handling
-- If you must catch `Exception`, log it and provide meaningful fallback behavior
-- When catching multiple exception types, group them: `except (IOError, OSError):`
 
-## Recent Streamlit App Improvements
+## MyPy Type Checking
 
-### ✅ **Completed Enhancements (Dec 2024)**
-- **Table Lineage Analysis**: Implemented GPT-suggested table lineage extraction approach
-- **Result Caching**: Added session state caching for both migration and lineage results
-- **Navigation Protection**: Disabled buttons during processing to prevent user interruption
-- **Clean UI**: Removed redundant sections (Advanced Options, Domain-Only chains, Back buttons)
-- **Error Handling**: Fixed "'str' object has no attribute 'get'" errors with proper type checking
-- **Clear Results Fix**: Clear Results button now resets both results and uploaded file cache
-- **Spinner Progress**: Replaced verbose logging with clean rotating spinner indicators
+The project uses gradual MyPy adoption with module-specific overrides:
 
-### 🎯 **Key UI Patterns**
+```bash
+# Check current MyPy progress
+./scripts/mypy_progress.sh
+
+# Test specific module
+uv run mypy --config-file pyproject.toml tools/
+
+# Current ignored modules (in pyproject.toml):
+# - tools.*
+# - agents.*
+# - registry.*
+# - convert_nifi_using_agent
+# - utils.xml_utils
+```
+
+**MyPy graduation process**: Remove module overrides one-by-one as code is cleaned up. See `docs/mypy_strictness_guide.md` for detailed progression plan.
+
+## Streamlit App Architecture
+
+The Streamlit app uses a 4-page architecture with session state management:
+
+### Page Structure
+- **Dashboard.py**: Main navigation hub with file upload and processor information
+- **01_Processor_Classification.py**: AI-powered processor classification and pruning
+- **02_Processor_Dependencies.py**: Comprehensive dependency analysis (development branch)
+- **03_Asset_Extraction.py**: Asset discovery and migration planning
+- **04_Lineage_Connections.py**: Table lineage and data flow analysis
+
+### Key Patterns
 - **Session State Management**: Use `st.session_state` for caching results across page navigation
-- **Navigation Protection**: Set running flags (`migration_running`, `lineage_running`) to disable UI during processing
+- **Navigation Protection**: Set running flags to disable UI during processing
 - **Error Display**: Use `st.error()` for failures, `st.warning()` for non-critical issues, `st.success()` for completions
 - **File Handling**: Always clean up temporary files in `finally` blocks
-- **Progress Indication**: Use `st.spinner()` for long-running operations instead of progress bars
+- **Progress Indication**: Use `st.spinner()` for long-running operations
 
-### ⚠️ **Common Issues to Avoid**
+### Common Issues to Avoid
 - **Don't assume data types**: Always check if objects are strings vs dicts before calling `.get()`
 - **Clear all caches**: Clear Results should remove both result cache AND uploaded file cache
-- **Handle edge cases**: Table lineage may return error strings instead of analysis objects
+- **Handle edge cases**: Analysis may return error strings instead of analysis objects
 - **Avoid redundant UI**: Don't add back navigation buttons when sidebar navigation exists
+
+## Branch Management
+
+- **main**: Production branch with Dependencies functionality hidden
+- **trace_data_dependency**: Development branch with full Dependencies functionality enabled
+
+The Dependencies page exists in both branches but is only accessible via UI in the development branch.
