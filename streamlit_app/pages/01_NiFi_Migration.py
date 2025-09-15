@@ -104,7 +104,7 @@ def main():
     migration_running = st.session_state.get("migration_running", False)
 
     # Migration options
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         # Check for auto-start flag from Dashboard
@@ -136,21 +136,6 @@ def main():
             help="Cannot navigate during analysis" if migration_running else None,
         ):
             st.switch_page("Dashboard.py")
-
-    with col3:
-        if st.button(
-            "🗑️ Clear Results", use_container_width=True, disabled=migration_running
-        ):
-            # Clear migration results cache
-            if migration_cache_key in st.session_state:
-                del st.session_state[migration_cache_key]
-            # Clear completion timestamp
-            if f"{migration_cache_key}_completion_time" in st.session_state:
-                del st.session_state[f"{migration_cache_key}_completion_time"]
-            # Clear uploaded file cache
-            if "uploaded_file" in st.session_state:
-                del st.session_state["uploaded_file"]
-            st.rerun()
 
     # Show warning if migration is running
     if migration_running:

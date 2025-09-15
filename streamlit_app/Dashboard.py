@@ -20,14 +20,19 @@ def main():
         help="Select your NiFi template (.xml) file",
     )
 
-    # Show migration option when file is uploaded
+    # Check for existing file in session state if no new upload
+    if not uploaded_file and "uploaded_file" in st.session_state:
+        uploaded_file = st.session_state["uploaded_file"]
+        st.info(f"📁 Current file: {uploaded_file.name} (uploaded previously)")
+
+    # Show migration option when file is available
     if uploaded_file:
         st.success(f"✅ File uploaded: {uploaded_file.name}")
 
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             if st.button("🚀 Start Migration", use_container_width=True):
@@ -38,6 +43,21 @@ def main():
         with col2:
             if st.button("📊 Analyze Table Lineage", use_container_width=True):
                 st.switch_page("pages/02_Table_Lineage.py")
+
+        with col3:
+            if st.button("🗑️ Clear File", use_container_width=True):
+                # Clear uploaded file and any cached results
+                if "uploaded_file" in st.session_state:
+                    del st.session_state["uploaded_file"]
+                # Clear any migration/lineage results for the file
+                for key in list(st.session_state.keys()):
+                    if (
+                        "migration_results_" in key
+                        or "lineage_results_" in key
+                        or "completion_time" in key
+                    ):
+                        del st.session_state[key]
+                st.rerun()
 
     else:
         st.info("Upload a NiFi XML file to get started")

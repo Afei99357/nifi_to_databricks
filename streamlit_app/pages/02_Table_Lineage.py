@@ -92,7 +92,7 @@ def main():
     analysis_running = st.session_state.get("lineage_running", False)
 
     # Analysis options
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         run_analysis = st.button(
@@ -108,18 +108,6 @@ def main():
             help="Cannot navigate during analysis" if analysis_running else None,
         ):
             st.switch_page("Dashboard.py")
-
-    with col3:
-        if st.button(
-            "🗑️ Clear Results", use_container_width=True, disabled=analysis_running
-        ):
-            # Clear table lineage results cache
-            if lineage_cache_key in st.session_state:
-                del st.session_state[lineage_cache_key]
-            # Clear uploaded file cache
-            if "uploaded_file" in st.session_state:
-                del st.session_state["uploaded_file"]
-            st.rerun()
 
     # Show warning if analysis is running
     if analysis_running:
