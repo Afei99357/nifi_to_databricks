@@ -41,8 +41,8 @@ def main():
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        # Navigation buttons - 3 columns (Dependencies button temporarily hidden)
-        col1, col2, col3 = st.columns(3)
+        # Navigation buttons - 4 columns
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             if st.button("🚀 Classify Processors", use_container_width=True):
@@ -50,19 +50,19 @@ def main():
                 st.session_state["auto_start_migration"] = True
                 st.switch_page("pages/01_Processor_Classification.py")
 
-        # with col2:
-        #     if st.button("🔗 Analyze Dependencies", use_container_width=True):
-        #         # Set flag to auto-start dependency analysis when arriving at page
-        #         st.session_state["auto_start_dependency_analysis"] = True
-        #         st.switch_page("pages/02_Processor_Dependencies.py")
-
         with col2:
+            if st.button("🔗 Analyze Dependencies", use_container_width=True):
+                # Set flag to auto-start dependency analysis when arriving at page
+                st.session_state["auto_start_dependency_analysis"] = True
+                st.switch_page("pages/02_Processor_Dependencies.py")
+
+        with col3:
             if st.button("📦 Extract Assets", use_container_width=True):
                 # Set flag to auto-start asset extraction when arriving at page
                 st.session_state["auto_start_asset_extraction"] = True
                 st.switch_page("pages/03_Asset_Extraction.py")
 
-        with col3:
+        with col4:
             if st.button("📊 Lineage & Connections", use_container_width=True):
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
