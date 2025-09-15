@@ -556,6 +556,9 @@ def analyze_nifi_table_lineage(
     la, pa = longest_paths(edges_all, max_examples=3)
     ld, pd = longest_paths(edges_dom, max_examples=3)
 
+    # Extract processor names for connection display
+    processor_names = {pid: proc["name"] for pid, proc in procs.items()}
+
     return {
         "processors": len(procs),
         "connections": sum(len(v) for v in adj.values()),
@@ -567,6 +570,8 @@ def analyze_nifi_table_lineage(
         "longest_path_domain": {"length": ld, "paths": pd},
         "chains_data": chains,
         "domain_chains_data": dom_chains,
+        "connections_data": adj,
+        "processor_names": processor_names,
     }
 
 
