@@ -31,6 +31,8 @@ def main():
 
         with col1:
             if st.button("🚀 Start Migration", use_container_width=True):
+                # Set flag to auto-start migration when arriving at migration page
+                st.session_state["auto_start_migration"] = True
                 st.switch_page("pages/01_NiFi_Migration.py")
 
         with col2:

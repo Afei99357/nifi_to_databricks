@@ -107,9 +107,27 @@ def main():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        run_migration = st.button(
-            "🚀 Run Migration", use_container_width=True, disabled=migration_running
-        )
+        # Check for auto-start flag from Dashboard
+        auto_start = st.session_state.get("auto_start_migration", False)
+
+        # Show Run Migration button only if no cached results exist
+        if cached_result:
+            # Hide button when results exist - user must Clear Results first
+            st.empty()
+            run_migration = auto_start
+        else:
+            run_migration = (
+                st.button(
+                    "🚀 Run Migration",
+                    use_container_width=True,
+                    disabled=migration_running,
+                )
+                or auto_start
+            )
+
+        # Clear auto-start flag after checking
+        if auto_start:
+            st.session_state["auto_start_migration"] = False
 
     with col2:
         if st.button(
