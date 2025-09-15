@@ -4,7 +4,7 @@ import streamlit as st
 
 # Configure the page
 st.set_page_config(
-    page_title="NiFi to Databricks Migration Tool", page_icon="🔧", layout="wide"
+    page_title="NiFi to Databricks Migration Tool", page_icon="", layout="wide"
 )
 
 

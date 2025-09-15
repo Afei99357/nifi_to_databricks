@@ -3,6 +3,7 @@
 import os
 import sys
 import tempfile
+import time
 
 # Add parent directory to Python path to find tools and config (MUST be before imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -125,6 +126,9 @@ def main():
             # Clear migration results cache
             if migration_cache_key in st.session_state:
                 del st.session_state[migration_cache_key]
+            # Clear completion timestamp
+            if f"{migration_cache_key}_completion_time" in st.session_state:
+                del st.session_state[f"{migration_cache_key}_completion_time"]
             # Clear uploaded file cache
             if "uploaded_file" in st.session_state:
                 del st.session_state["uploaded_file"]
@@ -138,9 +142,24 @@ def main():
 
     # Display cached results if available
     if cached_result and not run_migration:
-        st.info(
-            "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
+        # Check if this was a recently completed migration (within last 10 minutes)
+        completion_time = st.session_state.get(
+            f"{migration_cache_key}_completion_time", 0
         )
+        if completion_time > 0:
+            minutes_ago = (time.time() - completion_time) / 60
+            if minutes_ago < 10:  # Recent completion
+                st.success(
+                    f"✅ Your migration completed {int(minutes_ago)} minute(s) ago. Results are shown below."
+                )
+            else:
+                st.info(
+                    "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
+                )
+        else:
+            st.info(
+                "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
+            )
         display_migration_results(cached_result)
 
     # Run migration
@@ -165,8 +184,9 @@ def main():
 
             st.success("✅ Migration completed!")
 
-            # Cache the result
+            # Cache the result with completion timestamp
             st.session_state[migration_cache_key] = result
+            st.session_state[f"{migration_cache_key}_completion_time"] = time.time()
 
             # Display the results
             display_migration_results(result)
