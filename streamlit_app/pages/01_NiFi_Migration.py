@@ -103,19 +103,24 @@ def main():
     # Check if migration is running
     migration_running = st.session_state.get("migration_running", False)
 
-    # Migration options
-    col1, col2 = st.columns(2)
+    # Check for auto-start flag from Dashboard
+    auto_start = st.session_state.get("auto_start_migration", False)
 
-    with col1:
-        # Check for auto-start flag from Dashboard
-        auto_start = st.session_state.get("auto_start_migration", False)
+    # Dynamic layout based on whether Run Migration button should be shown
+    if cached_result:
+        # Only show Back to Dashboard button when results exist
+        if st.button(
+            "🔙 Back to Dashboard",
+            disabled=migration_running,
+            help="Cannot navigate during analysis" if migration_running else None,
+        ):
+            st.switch_page("Dashboard.py")
+        run_migration = auto_start
+    else:
+        # Show both buttons when no results exist
+        col1, col2 = st.columns(2)
 
-        # Show Run Migration button only if no cached results exist
-        if cached_result:
-            # Hide button when results exist - user must Clear Results first
-            st.empty()
-            run_migration = auto_start
-        else:
+        with col1:
             run_migration = (
                 st.button(
                     "🚀 Run Migration",
@@ -125,17 +130,17 @@ def main():
                 or auto_start
             )
 
-        # Clear auto-start flag after checking
-        if auto_start:
-            st.session_state["auto_start_migration"] = False
+        with col2:
+            if st.button(
+                "🔙 Back to Dashboard",
+                disabled=migration_running,
+                help="Cannot navigate during analysis" if migration_running else None,
+            ):
+                st.switch_page("Dashboard.py")
 
-    with col2:
-        if st.button(
-            "🔙 Back to Dashboard",
-            disabled=migration_running,
-            help="Cannot navigate during analysis" if migration_running else None,
-        ):
-            st.switch_page("Dashboard.py")
+    # Clear auto-start flag after checking
+    if auto_start:
+        st.session_state["auto_start_migration"] = False
 
     # Show warning if migration is running
     if migration_running:
