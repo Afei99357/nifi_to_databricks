@@ -109,12 +109,6 @@ def main():
         ):
             st.switch_page("Dashboard.py")
 
-    # Show warning if analysis is running
-    if analysis_running:
-        st.warning(
-            "⚠️ Analysis in progress. If you switch pages, the progress will not be saved. Please wait for completion."
-        )
-
     # Display cached results if available
     if cached_result and not run_analysis:
         st.info(
@@ -135,7 +129,10 @@ def main():
         # Create temp output directory
         with tempfile.TemporaryDirectory() as tmp_dir:
             try:
-                # Show spinner during analysis
+                # Show warning and spinner during analysis
+                st.warning(
+                    "⚠️ Analysis in progress. If you switch pages, the progress will not be saved. Please wait for completion."
+                )
                 with st.spinner("🔍 Analyzing NiFi table lineage..."):
                     result = analyze_nifi_table_lineage(
                         xml_path=tmp_xml_path,

@@ -142,12 +142,6 @@ def main():
     if auto_start:
         st.session_state["auto_start_migration"] = False
 
-    # Show warning if migration is running
-    if migration_running:
-        st.warning(
-            "⚠️ Migration in progress. If you switch pages, the progress will not be saved. Please wait for completion."
-        )
-
     # Display cached results if available
     if cached_result and not run_migration:
         st.info("📋 Showing cached migration results.")
@@ -164,7 +158,10 @@ def main():
         st.session_state["migration_running"] = True
 
         try:
-            # Show spinner during migration
+            # Show warning and spinner during migration
+            st.warning(
+                "⚠️ Migration in progress. If you switch pages, the progress will not be saved. Please wait for completion."
+            )
             with st.spinner("Running NiFi to Databricks migration..."):
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
