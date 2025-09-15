@@ -32,7 +32,7 @@ def main():
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             if st.button("🚀 Start Migration", use_container_width=True):
@@ -41,19 +41,24 @@ def main():
                 st.switch_page("pages/01_NiFi_Migration.py")
 
         with col2:
-            if st.button("📊 Analyze Table Lineage", use_container_width=True):
-                st.switch_page("pages/02_Table_Lineage.py")
+            if st.button("📦 Extract Assets", use_container_width=True):
+                st.switch_page("pages/02_Asset_Extraction.py")
 
         with col3:
+            if st.button("📊 Analyze Table Lineage", use_container_width=True):
+                st.switch_page("pages/03_Table_Lineage.py")
+
+        with col4:
             if st.button("🗑️ Clear File", use_container_width=True):
                 # Clear uploaded file and any cached results
                 if "uploaded_file" in st.session_state:
                     del st.session_state["uploaded_file"]
-                # Clear any migration/lineage results for the file
+                # Clear any migration/lineage/asset results for the file
                 for key in list(st.session_state.keys()):
                     if (
                         "migration_results_" in key
                         or "lineage_results_" in key
+                        or "asset_results_" in key
                         or "completion_time" in key
                     ):
                         del st.session_state[key]

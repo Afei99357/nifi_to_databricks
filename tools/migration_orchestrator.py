@@ -7,11 +7,11 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-from tools.asset_extraction import (
-    generate_asset_summary,
+from tools.asset_extraction import generate_asset_summary
+from tools.improved_classifier import (
+    analyze_workflow_patterns,
     generate_unknown_processors_json,
 )
-from tools.improved_classifier import analyze_workflow_patterns
 from tools.improved_pruning import (
     detect_data_flow_chains,
     prune_infrastructure_processors,
@@ -21,6 +21,63 @@ from tools.reporting import generate_essential_processors_report
 # from tools.simple_table_lineage import generate_simple_lineage_report  # REMOVED
 
 # Asset discovery functionality moved to tools/asset_extraction.py
+
+
+def extract_nifi_assets_only(
+    xml_path: str,
+    progress_callback: Optional[callable] = None,
+) -> Dict[str, Any]:
+    """
+    Extract only assets from NiFi workflow (no classification/dependencies needed).
+
+    Ultra-lightweight function focused purely on asset discovery:
+    - Scripts, paths, hosts, tables from ALL processors
+    - No classification or dependency analysis required
+
+    Args:
+        xml_path: Path to NiFi XML template file
+        progress_callback: Optional callback for progress updates
+
+    Returns:
+        Dictionary with asset extraction results
+    """
+
+    def _log(msg: str):
+        if progress_callback:
+            progress_callback(msg)
+        print(msg)
+
+    _log("📦 Starting pure asset extraction...")
+
+    try:
+        # Step 1: Parse NiFi XML to get raw processor data (no classification needed)
+        _log("🔍 Parsing NiFi XML...")
+        import json
+
+        from tools.xml_tools import parse_nifi_template
+
+        with open(xml_path, "r", encoding="utf-8") as f:
+            xml_content = f.read()
+
+        template_data = json.loads(parse_nifi_template(xml_content))
+        processors = template_data.get("processors", [])
+
+        _log(f"📋 Found {len(processors)} processors, extracting assets...")
+
+        # Step 2: Extract assets from ALL processors using existing function
+        asset_summary_content = generate_asset_summary({"processors": processors})
+
+        _log("✅ Pure asset extraction completed!")
+
+        return {
+            "reports": {
+                "asset_summary": asset_summary_content,
+            },
+            "total_processors": len(processors),
+        }
+
+    except Exception as e:
+        return {"error": f"Failed to extract assets: {str(e)}"}
 
 
 def migrate_nifi_to_databricks_simplified(
@@ -121,11 +178,16 @@ def migrate_nifi_to_databricks_simplified(
 
     # Asset discovery skipped - focusing on business migration guide
 
-    # Generate reports content
+    # Generate migration-focused reports content (dependencies/assets moved to separate pages)
     essential_processors_tuple = generate_essential_processors_report(pruned_result)
+    # Extract only the main report, skip dependencies part
+    essential_processors_report = (
+        essential_processors_tuple[0]
+        if isinstance(essential_processors_tuple, tuple)
+        else essential_processors_tuple
+    )
     unknown_processors_content = generate_unknown_processors_json(analysis_result)
-    asset_summary_content = generate_asset_summary(analysis_result)
-    _log("📋 Reports generated successfully")
+    _log("📋 Migration reports generated successfully")
 
     # Step 8: Generate comprehensive migration guide (essential processors only)
     _log("📋 Generating comprehensive migration guide...")
@@ -181,9 +243,8 @@ def migrate_nifi_to_databricks_simplified(
             "data_flow_chains": chains_result,
         },
         "reports": {
-            "essential_processors": essential_processors_tuple,
+            "essential_processors": essential_processors_report,
             "unknown_processors": unknown_processors_content,
-            "asset_summary": asset_summary_content,
             "connection_analysis": connection_analysis,
         },
         "configuration": {

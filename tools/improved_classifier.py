@@ -859,3 +859,36 @@ def analyze_workflow_patterns(
             "summary": {},
             "classification_results": [],
         }
+
+
+def generate_unknown_processors_json(analysis_result, output_dir: str = None) -> dict:
+    """Generate JSON with unknown processors for manual review.
+
+    Args:
+        analysis_result: Analysis result data
+        output_dir: Output directory (ignored, kept for compatibility)
+
+    Returns:
+        Dictionary containing unknown processors data
+    """
+    items = []
+    # tolerate dict-like input
+    cr = (analysis_result or {}).get("classification_results", [])
+    for proc in cr:
+        if proc.get("data_manipulation_type") == "unknown":
+            props = proc.get("properties") or {}
+            preview = []
+            for k, v in list(props.items())[:3]:
+                if isinstance(v, str) and len(v) > 120:
+                    v = v[:117] + "..."
+                preview.append(f"{k}={v}")
+            items.append(
+                {
+                    "id": proc.get("id"),
+                    "name": proc.get("name") or "Unknown",
+                    "type": proc.get("processor_type") or proc.get("type") or "Unknown",
+                    "property_preview": preview,
+                    "reason": proc.get("llm_error") or "Not matched by rules/LLM",
+                }
+            )
+    return {"unknown_processors": items, "count": len(items)}

@@ -31,25 +31,11 @@ def display_migration_results(result):
         if result.get("reports"):
             reports = result["reports"]
 
-            # Essential Processors Report (now returns a tuple)
+            # Essential Processors Report (now just main report, no dependencies)
             if reports.get("essential_processors"):
                 essential_data = reports["essential_processors"]
-
-                if isinstance(essential_data, tuple) and len(essential_data) == 2:
-                    main_report, dependencies_report = essential_data
-
-                    # Main Essential Processors Section
-                    with st.expander("📋 Essential Processors Report"):
-                        st.markdown(main_report)
-
-                    # Essential Dependencies Section (separate expander)
-                    if dependencies_report and dependencies_report.strip():
-                        with st.expander("🔗 Essential Dependencies"):
-                            st.markdown(dependencies_report)
-                else:
-                    # Fallback for old format
-                    with st.expander("📋 Essential Processors Report"):
-                        st.markdown(str(essential_data))
+                with st.expander("📋 Essential Processors Report"):
+                    st.markdown(str(essential_data))
 
             # Unknown Processors Report
             unknown_data = reports.get("unknown_processors", {})
@@ -64,11 +50,6 @@ def display_migration_results(result):
                         st.write("---")
             else:
                 st.info("✅ No unknown processors - all were successfully classified")
-
-            # Asset Summary Report
-            if "asset_summary" in reports and reports["asset_summary"]:
-                with st.expander("📄 Asset Summary"):
-                    st.markdown(reports["asset_summary"])
         else:
             st.warning("⚠️ No reports found in migration result")
 
