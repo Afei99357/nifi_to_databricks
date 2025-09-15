@@ -88,26 +88,27 @@ asset_discovery = {
 }
 ```
 
-**Real Example Output:**
+**Example Output:**
 ```bash
 # NiFi Asset Summary
-- Script Files Found: 11
-- HDFS Paths Found: 98
-- Database Hosts Found: 1
-- Working Directories: 13
+- Script Files Found: 8
+- HDFS Paths Found: 45
+- Database Hosts Found: 2
+- Working Directories: 6
 
 ## Script Files Requiring Migration
-- /users/nifi_service/scripts/etl/run_database_query.sh
-- /users/nifi_service/scripts/etl/backup_data.py
-- /scripts/etl/process_results.sql
+- /users/etl_service/scripts/data/run_query.sh
+- /users/etl_service/scripts/data/backup_tables.py
+- /scripts/data/transform_results.sql
 
 ## Database Connections
-- **Impala**: prod-impala-cluster.company.com
+- **Impala**: analytics-cluster.company.com
+- **MySQL**: metadata-db.company.com
 
 ## HDFS Paths for Unity Catalog Migration
-- /user/hive/warehouse/sales_data/staging_tables
-- /etl/dropzone/incoming/daily_files
-- /warehouse/prod/reports_tables
+- /user/hive/warehouse/customer_data/staging
+- /etl/incoming/daily_batch
+- /warehouse/prod/summary_tables
 ```
 
 ### 🚀 Migration Planning Benefits
