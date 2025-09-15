@@ -103,6 +103,28 @@ def main():
     # Check if migration is running
     migration_running = st.session_state.get("migration_running", False)
 
+    # Recovery logic: Handle orphaned migration_running state
+    if migration_running:
+        if cached_result:
+            # Case 1: Migration completed and results were saved - just clear the flag
+            st.session_state["migration_running"] = False
+            migration_running = False
+            st.rerun()  # Refresh to show results properly
+        else:
+            # Case 2: Check if migration has been running for too long (>60 minutes)
+            # This might indicate a stuck state or completed migration with lost results
+            migration_start_time = st.session_state.get("migration_start_time", 0)
+            if (
+                migration_start_time > 0 and (time.time() - migration_start_time) > 1800
+            ):  # 60 minutes
+                # Clear stuck migration state
+                st.session_state["migration_running"] = False
+                migration_running = False
+                st.warning(
+                    "⚠️ Previous migration session was reset due to timeout. Please try running migration again."
+                )
+                st.rerun()
+
     # Check for auto-start flag from Dashboard
     auto_start = st.session_state.get("auto_start_migration", False)
 
@@ -145,9 +167,17 @@ def main():
 
     # Show warning if migration is running
     if migration_running:
-        st.warning(
-            "⚠️ Migration in progress. Please wait and do not navigate away from this page."
-        )
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.warning(
+                "⚠️ Migration in progress. Please wait and do not navigate away from this page."
+            )
+        with col2:
+            if st.button("🔄 Reset State", help="Click if migration appears stuck"):
+                st.session_state["migration_running"] = False
+                if "migration_start_time" in st.session_state:
+                    del st.session_state["migration_start_time"]
+                st.rerun()
 
     # Display cached results if available
     if cached_result and not run_migration:
