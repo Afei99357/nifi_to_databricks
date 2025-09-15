@@ -158,11 +158,10 @@ def main():
         st.session_state["migration_running"] = True
 
         try:
-            # Show warning and spinner during migration
-            with st.spinner("Running NiFi to Databricks migration..."):
-                st.warning(
-                    "⚠️ Migration in progress. If you switch pages, the progress will not be saved. Please wait for completion."
-                )
+            # Show spinner with warning during migration
+            with st.spinner(
+                "Running NiFi to Databricks migration... Please do not navigate away."
+            ):
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
                     out_dir="/tmp",

@@ -129,11 +129,10 @@ def main():
         # Create temp output directory
         with tempfile.TemporaryDirectory() as tmp_dir:
             try:
-                # Show warning and spinner during analysis
-                with st.spinner("🔍 Analyzing NiFi table lineage..."):
-                    st.warning(
-                        "⚠️ Analysis in progress. If you switch pages, the progress will not be saved. Please wait for completion."
-                    )
+                # Show spinner with warning during analysis
+                with st.spinner(
+                    "🔍 Analyzing NiFi table lineage... Please do not navigate away."
+                ):
                     result = analyze_nifi_table_lineage(
                         xml_path=tmp_xml_path,
                         outdir=tmp_dir,
