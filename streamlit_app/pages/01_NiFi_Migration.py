@@ -12,18 +12,20 @@ import streamlit as st
 from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
 
 # Configure the page
-st.set_page_config(page_title="NiFi Migration", page_icon="🚀", layout="wide")
+st.set_page_config(
+    page_title="Processor Classification & Pruning", page_icon="🚀", layout="wide"
+)
 
 
 def display_migration_results(result):
-    """Display migration results from either fresh run or cache"""
+    """Display classification results from either fresh run or cache"""
     # Handle both string results (error case) and dict results
     if isinstance(result, str):
-        st.error(f"❌ Migration failed: {result}")
+        st.error(f"❌ Classification failed: {result}")
         return
 
     if not isinstance(result, dict):
-        st.error(f"❌ Migration failed: Invalid result format - {type(result)}")
+        st.error(f"❌ Classification failed: Invalid result format - {type(result)}")
         return
 
     try:
@@ -54,7 +56,7 @@ def display_migration_results(result):
             st.warning("⚠️ No reports found in migration result")
 
     except Exception as e:
-        st.error(f"❌ Error displaying migration results: {e}")
+        st.error(f"❌ Error displaying classification results: {e}")
         st.write(f"**Debug - Exception type:** {type(e)}")
         st.write(f"**Debug - Exception details:** {str(e)}")
         import traceback
@@ -63,7 +65,7 @@ def display_migration_results(result):
 
 
 def main():
-    st.title("🚀 NiFi to Databricks Migration")
+    st.title("🚀 NiFi Processor Classification & Pruning")
 
     # Check for uploaded file from Dashboard
     uploaded_file = st.session_state.get("uploaded_file", None)
@@ -76,7 +78,7 @@ def main():
             st.switch_page("Dashboard.py")
         return
 
-    # Check for cached migration results
+    # Check for cached classification results
     migration_cache_key = f"migration_results_{uploaded_file.name}"
     cached_result = st.session_state.get(migration_cache_key, None)
 
@@ -86,10 +88,10 @@ def main():
     # Check for auto-start flag from Dashboard
     auto_start = st.session_state.get("auto_start_migration", False)
 
-    # Dynamic layout based on whether Run Migration button should be shown
+    # Dynamic layout based on whether Run Analysis button should be shown
     # Hide button if results exist OR if auto-starting from Dashboard
     if cached_result or auto_start:
-        # Only show Back to Dashboard button (no Run Migration button needed)
+        # Only show Back to Dashboard button (no Run Analysis button needed)
         if st.button(
             "🔙 Back to Dashboard",
             disabled=migration_running,
@@ -104,7 +106,7 @@ def main():
         with col1:
             run_migration = (
                 st.button(
-                    "🚀 Run Migration",
+                    "🚀 Run Classification",
                     use_container_width=True,
                     disabled=migration_running,
                 )
@@ -125,10 +127,10 @@ def main():
 
     # Display cached results if available
     if cached_result and not run_migration:
-        st.info("📋 Showing cached migration results.")
+        st.info("📋 Showing cached classification results.")
         display_migration_results(cached_result)
 
-    # Run migration
+    # Run classification
     if uploaded_file and run_migration and not migration_running:
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
@@ -141,7 +143,7 @@ def main():
         try:
             # Show spinner with warning during migration
             with st.spinner(
-                "Running NiFi to Databricks migration... Please do not navigate away."
+                "Running NiFi processor classification & pruning... Please do not navigate away."
             ):
                 result = migrate_nifi_to_databricks_simplified(
                     xml_path=tmp_xml_path,
@@ -150,7 +152,7 @@ def main():
                     progress_callback=None,  # Disable verbose logging
                 )
 
-            st.success("✅ Migration completed!")
+            st.success("✅ Processor classification & pruning completed!")
 
             # Cache the result
             st.session_state[migration_cache_key] = result
@@ -160,7 +162,7 @@ def main():
 
         except Exception as e:
             error_msg = str(e)
-            st.error(f"❌ Migration failed: {error_msg}")
+            st.error(f"❌ Classification failed: {error_msg}")
             st.write("**Debug info:**")
             st.code(error_msg)
 
