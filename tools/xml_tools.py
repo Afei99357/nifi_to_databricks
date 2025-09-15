@@ -11,6 +11,7 @@ __all__ = [
     "parse_nifi_template",
     "parse_nifi_template_impl",
     "extract_nifi_parameters_and_services_impl",
+    "extract_processor_info",
 ]
 
 
@@ -51,8 +52,10 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
         )
 
         proc_info = {
+            "id": _trim(processor.findtext("id") or "Unknown"),
             "name": _trim(processor.findtext("name") or "Unknown"),
             "type": _trim(processor.findtext("type") or "Unknown"),
+            "comments": _trim(processor.findtext(".//config/comments") or ""),
             "properties": {},
             "parentGroupId": parent_group_id,
             "parentGroupName": parent_group_name,
@@ -181,3 +184,36 @@ def extract_nifi_parameters_and_services_impl(xml_content: str) -> Dict[str, Any
             )
 
     return result
+
+
+def extract_processor_info(xml_content: str) -> List[Dict[str, str]]:
+    """
+    Extract basic processor information for Dashboard display.
+
+    Parameters:
+        xml_content: The raw NiFi XML content
+
+    Returns:
+        List of dicts with id, name, type, comments for each processor
+    """
+    try:
+        root = ET.fromstring(xml_content)
+        processors = []
+
+        for processor in root.findall(".//processors"):
+            proc_info = {
+                "id": _trim(processor.findtext("id") or "Unknown"),
+                "name": _trim(processor.findtext("name") or "Unknown"),
+                "type": _trim(processor.findtext("type") or "Unknown"),
+                "comments": _trim(processor.findtext(".//config/comments") or ""),
+            }
+            processors.append(proc_info)
+
+        return processors
+
+    except ET.ParseError:
+        # Return empty list if XML parsing fails
+        return []
+    except Exception:
+        # Return empty list for any other errors
+        return []
