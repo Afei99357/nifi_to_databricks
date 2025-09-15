@@ -97,17 +97,17 @@ asset_discovery = {
 - Working Directories: 13
 
 ## Script Files Requiring Migration
-- /users/hadoop_nifi_svc/scripts/icn8/run_impala_query.sh
-- /users/hadoop_nifi_svc/scripts/icn8/backup_data.py
-- /scripts/icn8/process_results.sql
+- /users/nifi_service/scripts/etl/run_database_query.sh
+- /users/nifi_service/scripts/etl/backup_data.py
+- /scripts/etl/process_results.sql
 
 ## Database Connections
-- **Impala**: nardc02prod-impala.na-rdc02.nxp.com
+- **Impala**: prod-impala-cluster.company.com
 
 ## HDFS Paths for Unity Catalog Migration
-- /user/hive/warehouse/mfg_data/staging_tables
+- /user/hive/warehouse/sales_data/staging_tables
 - /etl/dropzone/incoming/daily_files
-- /warehouse/prod/analytics_tables
+- /warehouse/prod/reports_tables
 ```
 
 ### 🚀 Migration Planning Benefits
@@ -201,9 +201,9 @@ The system includes a sophisticated dependency analysis engine that maps ALL pro
 - Circular Dependencies: 2 cycles detected ⚠️
 
 🎯 High-Impact Processors:
-- UpdateAttribute_SQL_Builder: 8 dependents
-- Variable_Provider_Main: 6 dependents
-- Central_Router: 5 dependents
+- SQL_Query_Builder: 8 dependents
+- Config_Variable_Provider: 6 dependents
+- Data_Router: 5 dependents
 
 📊 Variable Dependencies:
 - ${query.select}: Defined by 2 processors, used by 8 processors
@@ -250,15 +250,11 @@ The application is designed for Databricks deployment using `app.yaml` configura
 1. **Create your `app.yaml` file** (this file is git-ignored for security):
 
 ```yaml
-command: ["streamlit", "run", "streamlit_app/app.py"]
+command: ["streamlit", "run", "streamlit_app/Dashboard.py"]
 
 env:
-  - name: "DATABRICKS_HOSTNAME"
-    value: "https://your-workspace.cloud.databricks.com"
-  - name: "DATABRICKS_TOKEN"
-    value: "dapi-your-token-here"
-  - name: "MODEL_ENDPOINT"
-    value: "databricks-meta-llama-3-3-70b-instruct"
+  - name: "SERVING_ENDPOINT"
+    valueFrom: "serving-endpoint"
   - name: "NOTIFICATION_EMAIL"
     value: "your-email@company.com"
   - name: "ENABLE_LLM_CODE_GENERATION"
@@ -267,6 +263,8 @@ env:
     value: "20"
   - name: "LLM_SUB_BATCH_SIZE"
     value: "5"
+  - name: "STREAMLIT_BROWSER_GATHER_USAGE_STATS"
+    value: "false"
 ```
 
 2. **Deploy as Databricks App**:
@@ -732,7 +730,7 @@ def my_custom_tool(parameter: str) -> str:
 
 ### Common Issues
 
-1. **Authentication Errors**: Verify `DATABRICKS_TOKEN` and `DATABRICKS_HOSTNAME` in `app.yaml`
+1. **Authentication Errors**: Verify `SERVING_ENDPOINT` configuration in `app.yaml`
 2. **LLM Generation Errors**: Ensure model endpoint is accessible and token has permissions
 3. **Job Creation Failures**: Ensure cluster permissions and workspace access
 4. **XML Parsing Errors**: Validate NiFi template XML structure
