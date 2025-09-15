@@ -141,7 +141,13 @@ def display_lineage_results(result, uploaded_file):
                 if not filtered_connections_df.empty:
                     st.dataframe(
                         filtered_connections_df[
-                            ["Connection", "Source ID", "Target ID"]
+                            [
+                                "Source Name",
+                                "Target Name",
+                                "Connection",
+                                "Source ID",
+                                "Target ID",
+                            ]
                         ],
                         use_container_width=True,
                         hide_index=True,
