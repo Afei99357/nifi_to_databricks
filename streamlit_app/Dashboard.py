@@ -41,6 +41,7 @@ def main():
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
+        # Navigation buttons - 2 rows of buttons
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -50,28 +51,38 @@ def main():
                 st.switch_page("pages/01_Processor_Classification.py")
 
         with col2:
+            if st.button("🔗 Analyze Dependencies", use_container_width=True):
+                # Set flag to auto-start dependency analysis when arriving at page
+                st.session_state["auto_start_dependency_analysis"] = True
+                st.switch_page("pages/02_Processor_Dependencies.py")
+
+        with col3:
             if st.button("📦 Extract Assets", use_container_width=True):
                 # Set flag to auto-start asset extraction when arriving at page
                 st.session_state["auto_start_asset_extraction"] = True
-                st.switch_page("pages/02_Asset_Extraction.py")
+                st.switch_page("pages/03_Asset_Extraction.py")
 
-        with col3:
+        with col4:
             if st.button("📊 Lineage & Connections", use_container_width=True):
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
-                st.switch_page("pages/03_Lineage_Connections.py")
+                st.switch_page("pages/04_Lineage_Connections.py")
 
-        with col4:
+        # Second row for utility actions
+        col5, col6, col7, col8 = st.columns(4)
+
+        with col5:
             if st.button("🗑️ Clear File", use_container_width=True):
                 # Clear uploaded file and any cached results
                 if "uploaded_file" in st.session_state:
                     del st.session_state["uploaded_file"]
-                # Clear any migration/lineage/asset/processor results for the file
+                # Clear any migration/lineage/asset/processor/dependency results for the file
                 for key in list(st.session_state.keys()):
                     if (
                         "migration_results_" in key
                         or "lineage_results_" in key
                         or "asset_results_" in key
+                        or "dependency_results_" in key
                         or "processor_info_" in key
                         or "completion_time" in key
                     ):
