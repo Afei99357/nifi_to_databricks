@@ -1,0 +1,19 @@
+command: [
+  "streamlit",
+  "run",
+  "streamlit_app/Dashboard.py"
+]
+
+env:
+  - name: "SERVING_ENDPOINT"
+    valueFrom: "serving-endpoint"
+  - name: "NOTIFICATION_EMAIL"
+    value: "your-email@company.com"
+  - name: "ENABLE_LLM_CODE_GENERATION"
+    value: "true"
+  - name: "MAX_PROCESSORS_PER_CHUNK"
+    value: "20"
+  - name: "LLM_SUB_BATCH_SIZE"
+    value: "5"
+  - name: "STREAMLIT_BROWSER_GATHER_USAGE_STATS"
+    value: "false"
