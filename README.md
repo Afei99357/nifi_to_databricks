@@ -4,11 +4,14 @@ An intelligent migration tool that converts Apache NiFi workflows into Databrick
 
 ## ✨ Key Features
 
-- **🎯 Streamlit Web App**: Interactive UI for uploading NiFi XML files and running migrations
+- **🎯 Streamlit Web App**: Interactive 4-page UI for comprehensive NiFi analysis and migration planning
 - **🧠 AI-Powered Analysis**: LLM-based processor classification and code generation using `databricks-langchain`
 - **✂️ Smart Pruning**: Automatically identifies and focuses on essential data processing logic
+- **🔗 Comprehensive Dependencies**: Complete dependency analysis across ALL processors with variable tracking, impact analysis, and circular dependency detection
+- **📦 Intelligent Asset Discovery**: Automatic detection of scripts, databases, file paths, and external dependencies
 - **🔄 Semantic Flow Detection**: Maps NiFi processor chains to logical data transformation flows
-- **📊 Comprehensive Reports**: Detailed analysis of processors, migrations, and recommendations
+- **📊 Table Lineage Tracking**: End-to-end data flow analysis from source tables through processors to destination tables
+- **📋 Comprehensive Reports**: Detailed analysis with interactive filtering, downloads, and session state persistence
 - **⚙️ Databricks Native**: Uses `app.yaml` configuration for seamless Databricks deployment
 
 ## 🎯 Overview
@@ -26,11 +29,12 @@ This project addresses the challenge of migrating legacy NiFi workflows to moder
 
 ## 🏗️ How It Works
 
-1. **📤 Upload**: Upload your NiFi XML template through the Streamlit interface
-2. **🔍 Analyze**: AI-powered analysis classifies processors and identifies data flows
-3. **✂️ Prune**: Automatically filters out infrastructure-only processors (logging, routing, flow control)
-4. **🔄 Chain**: Detects semantic data processing chains and logical flows
-5. **📊 Report**: Generates comprehensive migration analysis and recommendations
+1. **📤 Upload**: Upload your NiFi XML template through the Streamlit Dashboard
+2. **🚀 Classify**: AI-powered processor classification separating business logic from infrastructure
+3. **🔗 Dependencies**: Comprehensive dependency mapping across ALL processors (development branch)
+4. **📦 Assets**: Intelligent discovery of scripts, databases, file paths, and external dependencies
+5. **📊 Lineage**: End-to-end table lineage tracking and data flow analysis
+6. **📋 Plan**: Comprehensive migration planning with downloadable reports and analysis
 
 ## 🗂️ Intelligent Asset Discovery
 
@@ -124,6 +128,95 @@ asset_discovery = {
 - HDFS paths → Unity Catalog managed tables
 - Working directories → Databricks workspace paths
 
+## 🔗 Comprehensive Dependency Analysis *(Development Branch)*
+
+The system includes a sophisticated dependency analysis engine that maps ALL processor relationships and dependencies across the entire NiFi workflow, providing complete visibility into processor interconnections.
+
+### 🎯 **What It Analyzes**
+
+**Variable Dependencies:**
+- Track all `${variable}` definitions and usages across processors
+- Identify external variables (used but not defined within workflow)
+- Map variable providers to consumers with detailed context
+
+**Connection Dependencies:**
+- Complete processor-to-processor flow connection mapping
+- Bidirectional relationship analysis ("depends on" + "dependents")
+- Connection relationship details with source/destination context
+
+**Property Dependencies:**
+- Processors that reference other processors' outputs in configurations
+- Controller service references and processor group dependencies
+- Cross-processor configuration references
+
+**Configuration Dependencies:**
+- Shared configuration values across multiple processors
+- Common property patterns and reused settings
+- Configuration consistency analysis
+
+### 🎯 **Advanced Analysis Features**
+
+**Impact Analysis:**
+- **High-Impact Processors**: Processors with many dependents (change affects many others)
+- **Isolated Processors**: Processors with no dependencies (safe to modify independently)
+- **Dependency Chains**: Sequential dependency relationships and critical paths
+- **Circular Dependencies**: Problematic dependency cycles requiring attention
+
+**Interactive Filtering:**
+- Filter processors by type, dependencies, or search terms
+- Detailed dependency views for each processor
+- Variable usage tracking with definition sources
+- Connection mapping with relationship context
+
+### 🚀 **Use Cases & Benefits**
+
+**Migration Planning:**
+- "What are ALL the dependencies I need to consider for this processor?"
+- Complete dependency map prevents migration surprises
+- Identify critical processors requiring careful migration order
+
+**Impact Analysis:**
+- "If I change this processor, what else will be affected?"
+- Risk assessment for processor modifications
+- Change planning with comprehensive dependency awareness
+
+**Debugging & Troubleshooting:**
+- "Why is this processor not working? What does it depend on?"
+- Variable resolution tracing and dependency validation
+- Configuration consistency checking across processors
+
+**Architecture Understanding:**
+- Complete workflow relationship mapping
+- Identify tightly coupled vs loosely coupled processor groups
+- Optimize workflow design based on dependency patterns
+
+### 📊 **Example Analysis Output**
+
+```
+📊 Dependency Overview: 87 Total Processors
+- Total Dependencies: 156 relationships
+- High-Impact Processors: 12 (affecting 5+ others)
+- Isolated Processors: 23 (safe to modify)
+- Variable Dependencies: 34 variables tracked
+- Circular Dependencies: 2 cycles detected ⚠️
+
+🎯 High-Impact Processors:
+- UpdateAttribute_SQL_Builder: 8 dependents
+- Variable_Provider_Main: 6 dependents
+- Central_Router: 5 dependents
+
+📊 Variable Dependencies:
+- ${query.select}: Defined by 2 processors, used by 8 processors
+- ${hdfs.path}: External variable (used by 5 processors, not defined)
+- ${batch.size}: Defined by 1 processor, used by 3 processors
+```
+
+**Interactive Features:**
+- 5-tab interface with comprehensive filtering
+- Download options for markdown reports and raw JSON data
+- Real-time dependency relationship exploration
+- Impact analysis with visual dependency chains
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -186,35 +279,82 @@ env:
 
 ## 🖥️ Using the Streamlit App
 
-### 🎯 **Migration Analysis Page**
-1. **Upload NiFi XML**: Use the Dashboard to upload your NiFi template XML file
-2. **Run Migration**: Click "🚀 Run Migration" button with clean spinner progress indicator
-3. **View Results**: The app displays focused migration analysis:
-   - **Essential Processors Report**: Core data processing logic with dependency chains
-   - **Unknown Processors Report**: Processors requiring manual review with classification reasons
-   - **Asset Summary**: Overview of generated Databricks migration assets
-4. **Clear Results**: Use "🗑️ Clear Results" to reset both results and uploaded file cache
+The Streamlit app provides a comprehensive web interface for NiFi to Databricks migration analysis with four specialized pages:
 
-### 📊 **Table Lineage Analysis Page**
-1. **Analyze Data Flow**: Click "📊 Analyze Table Lineage" for dedicated data lineage analysis
-2. **View Lineage Results**:
+### 📊 **Dashboard**
+1. **Upload NiFi XML**: Upload your NiFi template XML file to begin analysis
+2. **Navigation Hub**: Access all analysis tools through dedicated buttons:
+   - 🚀 **Classify Processors**: Processor classification and pruning analysis
+   - 🔗 **Analyze Dependencies**: Comprehensive dependency analysis (development branch)
+   - 📦 **Extract Assets**: Asset discovery and migration planning
+   - 📊 **Lineage & Connections**: Table lineage and data flow analysis
+3. **Processor Information**: View raw processor details with filtering and search
+4. **Clear Results**: Reset all cached results and uploaded files
+
+### 🚀 **Processor Classification & Pruning**
+1. **Smart Classification**: AI-powered analysis of all processors using hybrid rule-based + LLM approach
+2. **Essential Processors Report**: Core data processing logic requiring migration
+3. **Unknown Processors Report**: Processors requiring manual review with classification reasons
+4. **Auto-expand Sections**: All reports displayed by default for easy review
+5. **Result Caching**: Analysis persists when switching between pages
+
+### 🔗 **Processor Dependencies** *(Development Branch)*
+**Comprehensive dependency analysis across ALL processors in the workflow:**
+
+1. **Interactive 5-Tab Interface**:
+   - **🔍 Processor Dependencies**: View dependencies for each processor with filtering
+   - **⚡ Impact Analysis**: High-impact processors, isolated processors, dependency chains
+   - **📊 Variable Dependencies**: Track all `${variable}` definitions and usages
+   - **🔗 Connection Map**: Processor-to-processor flow connections
+   - **📋 Full Report**: Comprehensive dependency analysis report
+
+2. **Advanced Features**:
+   - **Variable Tracking**: Complete `${variable}` mapping with external variable detection
+   - **Circular Dependency Detection**: Identify problematic dependency cycles
+   - **Impact Analysis**: "What depends on this processor?" functionality
+   - **Interactive Filtering**: Filter by processor type and text search
+   - **Download Options**: Export markdown reports and raw JSON data
+
+3. **Use Cases**:
+   - **Impact Analysis**: "If I change this processor, what else is affected?"
+   - **Migration Planning**: "What are ALL the dependencies I need to consider?"
+   - **Debugging**: "Why is this processor not working? What does it depend on?"
+
+### 📦 **Asset Extraction**
+1. **Intelligent Asset Discovery**: Comprehensive scanning of all processors to identify migration dependencies
+2. **Asset Categories**:
+   - **Script Files**: Shell, Python, SQL, Java JARs, and other executables (11 types)
+   - **Database Connections**: Impala/Hive, MySQL, PostgreSQL, Oracle, MongoDB
+   - **File System Paths**: HDFS paths, data warehouse locations, staging directories
+   - **Working Directories**: Script execution and processing workspaces
+3. **Filtering and Search**: Dynamic filtering by asset type with text search
+4. **Migration Planning**: Asset summary with download options for external analysis
+
+### 📊 **Lineage & Connections**
+1. **Table-Level Data Lineage**: Track end-to-end data flow through NiFi workflows
+2. **Analysis Results**:
    - **Summary Metrics**: Processors, connections, and discovered table chains
    - **Table Lineage Chains**: Direct table-to-table data flow relationships
-   - **Download CSV**: Export lineage results for external analysis
-3. **Navigation Protection**: UI prevents navigation during long-running analysis
+   - **Connection Details**: Complete processor-to-processor connection mapping
+3. **Critical Tables Analysis**: Identify high-connectivity tables (important data assets)
+4. **Download Options**: Export lineage results and connections as CSV for external analysis
 
-### ✨ **Key Features**
-- **Result Caching**: Analysis results persist when switching between pages
+### ✨ **Universal Features**
+- **Result Caching**: All analysis results persist when switching between pages
 - **Navigation Protection**: Buttons disabled during processing to prevent interruption
+- **Auto-Expand Sections**: All expandable content displayed by default
 - **Clean Interface**: Streamlined UI focusing on essential functionality
 - **Error Handling**: Graceful handling of analysis errors with detailed feedback
+- **Session Management**: Smart file and result caching across page navigation
 
-The app automatically:
-- Analyzes and classifies all NiFi processors using AI
-- Prunes infrastructure-only processors (logging, routing, flow control)
-- Detects semantic data transformation chains and table lineage
-- Generates comprehensive migration analysis and recommendations
-- Provides separate dedicated pages for migration and lineage analysis
+### 🎯 **Complete Analysis Workflow**
+The app provides a comprehensive analysis pipeline:
+1. **Classification**: Analyze and classify all processors (infrastructure vs business logic)
+2. **Dependencies**: Map all processor dependencies and relationships *(dev branch)*
+3. **Assets**: Discover external dependencies requiring migration
+4. **Lineage**: Trace table-to-table data flows and connections
+
+Each page focuses on a specific aspect of migration planning while maintaining shared context through session state management.
 
 ## 🔧 Programmatic API Usage
 
