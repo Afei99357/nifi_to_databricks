@@ -91,6 +91,28 @@ def main():
     # Check if analysis is running
     analysis_running = st.session_state.get("lineage_running", False)
 
+    # Hide sidebar during analysis to prevent navigation
+    if analysis_running:
+        st.markdown(
+            """
+        <style>
+        /* Hide sidebar completely */
+        [data-testid="stSidebar"] {display: none !important}
+        .css-1d391kg {display: none !important}
+        .css-1y4p8pa {display: none !important}
+        section[data-testid="stSidebar"] {display: none !important}
+
+        /* Hide sidebar navigation links */
+        .css-17eq0hr {display: none !important}
+        .css-pkbazv {display: none !important}
+
+        /* Force main content to full width */
+        .main .block-container {max-width: 100% !important; padding-left: 1rem !important}
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
+
     # Analysis options
     col1, col2 = st.columns(2)
 

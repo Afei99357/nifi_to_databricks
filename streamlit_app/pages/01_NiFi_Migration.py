@@ -3,7 +3,6 @@
 import os
 import sys
 import tempfile
-import time
 
 # Add parent directory to Python path to find tools and config (MUST be before imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -103,27 +102,40 @@ def main():
     # Check if migration is running
     migration_running = st.session_state.get("migration_running", False)
 
-    # Recovery logic: Handle orphaned migration_running state
+    # Hide sidebar during migration to prevent navigation
     if migration_running:
-        if cached_result:
-            # Case 1: Migration completed and results were saved - just clear the flag
-            st.session_state["migration_running"] = False
-            migration_running = False
-            st.rerun()  # Refresh to show results properly
-        else:
-            # Case 2: Check if migration has been running for too long (>60 minutes)
-            # This might indicate a stuck state or completed migration with lost results
-            migration_start_time = st.session_state.get("migration_start_time", 0)
-            if (
-                migration_start_time > 0 and (time.time() - migration_start_time) > 1800
-            ):  # 60 minutes
-                # Clear stuck migration state
-                st.session_state["migration_running"] = False
-                migration_running = False
-                st.warning(
-                    "⚠️ Previous migration session was reset due to timeout. Please try running migration again."
-                )
-                st.rerun()
+        st.markdown(
+            """
+        <style>
+        /* Hide all possible sidebar selectors */
+        [data-testid="stSidebar"] {display: none !important}
+        [data-testid="stSidebarNav"] {display: none !important}
+        .css-1d391kg {display: none !important}
+        .css-1y4p8pa {display: none !important}
+        .css-17eq0hr {display: none !important}
+        .css-pkbazv {display: none !important}
+        section[data-testid="stSidebar"] {display: none !important}
+        div[data-testid="stSidebar"] {display: none !important}
+        .sidebar {display: none !important}
+
+        /* More generic sidebar hiding */
+        .stApp > div:first-child {display: none !important}
+        .css-1lcbmhc {display: none !important}
+        .css-1outpf7 {display: none !important}
+
+        /* Expand main content */
+        .main .block-container {
+            max-width: 100% !important;
+            padding-left: 1rem !important;
+            margin-left: 0 !important;
+        }
+        .stApp > div:last-child {
+            margin-left: 0 !important;
+        }
+        </style>
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Check for auto-start flag from Dashboard
     auto_start = st.session_state.get("auto_start_migration", False)
@@ -167,38 +179,13 @@ def main():
 
     # Show warning if migration is running
     if migration_running:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.warning(
-                "⚠️ Migration in progress. Please wait and do not navigate away from this page."
-            )
-        with col2:
-            if st.button("🔄 Reset State", help="Click if migration appears stuck"):
-                st.session_state["migration_running"] = False
-                if "migration_start_time" in st.session_state:
-                    del st.session_state["migration_start_time"]
-                st.rerun()
+        st.warning(
+            "⚠️ Migration in progress. Please wait and do not navigate away from this page."
+        )
 
     # Display cached results if available
     if cached_result and not run_migration:
-        # Check if this was a recently completed migration (within last 10 minutes)
-        completion_time = st.session_state.get(
-            f"{migration_cache_key}_completion_time", 0
-        )
-        if completion_time > 0:
-            minutes_ago = (time.time() - completion_time) / 60
-            if minutes_ago < 10:  # Recent completion
-                st.success(
-                    f"✅ Your migration completed {int(minutes_ago)} minute(s) ago. Results are shown below."
-                )
-            else:
-                st.info(
-                    "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
-                )
-        else:
-            st.info(
-                "📋 Showing cached migration results. Click 'Run Migration' to regenerate."
-            )
+        st.info("📋 Showing cached migration results.")
         display_migration_results(cached_result)
 
     # Run migration
@@ -223,9 +210,8 @@ def main():
 
             st.success("✅ Migration completed!")
 
-            # Cache the result with completion timestamp
+            # Cache the result
             st.session_state[migration_cache_key] = result
-            st.session_state[f"{migration_cache_key}_completion_time"] = time.time()
 
             # Display the results
             display_migration_results(result)
