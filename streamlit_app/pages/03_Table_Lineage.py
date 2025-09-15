@@ -142,9 +142,9 @@ def display_lineage_results(result, uploaded_file):
                     st.dataframe(
                         filtered_connections_df[
                             [
+                                "Connection",
                                 "Source Name",
                                 "Target Name",
-                                "Connection",
                                 "Source ID",
                                 "Target ID",
                             ]
