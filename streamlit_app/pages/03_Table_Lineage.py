@@ -76,10 +76,10 @@ def display_lineage_results(result, uploaded_file):
                     )
                     connections_data.append(
                         {
-                            "Source ID": source_id,
-                            "Source Name": source_name,
-                            "Target ID": target_id,
-                            "Target Name": target_name,
+                            "Source Processor ID": source_id,
+                            "Source Processor": source_name,
+                            "Target Processor ID": target_id,
+                            "Target Processor": target_name,
                             "Connection": f"{source_name} → {target_name}",
                         }
                     )
@@ -92,7 +92,7 @@ def display_lineage_results(result, uploaded_file):
                 with col1:
                     # Connection direction filter
                     unique_sources = sorted(
-                        connections_df["Source Name"].unique().tolist()
+                        connections_df["Source Processor"].unique().tolist()
                     )
                     selected_source = st.selectbox(
                         "Filter by Source Processor:",
@@ -114,7 +114,7 @@ def display_lineage_results(result, uploaded_file):
                 # Filter by source processor
                 if selected_source != "All":
                     filtered_connections_df = filtered_connections_df[
-                        filtered_connections_df["Source Name"] == selected_source
+                        filtered_connections_df["Source Processor"] == selected_source
                     ]
 
                 # Filter by search term
@@ -123,10 +123,10 @@ def display_lineage_results(result, uploaded_file):
                         filtered_connections_df["Connection"].str.contains(
                             connection_search, case=False, na=False
                         )
-                        | filtered_connections_df["Source ID"].str.contains(
+                        | filtered_connections_df["Source Processor ID"].str.contains(
                             connection_search, case=False, na=False
                         )
-                        | filtered_connections_df["Target ID"].str.contains(
+                        | filtered_connections_df["Target Processor ID"].str.contains(
                             connection_search, case=False, na=False
                         )
                     ]
@@ -143,10 +143,10 @@ def display_lineage_results(result, uploaded_file):
                         filtered_connections_df[
                             [
                                 "Connection",
-                                "Source Name",
-                                "Target Name",
-                                "Source ID",
-                                "Target ID",
+                                "Source Processor",
+                                "Target Processor",
+                                "Source Processor ID",
+                                "Target Processor ID",
                             ]
                         ],
                         use_container_width=True,
