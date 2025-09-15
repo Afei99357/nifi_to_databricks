@@ -102,38 +102,17 @@ def main():
     # Check if migration is running
     migration_running = st.session_state.get("migration_running", False)
 
-    # Hide sidebar during migration to prevent navigation
+    # Disable sidebar navigation during migration
     if migration_running:
+        # Clear sidebar content and show warning
+        with st.sidebar:
+            st.warning("🚫 Navigation disabled during migration")
+            st.info(
+                "Please wait for migration to complete before navigating to other pages."
+            )
+        # Also try to collapse sidebar programmatically
         st.markdown(
-            """
-        <style>
-        /* Hide all possible sidebar selectors */
-        [data-testid="stSidebar"] {display: none !important}
-        [data-testid="stSidebarNav"] {display: none !important}
-        .css-1d391kg {display: none !important}
-        .css-1y4p8pa {display: none !important}
-        .css-17eq0hr {display: none !important}
-        .css-pkbazv {display: none !important}
-        section[data-testid="stSidebar"] {display: none !important}
-        div[data-testid="stSidebar"] {display: none !important}
-        .sidebar {display: none !important}
-
-        /* More generic sidebar hiding */
-        .stApp > div:first-child {display: none !important}
-        .css-1lcbmhc {display: none !important}
-        .css-1outpf7 {display: none !important}
-
-        /* Expand main content */
-        .main .block-container {
-            max-width: 100% !important;
-            padding-left: 1rem !important;
-            margin-left: 0 !important;
-        }
-        .stApp > div:last-child {
-            margin-left: 0 !important;
-        }
-        </style>
-        """,
+            '<script>document.querySelector("[data-testid=stSidebar]").style.display="none";</script>',
             unsafe_allow_html=True,
         )
 

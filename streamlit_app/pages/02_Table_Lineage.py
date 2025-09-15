@@ -91,25 +91,17 @@ def main():
     # Check if analysis is running
     analysis_running = st.session_state.get("lineage_running", False)
 
-    # Hide sidebar during analysis to prevent navigation
+    # Disable sidebar navigation during analysis
     if analysis_running:
+        # Clear sidebar content and show warning
+        with st.sidebar:
+            st.warning("🚫 Navigation disabled during analysis")
+            st.info(
+                "Please wait for analysis to complete before navigating to other pages."
+            )
+        # Also try to collapse sidebar programmatically
         st.markdown(
-            """
-        <style>
-        /* Hide sidebar completely */
-        [data-testid="stSidebar"] {display: none !important}
-        .css-1d391kg {display: none !important}
-        .css-1y4p8pa {display: none !important}
-        section[data-testid="stSidebar"] {display: none !important}
-
-        /* Hide sidebar navigation links */
-        .css-17eq0hr {display: none !important}
-        .css-pkbazv {display: none !important}
-
-        /* Force main content to full width */
-        .main .block-container {max-width: 100% !important; padding-left: 1rem !important}
-        </style>
-        """,
+            '<script>document.querySelector("[data-testid=stSidebar]").style.display="none";</script>',
             unsafe_allow_html=True,
         )
 
