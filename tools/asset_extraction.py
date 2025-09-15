@@ -318,31 +318,6 @@ def generate_asset_summary(processor_data, output_dir: str = None) -> str:
             report_lines.append(f"- **External Host**: `{host}`")
         report_lines.append("")
 
-    # Migration recommendations
-    report_lines.extend(
-        [
-            "## Migration Recommendations",
-            "",
-            "### High Priority Items:",
-            "",
-        ]
-    )
-
-    if table_references:
-        report_lines.append(
-            f"1. **Unity Catalog Setup**: Create catalogs and schemas for {len(table_references)} table references"
-        )
-    if script_files:
-        report_lines.append(
-            f"2. **Script Migration**: Convert {len(script_files)} custom scripts to Databricks notebooks"
-        )
-    if database_hosts:
-        report_lines.append(
-            f"3. **Database Connectivity**: Configure connections to {len(database_hosts)} database hosts"
-        )
-    if external_hosts:
-        report_lines.append(
-            f"4. **External Dependencies**: Plan integration with {len(external_hosts)} external systems"
-        )
+    # Migration recommendations section removed - not useful for users
 
     return "\n".join(report_lines)
