@@ -36,13 +36,15 @@ def display_migration_results(result):
             # Essential Processors Report (now just main report, no dependencies)
             if reports.get("essential_processors"):
                 essential_data = reports["essential_processors"]
-                with st.expander("📋 Essential Processors Report"):
+                with st.expander("📋 Essential Processors Report", expanded=True):
                     st.markdown(str(essential_data))
 
             # Unknown Processors Report
             unknown_data = reports.get("unknown_processors", {})
             if unknown_data.get("count", 0) > 0:
-                with st.expander(f"❓ Unknown Processors ({unknown_data['count']})"):
+                with st.expander(
+                    f"❓ Unknown Processors ({unknown_data['count']})", expanded=True
+                ):
                     for proc in unknown_data.get("unknown_processors", []):
                         st.write(f"**{proc.get('name', 'Unknown')}**")
                         st.write(f"- Type: `{proc.get('type', 'Unknown')}`")

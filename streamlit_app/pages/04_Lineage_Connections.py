@@ -64,7 +64,7 @@ def display_lineage_results(result, uploaded_file):
     if result.get("connections_data"):
         with st.expander(
             f"🔗 View Connections Details ({result['connections']} connections)",
-            expanded=False,
+            expanded=True,
         ):
             st.markdown("#### Processor-to-Processor Connections")
             st.info(

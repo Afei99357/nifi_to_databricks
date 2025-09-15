@@ -276,7 +276,7 @@ def display_dependency_results(result, uploaded_file):
                 for i, chain in enumerate(chains[:5]):  # Show top 5 chains
                     with st.expander(
                         f"Chain {i+1} (Length: {chain['chain_length']})",
-                        expanded=(i == 0),
+                        expanded=True,
                     ):
                         chain_names = []
                         for proc in chain["processors"]:
