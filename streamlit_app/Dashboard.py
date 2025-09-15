@@ -38,7 +38,7 @@ def main():
             if st.button("🚀 Classify Processors", use_container_width=True):
                 # Set flag to auto-start migration when arriving at migration page
                 st.session_state["auto_start_migration"] = True
-                st.switch_page("pages/01_NiFi_Migration.py")
+                st.switch_page("pages/01_Processor_Classification.py")
 
         with col2:
             if st.button("📦 Extract Assets", use_container_width=True):
@@ -50,7 +50,7 @@ def main():
             if st.button("📊 Lineage & Connections", use_container_width=True):
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
-                st.switch_page("pages/03_Table_Lineage.py")
+                st.switch_page("pages/03_Lineage_Connections.py")
 
         with col4:
             if st.button("🗑️ Clear File", use_container_width=True):

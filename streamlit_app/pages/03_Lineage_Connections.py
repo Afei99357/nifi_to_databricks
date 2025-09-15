@@ -31,13 +31,18 @@ def display_lineage_results(result, uploaded_file):
     # Display all chains table
     st.markdown("### 📋 All Table Lineage Chains")
     if result["chains_data"]:
-        # Read CSV data to display exactly as GPT generates it
+        # Try to read CSV data first, but use fallback if file doesn't exist (common after navigation)
+        chains_df = None
         try:
-            all_chains_df = pd.read_csv(result["all_chains_csv"])
-            st.dataframe(all_chains_df, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-            # Fallback to manual DataFrame
+            if result.get("all_chains_csv") and os.path.exists(
+                result["all_chains_csv"]
+            ):
+                chains_df = pd.read_csv(result["all_chains_csv"])
+        except Exception:
+            pass  # Fall through to manual DataFrame creation
+
+        # Use cached CSV content if available, otherwise create manually
+        if chains_df is None or chains_df.empty:
             chains_df = pd.DataFrame(
                 [
                     {
@@ -50,7 +55,8 @@ def display_lineage_results(result, uploaded_file):
                     for chain in result["chains_data"]
                 ]
             )
-            st.dataframe(chains_df, use_container_width=True)
+
+        st.dataframe(chains_df, use_container_width=True)
     else:
         st.info("No table lineage chains found.")
 
@@ -170,17 +176,40 @@ def display_lineage_results(result, uploaded_file):
     # Download button for table lineage
     st.markdown("---")
     try:
-        with open(result["all_chains_csv"], "r") as f:
-            all_csv_content = f.read()
-        st.download_button(
-            label="📥 Download Table Lineage CSV",
-            data=all_csv_content,
-            file_name=f"table_lineage_{uploaded_file.name.replace('.xml', '')}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+        # Try to read from file first, fallback to generating from chains_data
+        all_csv_content = None
+        if result.get("all_chains_csv") and os.path.exists(result["all_chains_csv"]):
+            with open(result["all_chains_csv"], "r") as f:
+                all_csv_content = f.read()
+        else:
+            # Generate CSV content from chains_data if file doesn't exist
+            if result.get("chains_data"):
+                chains_df = pd.DataFrame(
+                    [
+                        {
+                            "source_table": chain[0],
+                            "target_table": chain[1],
+                            "processor_ids": " -> ".join(chain[2]),
+                            "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
+                            "hop_count": len(chain[2]),
+                        }
+                        for chain in result["chains_data"]
+                    ]
+                )
+                all_csv_content = chains_df.to_csv(index=False)
+
+        if all_csv_content:
+            st.download_button(
+                label="📥 Download Table Lineage CSV",
+                data=all_csv_content,
+                file_name=f"table_lineage_{uploaded_file.name.replace('.xml', '')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        else:
+            st.info("No table lineage data available for download.")
     except Exception as e:
-        st.error(f"Error reading CSV: {e}")
+        st.error(f"Error preparing CSV download: {e}")
 
 
 def main():
