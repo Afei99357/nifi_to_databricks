@@ -107,8 +107,9 @@ def main():
     auto_start = st.session_state.get("auto_start_migration", False)
 
     # Dynamic layout based on whether Run Migration button should be shown
-    if cached_result:
-        # Only show Back to Dashboard button when results exist
+    # Hide button if results exist OR if auto-starting from Dashboard
+    if cached_result or auto_start:
+        # Only show Back to Dashboard button (no Run Migration button needed)
         if st.button(
             "🔙 Back to Dashboard",
             disabled=migration_running,
