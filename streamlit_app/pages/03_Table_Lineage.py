@@ -14,7 +14,7 @@ import streamlit as st
 from tools.nifi_table_lineage import analyze_nifi_table_lineage
 
 # Configure the page
-st.set_page_config(page_title="Table Lineage Analysis", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Lineage & Connections", page_icon="📊", layout="wide")
 
 
 def display_lineage_results(result, uploaded_file):
@@ -184,7 +184,7 @@ def display_lineage_results(result, uploaded_file):
 
 
 def main():
-    st.title("📊 NiFi Table Lineage Analysis")
+    st.title("📊 NiFi Lineage & Connections")
 
     # Check for uploaded file from Dashboard
     uploaded_file = st.session_state.get("uploaded_file", None)
@@ -225,7 +225,7 @@ def main():
         with col1:
             run_analysis = (
                 st.button(
-                    "📊 Analyze Table Lineage",
+                    "📊 Analyze Lineage & Connections",
                     use_container_width=True,
                     disabled=analysis_running,
                 )
@@ -247,7 +247,7 @@ def main():
     # Display cached results if available
     if cached_result and not run_analysis:
         st.info(
-            "📋 Showing cached table lineage results. Click 'Analyze Table Lineage' to regenerate."
+            "📋 Showing cached lineage & connections results. Click 'Analyze Lineage & Connections' to regenerate."
         )
         display_lineage_results(cached_result, uploaded_file)
 
@@ -266,7 +266,7 @@ def main():
             try:
                 # Show spinner with warning during analysis
                 with st.spinner(
-                    "🔍 Analyzing NiFi table lineage... Please do not navigate away."
+                    "🔍 Analyzing NiFi lineage & connections... Please do not navigate away."
                 ):
                     result = analyze_nifi_table_lineage(
                         xml_path=tmp_xml_path,
@@ -274,7 +274,7 @@ def main():
                         write_inter_chains=False,
                     )
 
-                st.success("✅ Table lineage analysis completed!")
+                st.success("✅ Lineage & connections analysis completed!")
 
                 # Cache the result
                 st.session_state[lineage_cache_key] = result
@@ -283,7 +283,7 @@ def main():
                 display_lineage_results(result, uploaded_file)
 
             except Exception as e:
-                st.error(f"❌ Table lineage analysis failed: {e}")
+                st.error(f"❌ Lineage & connections analysis failed: {e}")
                 st.write("**Debug info:**")
                 st.code(str(e))
             finally:
