@@ -31,42 +31,7 @@ import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Set, Tuple
 
-# ---------------- XML helpers ----------------
-
-
-def _strip_namespaces(root: ET.Element):
-    for el in root.iter():
-        if "}" in el.tag:
-            el.tag = el.tag.split("}", 1)[1]
-
-
-def _txt(elem: ET.Element, *paths: str) -> str:
-    for p in paths:
-        n = elem.find(p)
-        if n is not None:
-            t = (n.text or "").strip()
-            if t:
-                return t
-    return ""
-
-
-def _props_from_proc_container(proc: ET.Element) -> Dict[str, str]:
-    """Read properties entries from NiFi <processors> container."""
-    props: Dict[str, str] = {}
-    props_node = (
-        proc.find("config/properties")
-        or proc.find("component/config/properties")
-        or proc.find(".//properties")
-    )
-    if props_node is None:
-        return props
-    for entry in props_node.findall("entry"):
-        k = _txt(entry, "key", "name")
-        v = _txt(entry, "value")
-        if k:
-            props[k] = v
-    return props
-
+from .xml_tools import parse_nifi_template_impl
 
 # ---------------- Table extraction helpers ----------------
 
@@ -247,58 +212,15 @@ CONTROL_SCHEMAS = {"root", "absolute", "file", "text", "impala"}
 SKIP_PROCESSOR_TYPES = ("updateattribute", "logmessage", "wait", "routeonattribute")
 
 
-def parse_template(xml_path: str):
-    root = ET.parse(xml_path).getroot()
-    _strip_namespaces(root)
-    return root
-
-
-def build_processors(root: ET.Element) -> Dict[str, Dict[str, Any]]:
-    procs: Dict[str, Dict[str, Any]] = {}
-    for proc in root.findall(".//processors"):
-        pid = _txt(proc, "id", "component/id")
-        ptype = _txt(proc, "type", "component/type")
-        pname = _txt(proc, "name", "component/name") or f"processor-{pid[:8]}"
-        props = _props_from_proc_container(proc)
-
-        # initial extraction (no var-resolve yet)
-        reads, writes = set(), set()
-        for sql in _sql_snippets(ptype, props):
-            r, w = _extract_sql_tables(sql)
-            reads |= r
-            writes |= w
-
-        # Handle non-SQL database processors
-        if (
-            "querydatabasetable" in ptype.lower()
-            or "generatetablefetch" in ptype.lower()
-        ):
-            t = (props.get("Table Name") or props.get("table.name") or "").strip()
-            if t:
-                reads.add(_clean_table(t))
-
-        if "putdatabaserecord" in ptype.lower():
-            t = (props.get("Table Name") or props.get("table.name") or "").strip()
-            if t:
-                writes.add(_clean_table(t))
-
-        procs[pid] = {
-            "id": pid,
-            "type": ptype,
-            "name": pname,
-            "props": props,
-            "reads": reads,
-            "writes": writes,
-        }
-    return procs
-
-
-def build_connections(root: ET.Element) -> Dict[str, List[str]]:
+def build_connections_from_xml_tools(
+    connections_data: List[Dict[str, Any]],
+) -> Dict[str, List[str]]:
+    """Convert xml_tools connection format to adjacency dictionary."""
     adj: Dict[str, List[str]] = defaultdict(list)
-    for conn in root.findall(".//connections"):
-        src = _txt(conn, "source/id", "component/source/id")
-        dst = _txt(conn, "destination/id", "component/destination/id")
-        if src and dst:
+    for conn in connections_data:
+        src = conn.get("source")
+        dst = conn.get("destination")
+        if src and dst and src != "Unknown" and dst != "Unknown":
             adj[src].append(dst)
     return dict(adj)
 
@@ -531,9 +453,55 @@ def analyze_nifi_table_lineage(
     Returns:
         Dictionary containing analysis results and file paths
     """
-    root = parse_template(xml_path)
-    procs = build_processors(root)
-    adj = build_connections(root)
+    # Use xml_tools for consistent XML parsing
+    with open(xml_path, "r", encoding="utf-8") as f:
+        xml_content = f.read()
+
+    xml_data = parse_nifi_template_impl(xml_content)
+
+    # Convert xml_tools processor format to our format
+    procs = {}
+    for proc in xml_data["processors"]:
+        # Initial extraction (no var-resolve yet)
+        reads, writes = set(), set()
+        for sql in _sql_snippets(proc["type"], proc["properties"]):
+            r, w = _extract_sql_tables(sql)
+            reads |= r
+            writes |= w
+
+        # Handle non-SQL database processors
+        if (
+            "querydatabasetable" in proc["type"].lower()
+            or "generatetablefetch" in proc["type"].lower()
+        ):
+            t = (
+                proc["properties"].get("Table Name")
+                or proc["properties"].get("table.name")
+                or ""
+            ).strip()
+            if t:
+                reads.add(_clean_table(t))
+
+        if "putdatabaserecord" in proc["type"].lower():
+            t = (
+                proc["properties"].get("Table Name")
+                or proc["properties"].get("table.name")
+                or ""
+            ).strip()
+            if t:
+                writes.add(_clean_table(t))
+
+        procs[proc["id"]] = {
+            "id": proc["id"],
+            "type": proc["type"],
+            "name": proc["name"],
+            "props": proc["properties"],
+            "reads": reads,
+            "writes": writes,
+        }
+
+    # Convert xml_tools connections to adjacency dictionary
+    adj = build_connections_from_xml_tools(xml_data["connections"])
 
     chains = extract_atomic_chains(procs, adj, make_inter_chains=write_inter_chains)
     dom_chains = domain_only(chains)
