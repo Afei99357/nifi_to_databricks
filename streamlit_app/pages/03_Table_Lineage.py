@@ -91,23 +91,45 @@ def main():
     # Check if analysis is running
     analysis_running = st.session_state.get("lineage_running", False)
 
-    # Analysis options
-    col1, col2 = st.columns(2)
+    # Check for auto-start flag from Dashboard
+    auto_start = st.session_state.get("auto_start_table_lineage", False)
 
-    with col1:
-        run_analysis = st.button(
-            "📊 Analyze Table Lineage",
-            use_container_width=True,
-            disabled=analysis_running,
-        )
-
-    with col2:
+    # Dynamic layout based on whether Analyze Table Lineage button should be shown
+    # Hide button if results exist OR if auto-starting from Dashboard
+    if cached_result or auto_start:
+        # Only show Back to Dashboard button (no Analyze button needed)
         if st.button(
             "🔙 Back to Dashboard",
             disabled=analysis_running,
             help="Cannot navigate during analysis" if analysis_running else None,
         ):
             st.switch_page("Dashboard.py")
+        run_analysis = auto_start
+    else:
+        # Show both buttons when no results exist
+        col1, col2 = st.columns(2)
+
+        with col1:
+            run_analysis = (
+                st.button(
+                    "📊 Analyze Table Lineage",
+                    use_container_width=True,
+                    disabled=analysis_running,
+                )
+                or auto_start
+            )
+
+        with col2:
+            if st.button(
+                "🔙 Back to Dashboard",
+                disabled=analysis_running,
+                help="Cannot navigate during analysis" if analysis_running else None,
+            ):
+                st.switch_page("Dashboard.py")
+
+    # Clear auto-start flag after checking
+    if auto_start:
+        st.session_state["auto_start_table_lineage"] = False
 
     # Display cached results if available
     if cached_result and not run_analysis:

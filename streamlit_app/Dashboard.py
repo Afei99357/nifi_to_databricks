@@ -42,10 +42,14 @@ def main():
 
         with col2:
             if st.button("📦 Extract Assets", use_container_width=True):
+                # Set flag to auto-start asset extraction when arriving at page
+                st.session_state["auto_start_asset_extraction"] = True
                 st.switch_page("pages/02_Asset_Extraction.py")
 
         with col3:
             if st.button("📊 Analyze Table Lineage", use_container_width=True):
+                # Set flag to auto-start table lineage analysis when arriving at page
+                st.session_state["auto_start_table_lineage"] = True
                 st.switch_page("pages/03_Table_Lineage.py")
 
         with col4:

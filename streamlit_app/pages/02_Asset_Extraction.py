@@ -79,21 +79,77 @@ def display_asset_results(result, uploaded_file):
             for host in assets.get("external_hosts", []):
                 table_data.append({"Asset Type": "External Host", "Asset Value": host})
 
-            # Display table
+            # Display table with filtering
             if table_data:
                 st.markdown("### 📦 Discovered Assets")
                 df = pd.DataFrame(table_data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
 
-                # Download button for CSV
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Assets CSV",
-                    data=csv,
-                    file_name=f"nifi_assets_{uploaded_file.name.replace('.xml', '')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+                # Filter controls
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    # Asset type filter
+                    asset_types = ["All"] + sorted(df["Asset Type"].unique().tolist())
+                    selected_type = st.selectbox(
+                        "Filter by Asset Type:", asset_types, key="asset_type_filter"
+                    )
+
+                with col2:
+                    # Text search filter
+                    search_term = st.text_input(
+                        "Search Asset Values:",
+                        placeholder="Enter search term (e.g., 'script', 'table', 'icn8')",
+                        key="asset_search",
+                    )
+
+                # Apply filters
+                filtered_df = df.copy()
+
+                # Filter by asset type
+                if selected_type != "All":
+                    filtered_df = filtered_df[
+                        filtered_df["Asset Type"] == selected_type
+                    ]
+
+                # Filter by search term
+                if search_term:
+                    filtered_df = filtered_df[
+                        filtered_df["Asset Value"].str.contains(
+                            search_term, case=False, na=False
+                        )
+                    ]
+
+                # Show filtered results count
+                if len(filtered_df) != len(df):
+                    st.info(f"Showing {len(filtered_df)} of {len(df)} assets")
+
+                # Display filtered table
+                if not filtered_df.empty:
+                    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No assets match the current filters.")
+
+                # Download buttons
+                col3, col4 = st.columns(2)
+                with col3:
+                    # Download filtered results
+                    filtered_csv = filtered_df.to_csv(index=False)
+                    st.download_button(
+                        label=f"📥 Download Filtered Assets ({len(filtered_df)} items)",
+                        data=filtered_csv,
+                        file_name=f"nifi_assets_filtered_{uploaded_file.name.replace('.xml', '')}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                with col4:
+                    # Download all results
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label=f"📥 Download All Assets ({len(df)} items)",
+                        data=csv,
+                        file_name=f"nifi_assets_all_{uploaded_file.name.replace('.xml', '')}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
             else:
                 st.info("No assets found in the workflow.")
         else:
@@ -129,23 +185,47 @@ def main():
     # Check if extraction is running
     extraction_running = st.session_state.get("asset_extraction_running", False)
 
-    # Extraction options
-    col1, col2 = st.columns(2)
+    # Check for auto-start flag from Dashboard
+    auto_start = st.session_state.get("auto_start_asset_extraction", False)
 
-    with col1:
-        run_extraction = st.button(
-            "📦 Extract Assets",
-            use_container_width=True,
-            disabled=extraction_running,
-        )
-
-    with col2:
+    # Dynamic layout based on whether Extract Assets button should be shown
+    # Hide button if results exist OR if auto-starting from Dashboard
+    if cached_result or auto_start:
+        # Only show Back to Dashboard button (no Extract Assets button needed)
         if st.button(
             "🔙 Back to Dashboard",
             disabled=extraction_running,
             help="Cannot navigate during extraction" if extraction_running else None,
         ):
             st.switch_page("Dashboard.py")
+        run_extraction = auto_start
+    else:
+        # Show both buttons when no results exist
+        col1, col2 = st.columns(2)
+
+        with col1:
+            run_extraction = (
+                st.button(
+                    "📦 Extract Assets",
+                    use_container_width=True,
+                    disabled=extraction_running,
+                )
+                or auto_start
+            )
+
+        with col2:
+            if st.button(
+                "🔙 Back to Dashboard",
+                disabled=extraction_running,
+                help=(
+                    "Cannot navigate during extraction" if extraction_running else None
+                ),
+            ):
+                st.switch_page("Dashboard.py")
+
+    # Clear auto-start flag after checking
+    if auto_start:
+        st.session_state["auto_start_asset_extraction"] = False
 
     # Display cached results if available
     if cached_result and not run_extraction:
