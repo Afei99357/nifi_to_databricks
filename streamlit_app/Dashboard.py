@@ -41,8 +41,8 @@ def main():
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        # Navigation buttons - 3 columns
-        col1, col2, col3 = st.columns(3)
+        # Navigation buttons - 4 columns
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             if st.button("🚀 Classify Processors", use_container_width=True):
@@ -61,6 +61,12 @@ def main():
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
                 st.switch_page("pages/03_Lineage_Connections.py")
+
+        with col4:
+            if st.button("🔄 Variable Dependencies", use_container_width=True):
+                # Set flag to auto-start variable analysis when arriving at page
+                st.session_state["auto_start_variable_analysis"] = True
+                st.switch_page("pages/04_Variable_Dependencies.py")
 
         # Second row for utility actions
         st.markdown("")  # Add some spacing
