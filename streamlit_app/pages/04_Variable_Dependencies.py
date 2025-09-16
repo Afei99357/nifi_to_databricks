@@ -240,7 +240,7 @@ def display_variable_results(result, uploaded_file):
                                     == "modification"
                                     else "TRANSFORMS"
                                 ),
-                                "Details": f"Transforms into: {transform['output_variable']}",
+                                "Details": f"Transforms into: {transform['output_variable'].strip()}",
                                 "Value/Expression": transform[
                                     "transformation_expression"
                                 ],
@@ -460,8 +460,12 @@ def display_variable_results(result, uploaded_file):
                                         "Processor Name": trans["processor_name"],
                                         "Processor ID": trans["processor_id"],
                                         "Type": trans["transformation_type"].title(),
-                                        "Input Variable": trans["input_variable"],
-                                        "Output Variable": trans["output_variable"],
+                                        "Input Variable": trans[
+                                            "input_variable"
+                                        ].strip(),
+                                        "Output Variable": trans[
+                                            "output_variable"
+                                        ].strip(),
                                         "Expression": trans[
                                             "transformation_expression"
                                         ],
@@ -520,6 +524,7 @@ def display_variable_results(result, uploaded_file):
             # Build connection flow data
             connection_flows = []
             for var_name, var_data in variables.items():
+                clean_var_name = var_name.strip()  # Clean variable name
                 for flow in var_data.get("flows", []):
                     processors = flow.get("processors", [])
                     relationships = flow.get("relationships", [])
@@ -531,7 +536,7 @@ def display_variable_results(result, uploaded_file):
 
                         connection_flows.append(
                             {
-                                "Variable": f"${{{var_name}}}",
+                                "Variable": f"${{{clean_var_name}}}",
                                 "Source Processor": source["processor_name"],
                                 "Source ID": source["processor_id"],
                                 "Target Processor": target["processor_name"],
@@ -577,7 +582,7 @@ def display_variable_results(result, uploaded_file):
 
                 # Variable Flow Chains for selected variable
                 if var_filter != "All":
-                    selected_var_flows = {}
+                    selected_var_flows = []
                     for var_name, var_data in variables.items():
                         clean_var_name = var_name.strip()
                         if f"${{{clean_var_name}}}" == var_filter:
