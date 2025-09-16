@@ -311,7 +311,9 @@ def display_variable_results(result, uploaded_file):
                                     col1, col2 = st.columns([1, 3])
 
                                     with col1:
-                                        st.write(f"**{i+1}. {defn['processor_name']}**")
+                                        st.markdown(
+                                            f"**{i+1}.** **{defn['processor_name']}**"
+                                        )
                                         st.caption(
                                             f"Type: {defn['processor_type'].split('.')[-1]}"
                                         )
@@ -360,8 +362,8 @@ def display_variable_results(result, uploaded_file):
                                     col1, col2 = st.columns([1, 3])
 
                                     with col1:
-                                        st.write(
-                                            f"**{i+1}. {trans['processor_name']}**"
+                                        st.markdown(
+                                            f"**{i+1}.** **{trans['processor_name']}**"
                                         )
                                         st.caption(
                                             f"Type: {trans['transformation_type'].title()}"
@@ -405,8 +407,8 @@ def display_variable_results(result, uploaded_file):
                                     col1, col2 = st.columns([1, 3])
 
                                     with col1:
-                                        st.write(
-                                            f"**{i+1}. {usage['processor_name']}**"
+                                        st.markdown(
+                                            f"**{i+1}.** **{usage['processor_name']}**"
                                         )
                                         st.caption(
                                             f"Type: {usage['processor_type'].split('.')[-1]}"
