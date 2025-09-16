@@ -284,9 +284,9 @@ The Streamlit app provides a comprehensive web interface for NiFi to Databricks 
 1. **Upload NiFi XML**: Upload your NiFi template XML file to begin analysis
 2. **Navigation Hub**: Access all analysis tools through dedicated buttons:
    - 🚀 **Classify Processors**: Processor classification and pruning analysis
-   - 🔗 **Analyze Dependencies**: Comprehensive dependency analysis (development branch)
    - 📦 **Extract Assets**: Asset discovery and migration planning
    - 📊 **Lineage & Connections**: Table lineage and data flow analysis
+   - 🔄 **Variable Dependencies**: Comprehensive variable analysis and flow tracking
 3. **Processor Information**: View raw processor details with filtering and search
 4. **Clear Results**: Reset all cached results and uploaded files
 
@@ -297,27 +297,58 @@ The Streamlit app provides a comprehensive web interface for NiFi to Databricks 
 4. **Auto-expand Sections**: All reports displayed by default for easy review
 5. **Result Caching**: Analysis persists when switching between pages
 
-### 🔗 **Processor Dependencies** *(Development Branch)*
-**Comprehensive dependency analysis across ALL processors in the workflow:**
+### 🔄 **Variable Dependencies**
+**Comprehensive variable analysis and flow tracking across ALL processors in the workflow:**
 
-1. **Interactive 5-Tab Interface**:
-   - **🔍 Processor Dependencies**: View dependencies for each processor with filtering
-   - **⚡ Impact Analysis**: High-impact processors, isolated processors, dependency chains
-   - **📊 Variable Dependencies**: Track all `${variable}` definitions and usages
-   - **🔗 Connection Map**: Processor-to-processor flow connections
-   - **📋 Full Report**: Comprehensive dependency analysis report
+1. **Interactive 4-Tab Interface**:
+   - **📋 Variable Details**: Complete inventory of all variables with their source processors
+   - **🔄 Variable Flow Tracking**: Trace individual variables through their complete lifecycle
+   - **📝 Variable Actions**: Analyze how variables are defined, modified, and used across processors
+   - **🌐 Variable Flow Connections**: See variable flow paths through processor connections
 
-2. **Advanced Features**:
-   - **Variable Tracking**: Complete `${variable}` mapping with external variable detection
-   - **Circular Dependency Detection**: Identify problematic dependency cycles
-   - **Impact Analysis**: "What depends on this processor?" functionality
-   - **Interactive Filtering**: Filter by processor type and text search
-   - **Download Options**: Export markdown reports and raw JSON data
+2. **Tab-Specific Features**:
 
-3. **Use Cases**:
-   - **Impact Analysis**: "If I change this processor, what else is affected?"
-   - **Migration Planning**: "What are ALL the dependencies I need to consider?"
-   - **Debugging**: "Why is this processor not working? What does it depend on?"
+   **📋 Variable Details Tab:**
+   - **Complete Variable Inventory**: All variables in the workflow with source processors
+   - **Source Information**: Variable name, processor name, processor ID, processor type
+   - **Source Classification**: DEFINES (defined in workflow) vs EXTERNAL (used but not defined)
+   - **Filtering**: Filter by variable name and source type
+   - **Download**: Export complete variable inventory as CSV
+
+   **🔄 Variable Flow Tracking Tab:**
+   - **Variable Selection**: Choose any variable to trace its complete lifecycle
+   - **Flow Statistics**: Total processors, definitions, usages, internal/external status
+   - **Processor Flow Chain**: Complete table showing all processors that interact with the variable
+   - **Action Classification**: DEFINES, MODIFIES, TRANSFORMS, USES, EVALUATES, LOGS, EXECUTES
+   - **Flow Visualization**: Visual flow chains showing processor connections with IDs
+
+   **📝 Variable Actions Tab:**
+   - **Summary Overview**: All variables with definition, modification, and usage counts
+   - **Detailed Analysis**: Select any variable for in-depth analysis
+   - **Three Analysis Tables**: Definitions, Transformations, and Usages with full processor details
+   - **Complete Values**: Full expressions and transformation details without truncation
+   - **Filtering**: Filter by status, minimum usage counts, and text search
+
+   **🌐 Variable Flow Connections Tab:**
+   - **Connection Flow Data**: Variable flow paths between connected processors
+   - **Flow Path Analysis**: Each row represents one hop in a variable's journey
+   - **Dynamic Flow Chains**: Select a variable to see its complete flow paths
+   - **Connection Details**: Source/target processors, connection types, flow chains
+   - **Relationship Mapping**: Shows success/failure relationship paths
+
+3. **Advanced Capabilities**:
+   - **External Variable Detection**: Identifies variables used but not defined in the workflow
+   - **Flow Path Tracing**: Maps how variables move through processor connections
+   - **Value Transformation Tracking**: Shows how variables are modified along their journey
+   - **Processor ID Display**: Uses full processor IDs for accurate identification
+   - **Plain English Descriptions**: Clear action descriptions instead of technical symbols
+
+4. **Use Cases**:
+   - **Migration Planning**: "Which processors define the variables that others depend on?"
+   - **Impact Analysis**: "If I change this variable definition, what processors are affected?"
+   - **Debugging**: "Where does this variable get its value and how is it transformed?"
+   - **Data Flow Understanding**: "How do variables flow through my NiFi pipeline?"
+   - **External Dependency Mapping**: "Which variables come from outside the workflow?"
 
 ### 📦 **Asset Extraction**
 1. **Intelligent Asset Discovery**: Comprehensive scanning of all processors to identify migration dependencies
@@ -349,9 +380,9 @@ The Streamlit app provides a comprehensive web interface for NiFi to Databricks 
 ### 🎯 **Complete Analysis Workflow**
 The app provides a comprehensive analysis pipeline:
 1. **Classification**: Analyze and classify all processors (infrastructure vs business logic)
-2. **Dependencies**: Map all processor dependencies and relationships *(dev branch)*
-3. **Assets**: Discover external dependencies requiring migration
-4. **Lineage**: Trace table-to-table data flows and connections
+2. **Assets**: Discover external dependencies requiring migration
+3. **Lineage**: Trace table-to-table data flows and connections
+4. **Variables**: Complete variable analysis and flow tracking across all processors
 
 Each page focuses on a specific aspect of migration planning while maintaining shared context through session state management.
 

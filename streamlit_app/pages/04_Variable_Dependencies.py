@@ -506,8 +506,8 @@ def display_variable_results(result, uploaded_file):
                         else:
                             st.info("ℹ️ No usages found")
 
-        # Tab 3: Variable Flow Connections
-        with tab3:
+        # Tab 4: Variable Flow Connections
+        with tab4:
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
