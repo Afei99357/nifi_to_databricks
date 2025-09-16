@@ -80,107 +80,102 @@ def display_variable_results(result, uploaded_file):
 
                     st.markdown(f"#### Variable Lineage: `${{{selected_var}}}`")
 
-                    # Variable flow details
-                    col1, col2 = st.columns([3, 1])
-
-                    with col2:
-                        st.markdown("**📊 Flow Statistics**")
-                        st.metric("Total Processors", var_data["processor_count"])
-                        st.metric("Definitions", var_data["definition_count"])
-                        st.metric("Usages", var_data["usage_count"])
-
-                        if var_data["is_external"]:
-                            st.warning("⚠️ External Variable")
-                            st.caption("Defined outside workflow")
-                        else:
-                            st.success("✅ Internally Defined")
-
+                    # Flow Statistics - horizontal layout
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        # Build flow chain table
-                        flow_data = []
-
-                        # Add definitions
-                        for definition in var_data.get("definitions", []):
-                            flow_data.append(
-                                {
-                                    "Processor Name": definition["processor_name"],
-                                    "Processor Type": definition[
-                                        "processor_type"
-                                    ].split(".")[-1],
-                                    "Processor ID": definition["processor_id"][:8]
-                                    + "...",
-                                    "Action": "DEFINES",
-                                    "Details": f"Property: {definition['property_name']}",
-                                    "Value/Expression": (
-                                        definition["property_value"][:50] + "..."
-                                        if len(definition["property_value"]) > 50
-                                        else definition["property_value"]
-                                    ),
-                                }
-                            )
-
-                        # Add transformations
-                        for transform in var_data.get("transformations", []):
-                            flow_data.append(
-                                {
-                                    "Processor Name": transform["processor_name"],
-                                    "Processor Type": transform["processor_type"].split(
-                                        "."
-                                    )[-1],
-                                    "Processor ID": transform["processor_id"][:8]
-                                    + "...",
-                                    "Action": (
-                                        "MODIFIES"
-                                        if transform["transformation_type"]
-                                        == "modification"
-                                        else "TRANSFORMS"
-                                    ),
-                                    "Details": f"→ {transform['output_variable']}",
-                                    "Value/Expression": (
-                                        transform["transformation_expression"][:50]
-                                        + "..."
-                                        if len(transform["transformation_expression"])
-                                        > 50
-                                        else transform["transformation_expression"]
-                                    ),
-                                }
-                            )
-
-                        # Add usages
-                        for usage in var_data.get("usages", []):
-                            action = "USES"
-                            if "RouteOnAttribute" in usage["processor_type"]:
-                                action = "EVALUATES"
-                            elif "LogMessage" in usage["processor_type"]:
-                                action = "LOGS"
-                            elif "ExecuteStreamCommand" in usage["processor_type"]:
-                                action = "EXECUTES"
-
-                            flow_data.append(
-                                {
-                                    "Processor Name": usage["processor_name"],
-                                    "Processor Type": usage["processor_type"].split(
-                                        "."
-                                    )[-1],
-                                    "Processor ID": usage["processor_id"][:8] + "...",
-                                    "Action": action,
-                                    "Details": f"In: {usage['property_name']}",
-                                    "Value/Expression": usage["variable_expression"]
-                                    + (
-                                        " (with functions)"
-                                        if usage.get("has_functions")
-                                        else ""
-                                    ),
-                                }
-                            )
-
-                        if flow_data:
-                            flow_df = pd.DataFrame(flow_data)
-                            st.dataframe(
-                                flow_df, use_container_width=True, hide_index=True
-                            )
+                        st.metric("Total Processors", var_data["processor_count"])
+                    with col2:
+                        st.metric("Definitions", var_data["definition_count"])
+                    with col3:
+                        st.metric("Usages", var_data["usage_count"])
+                    with col4:
+                        if var_data["is_external"]:
+                            st.error("⚠️ External")
                         else:
-                            st.info("No flow data available for this variable.")
+                            st.success("✅ Internal")
+
+                    # Flow chain table - full width
+                    st.markdown("**🔄 Processor Flow Chain:**")
+
+                    # Build flow chain table
+                    flow_data = []
+
+                    # Add definitions
+                    for definition in var_data.get("definitions", []):
+                        flow_data.append(
+                            {
+                                "Processor Name": definition["processor_name"],
+                                "Processor Type": definition["processor_type"].split(
+                                    "."
+                                )[-1],
+                                "Processor ID": definition["processor_id"][:8] + "...",
+                                "Action": "DEFINES",
+                                "Details": f"Property: {definition['property_name']}",
+                                "Value/Expression": (
+                                    definition["property_value"][:50] + "..."
+                                    if len(definition["property_value"]) > 50
+                                    else definition["property_value"]
+                                ),
+                            }
+                        )
+
+                    # Add transformations
+                    for transform in var_data.get("transformations", []):
+                        flow_data.append(
+                            {
+                                "Processor Name": transform["processor_name"],
+                                "Processor Type": transform["processor_type"].split(
+                                    "."
+                                )[-1],
+                                "Processor ID": transform["processor_id"][:8] + "...",
+                                "Action": (
+                                    "MODIFIES"
+                                    if transform["transformation_type"]
+                                    == "modification"
+                                    else "TRANSFORMS"
+                                ),
+                                "Details": f"→ {transform['output_variable']}",
+                                "Value/Expression": (
+                                    transform["transformation_expression"][:50] + "..."
+                                    if len(transform["transformation_expression"]) > 50
+                                    else transform["transformation_expression"]
+                                ),
+                            }
+                        )
+
+                    # Add usages
+                    for usage in var_data.get("usages", []):
+                        action = "USES"
+                        if "RouteOnAttribute" in usage["processor_type"]:
+                            action = "EVALUATES"
+                        elif "LogMessage" in usage["processor_type"]:
+                            action = "LOGS"
+                        elif "ExecuteStreamCommand" in usage["processor_type"]:
+                            action = "EXECUTES"
+
+                        flow_data.append(
+                            {
+                                "Processor Name": usage["processor_name"],
+                                "Processor Type": usage["processor_type"].split(".")[
+                                    -1
+                                ],
+                                "Processor ID": usage["processor_id"][:8] + "...",
+                                "Action": action,
+                                "Details": f"In: {usage['property_name']}",
+                                "Value/Expression": usage["variable_expression"]
+                                + (
+                                    " (with functions)"
+                                    if usage.get("has_functions")
+                                    else ""
+                                ),
+                            }
+                        )
+
+                    if flow_data:
+                        flow_df = pd.DataFrame(flow_data)
+                        st.dataframe(flow_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No flow data available for this variable.")
 
                     # Flow chains visualization
                     flows = var_data.get("flows", [])
