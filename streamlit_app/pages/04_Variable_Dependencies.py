@@ -280,55 +280,157 @@ def display_variable_results(result, uploaded_file):
                             f"#### Variable Details: `${{{selected_var_detail}}}`"
                         )
 
-                        col1, col2, col3 = st.columns(3)
+                        # Add explanation box
+                        st.info(
+                            f"""
+                            **What this shows:** The variable `${{{selected_var_detail}}}` analysis reveals:
 
-                        with col1:
-                            st.markdown("**Definitions:**")
-                            definitions = var_detail.get("definitions", [])
-                            if definitions:
-                                for defn in definitions:
-                                    st.write(f"• **{defn['processor_name']}**")
-                                    st.write(
-                                        f"  ↳ Type: {defn['processor_type'].split('.')[-1]}"
-                                    )
-                                    st.write(f"  ↳ ID: {defn['processor_id'][:8]}...")
-                                    st.write(
-                                        f"  ↳ Value: `{defn['property_value'][:30]}...`"
-                                    )
-                            else:
-                                st.write("No definitions (external variable)")
+                            • **Definitions**: Processors that SET this variable's value (typically UpdateAttribute processors)
+                            • **Transformations**: Processors that MODIFY or derive new variables from this one
+                            • **Usages**: Processors that READ/USE this variable in their operations
 
-                        with col2:
-                            st.markdown("**Transformations:**")
-                            transformations = var_detail.get("transformations", [])
-                            if transformations:
-                                for trans in transformations:
-                                    st.write(f"• **{trans['processor_name']}**")
-                                    st.write(
-                                        f"  ↳ Type: {trans['transformation_type']}"
-                                    )
-                                    st.write(
-                                        f"  ↳ Output: `{trans['output_variable']}`"
-                                    )
-                            else:
-                                st.write("No transformations found")
+                            This helps you understand the data flow and dependencies in your NiFi workflow.
+                            """
+                        )
 
-                        with col3:
-                            st.markdown("**Usages:**")
-                            usages = var_detail.get("usages", [])[:5]  # Show first 5
-                            if usages:
-                                for usage in usages:
-                                    st.write(f"• **{usage['processor_name']}**")
-                                    st.write(
-                                        f"  ↳ Type: {usage['processor_type'].split('.')[-1]}"
+                        # Enhanced detailed view with expandable sections
+                        st.markdown("### 📋 Detailed Analysis")
+
+                        # Definitions Section
+                        definitions = var_detail.get("definitions", [])
+                        if definitions:
+                            with st.expander(
+                                f"📝 Definitions ({len(definitions)} processors)",
+                                expanded=True,
+                            ):
+                                st.markdown(
+                                    "*Processors that define/set this variable:*"
+                                )
+
+                                for i, defn in enumerate(definitions):
+                                    col1, col2 = st.columns([1, 3])
+
+                                    with col1:
+                                        st.write(f"**{i+1}. {defn['processor_name']}**")
+                                        st.caption(
+                                            f"Type: {defn['processor_type'].split('.')[-1]}"
+                                        )
+
+                                    with col2:
+                                        # Full processor ID with copy button
+                                        full_id = defn["processor_id"]
+                                        st.code(f"ID: {full_id}", language=None)
+
+                                        # Full value with expandable view
+                                        full_value = defn["property_value"]
+                                        if len(full_value) > 60:
+                                            st.write(
+                                                f"**Property:** `{defn['property_name']}`"
+                                            )
+                                            st.write(
+                                                f"**Value:** `{full_value[:60]}...`"
+                                            )
+                                            with st.expander("Show full value"):
+                                                st.code(full_value, language=None)
+                                        else:
+                                            st.write(
+                                                f"**Property:** `{defn['property_name']}`"
+                                            )
+                                            st.write(f"**Value:** `{full_value}`")
+
+                                    if i < len(definitions) - 1:
+                                        st.divider()
+                        else:
+                            st.warning(
+                                "🔍 **External Variable** - No definitions found (defined outside workflow)"
+                            )
+
+                        # Transformations Section
+                        transformations = var_detail.get("transformations", [])
+                        if transformations:
+                            with st.expander(
+                                f"⚙️ Transformations ({len(transformations)} processors)",
+                                expanded=True,
+                            ):
+                                st.markdown(
+                                    "*Processors that modify or derive new variables from this one:*"
+                                )
+
+                                for i, trans in enumerate(transformations):
+                                    col1, col2 = st.columns([1, 3])
+
+                                    with col1:
+                                        st.write(
+                                            f"**{i+1}. {trans['processor_name']}**"
+                                        )
+                                        st.caption(
+                                            f"Type: {trans['transformation_type'].title()}"
+                                        )
+
+                                    with col2:
+                                        st.write(
+                                            f"**Output Variable:** `${{{trans['output_variable']}}}`"
+                                        )
+
+                                        # Full transformation expression
+                                        full_expr = trans["transformation_expression"]
+                                        if len(full_expr) > 80:
+                                            st.write(
+                                                f"**Expression:** `{full_expr[:80]}...`"
+                                            )
+                                            with st.expander("Show full expression"):
+                                                st.code(full_expr, language=None)
+                                        else:
+                                            st.code(full_expr, language=None)
+
+                                    if i < len(transformations) - 1:
+                                        st.divider()
+                        else:
+                            st.info("ℹ️ No transformations found")
+
+                        # Usages Section
+                        usages = var_detail.get("usages", [])
+                        if usages:
+                            usage_count = len(usages)
+                            with st.expander(
+                                f"📖 Usages ({usage_count} processors)",
+                                expanded=usage_count <= 10,
+                            ):
+                                st.markdown("*Processors that read/use this variable:*")
+
+                                # Show all usages with pagination if many
+                                display_count = min(len(usages), 20)  # Show up to 20
+
+                                for i, usage in enumerate(usages[:display_count]):
+                                    col1, col2 = st.columns([1, 3])
+
+                                    with col1:
+                                        st.write(
+                                            f"**{i+1}. {usage['processor_name']}**"
+                                        )
+                                        st.caption(
+                                            f"Type: {usage['processor_type'].split('.')[-1]}"
+                                        )
+
+                                    with col2:
+                                        st.write(
+                                            f"**Used in:** `{usage['property_name']}`"
+                                        )
+                                        st.write(
+                                            f"**Expression:** `{usage['variable_expression']}`"
+                                        )
+                                        if usage.get("has_functions"):
+                                            st.caption("🔧 Contains NiFi functions")
+
+                                    if i < display_count - 1:
+                                        st.divider()
+
+                                if len(usages) > 20:
+                                    st.info(
+                                        f"📋 Showing first 20 of {len(usages)} total usages"
                                     )
-                                    st.write(f"  ↳ Context: {usage['usage_context']}")
-                                if len(var_detail.get("usages", [])) > 5:
-                                    st.write(
-                                        f"... and {len(var_detail.get('usages', [])) - 5} more"
-                                    )
-                            else:
-                                st.write("No usages found")
+                        else:
+                            st.info("ℹ️ No usages found")
 
         # Tab 3: Flow Connections
         with tab3:
