@@ -50,10 +50,9 @@ def display_variable_results(result, uploaded_file):
             return
 
         # Tabs for different analysis views
-        tab1, tab2, tab3, tab4 = st.tabs(
+        tab1, tab2, tab3 = st.tabs(
             [
                 "📋 Variable Details",
-                "🔄 Variable Flow Tracking",
                 "📝 Variable Actions",
                 "🌐 Variable Flow Connections",
             ]
@@ -186,171 +185,8 @@ def display_variable_results(result, uploaded_file):
             else:
                 st.warning("No variable details available.")
 
-        # Tab 2: Variable Flow Tracking
+        # Tab 2: Variable Actions
         with tab2:
-            st.markdown("### 🔄 Variable Flow Tracking")
-            st.info(
-                "Trace how variables flow from definition through modification to usage."
-            )
-
-            # Variable selector - clean variable names for display
-            clean_variable_names = {name.strip(): name for name in variables.keys()}
-            display_names = sorted(clean_variable_names.keys())
-
-            if display_names:
-                selected_display_var = st.selectbox(
-                    "Select Variable to Trace:",
-                    options=display_names,
-                    key="flow_var_selector_tab2",
-                )
-                # Get the original key for data lookup
-                selected_var = clean_variable_names.get(selected_display_var)
-
-                if selected_var and selected_var in variables:
-                    var_data = variables[selected_var]
-
-                    st.markdown(f"#### Variable Lineage: `{selected_display_var}`")
-
-                    # Flow Statistics - horizontal layout
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Processors", var_data["processor_count"])
-                    with col2:
-                        st.metric("Definitions", var_data["definition_count"])
-                    with col3:
-                        st.metric("Usages", var_data["usage_count"])
-                    with col4:
-                        if var_data["is_external"]:
-                            st.error("⚠️ Unknown Source")
-                        else:
-                            st.success("✅ Known")
-
-                    # Flow chain table - full width
-                    st.markdown("**🔄 Processor Flow Chain:**")
-
-                    # Build flow chain table
-                    flow_data = []
-
-                    # Add definitions
-                    for definition in var_data.get("definitions", []):
-                        flow_data.append(
-                            {
-                                "Processor Name": definition["processor_name"],
-                                "Processor Type": definition["processor_type"].split(
-                                    "."
-                                )[-1],
-                                "Processor ID": definition["processor_id"],
-                                "Action": "Known",
-                                "Details": f"Creates variable in property: {definition['property_name']}",
-                                "Value/Expression": definition["property_value"],
-                            }
-                        )
-
-                    # Add usages
-                    for usage in var_data.get("usages", []):
-                        action = "USES"
-                        if "RouteOnAttribute" in usage["processor_type"]:
-                            action = "EVALUATES"
-                        elif "LogMessage" in usage["processor_type"]:
-                            action = "LOGS"
-                        elif "ExecuteStreamCommand" in usage["processor_type"]:
-                            action = "EXECUTES"
-
-                        flow_data.append(
-                            {
-                                "Processor Name": usage["processor_name"],
-                                "Processor Type": usage["processor_type"].split(".")[
-                                    -1
-                                ],
-                                "Processor ID": usage["processor_id"],
-                                "Action": action,
-                                "Details": f"Used in property: {usage['property_name']}",
-                                "Value/Expression": f"Usage: {usage['variable_expression']} in {usage['processor_name']}"
-                                + (
-                                    " (with functions)"
-                                    if usage.get("has_functions")
-                                    else ""
-                                ),
-                            }
-                        )
-
-                    if flow_data:
-                        flow_df = pd.DataFrame(flow_data)
-                        st.dataframe(
-                            flow_df,
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "Processor Name": st.column_config.TextColumn(
-                                    "Processor Name", width="medium"
-                                ),
-                                "Processor Type": st.column_config.TextColumn(
-                                    "Type", width="small"
-                                ),
-                                "Processor ID": st.column_config.TextColumn(
-                                    "ID", width="small"
-                                ),
-                                "Action": st.column_config.TextColumn(
-                                    "Action", width="small"
-                                ),
-                                "Details": st.column_config.TextColumn(
-                                    "Details", width="medium"
-                                ),
-                                "Value/Expression": st.column_config.TextColumn(
-                                    "Value/Expression", width="large"
-                                ),
-                            },
-                        )
-                    else:
-                        st.info("No flow data available for this variable.")
-
-                    # Flow chains visualization
-                    flows = var_data.get("flows", [])
-                    if flows:
-                        st.markdown("#### 🔗 Variable Flow Chains")
-
-                        # Control for number of chains to display
-                        max_chains = len(flows)
-                        if max_chains > 10:
-                            num_chains_to_show = st.slider(
-                                "Number of flow chains to display:",
-                                min_value=1,
-                                max_value=max_chains,
-                                value=min(10, max_chains),
-                                key=f"flow_chains_slider_tab2_{selected_display_var}",
-                            )
-                        else:
-                            num_chains_to_show = max_chains
-
-                        for i, flow in enumerate(flows[:num_chains_to_show]):
-                            with st.expander(
-                                f"Flow Chain {i+1} (Length: {flow['chain_length']})",
-                                expanded=i == 0,
-                            ):
-                                # Show processor chain
-                                chain_processors = flow.get("processors", [])
-                                if chain_processors:
-                                    chain_text = " → ".join(
-                                        [
-                                            f"**{p['processor_name']}** ({p['processor_id']})"
-                                            for p in chain_processors
-                                        ]
-                                    )
-                                    st.markdown(chain_text)
-
-                                    # Show relationship types
-                                    relationships = flow.get("relationships", [])
-                                    if relationships:
-                                        rel_text = " → ".join(relationships)
-                                        st.caption(f"Connection types: {rel_text}")
-
-                        if num_chains_to_show < len(flows):
-                            st.info(
-                                f"📋 Showing {num_chains_to_show} of {len(flows)} total flow chains (use slider to show more)"
-                            )
-
-        # Tab 3: Variable Actions
-        with tab3:
             st.markdown("### 📝 Variable Actions Analysis")
             st.info("Analyze how variables are defined and used across processors.")
 
@@ -575,8 +411,8 @@ def display_variable_results(result, uploaded_file):
                         else:
                             st.info("ℹ️ No usages found")
 
-        # Tab 4: Variable Flow Connections
-        with tab4:
+        # Tab 3: Variable Flow Connections
+        with tab3:
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
