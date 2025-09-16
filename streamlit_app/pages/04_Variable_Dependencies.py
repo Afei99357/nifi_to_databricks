@@ -90,18 +90,22 @@ def display_variable_results(result, uploaded_file):
                             }
                         )
                 else:
-                    # External variable - no definitions found
-                    all_variables_data.append(
-                        {
-                            "Variable Name": clean_var_name,
-                            "Processor Name": "External Variable",
-                            "Processor ID": "N/A",
-                            "Processor Type": "External",
-                            "Source": "EXTERNAL",
-                            "Property": "N/A",
-                            "Value": "Defined outside workflow",
-                        }
-                    )
+                    # External variable - show processors that use it
+                    usages = var_data.get("usages", [])
+                    for usage in usages:
+                        all_variables_data.append(
+                            {
+                                "Variable Name": clean_var_name,
+                                "Processor Name": usage["processor_name"],
+                                "Processor ID": usage["processor_id"],
+                                "Processor Type": usage["processor_type"].split(".")[
+                                    -1
+                                ],
+                                "Source": "EXTERNAL",
+                                "Property": usage["property_name"],
+                                "Value": f"Used in: {usage['variable_expression']}",
+                            }
+                        )
 
             if all_variables_data:
                 details_df = pd.DataFrame(all_variables_data)
