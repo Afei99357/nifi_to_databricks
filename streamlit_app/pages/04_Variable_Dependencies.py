@@ -50,10 +50,9 @@ def display_variable_results(result, uploaded_file):
             return
 
         # Tabs for different analysis views
-        tab1, tab2, tab3, tab4 = st.tabs(
+        tab1, tab2, tab3 = st.tabs(
             [
                 "📋 Variable Details",
-                "🔄 Variable Flow Tracking",
                 "📝 Variable Actions",
                 "🌐 Variable Flow Connections",
             ]
@@ -118,7 +117,7 @@ def display_variable_results(result, uploaded_file):
                     selected_var_filter = st.selectbox(
                         "Filter by Variable:",
                         ["All"] + unique_vars,
-                        key="var_details_filter",
+                        key="var_details_filter_tab1",
                     )
 
                 with col2:
@@ -126,7 +125,7 @@ def display_variable_results(result, uploaded_file):
                     source_filter = st.selectbox(
                         "Filter by Source:",
                         ["All", "Known", "Unknown Source"],
-                        key="source_filter",
+                        key="source_filter_tab1",
                     )
 
                 # Apply filters
@@ -148,9 +147,30 @@ def display_variable_results(result, uploaded_file):
                         f"Showing {len(filtered_details_df)} of {len(details_df)} variable definitions"
                     )
 
-                # Display table
+                # Display table with column configuration
                 st.dataframe(
-                    filtered_details_df, use_container_width=True, hide_index=False
+                    filtered_details_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Variable Name": st.column_config.TextColumn(
+                            "Variable Name", width="medium"
+                        ),
+                        "Processor Name": st.column_config.TextColumn(
+                            "Processor Name", width="medium"
+                        ),
+                        "Processor ID": st.column_config.TextColumn(
+                            "Processor ID", width="small"
+                        ),
+                        "Processor Type": st.column_config.TextColumn(
+                            "Processor Type", width="small"
+                        ),
+                        "Source": st.column_config.TextColumn("Source", width="small"),
+                        "Property": st.column_config.TextColumn(
+                            "Property", width="medium"
+                        ),
+                        "Value": st.column_config.TextColumn("Value", width="large"),
+                    },
                 )
 
                 # Download button
@@ -165,130 +185,8 @@ def display_variable_results(result, uploaded_file):
             else:
                 st.warning("No variable details available.")
 
-        # Tab 2: Variable Flow Tracking
+        # Tab 2: Variable Actions
         with tab2:
-            st.markdown("### 🔄 Variable Flow Tracking")
-            st.info(
-                "Trace how variables flow from definition through modification to usage."
-            )
-
-            # Variable selector - clean variable names for display
-            clean_variable_names = {name.strip(): name for name in variables.keys()}
-            display_names = sorted(clean_variable_names.keys())
-
-            if display_names:
-                selected_display_var = st.selectbox(
-                    "Select Variable to Trace:",
-                    options=display_names,
-                    key="flow_var_selector",
-                )
-                # Get the original key for data lookup
-                selected_var = clean_variable_names.get(selected_display_var)
-
-                if selected_var and selected_var in variables:
-                    var_data = variables[selected_var]
-
-                    st.markdown(f"#### Variable Lineage: `{selected_display_var}`")
-
-                    # Flow Statistics - horizontal layout
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Processors", var_data["processor_count"])
-                    with col2:
-                        st.metric("Definitions", var_data["definition_count"])
-                    with col3:
-                        st.metric("Usages", var_data["usage_count"])
-                    with col4:
-                        if var_data["is_external"]:
-                            st.error("⚠️ Unknown Source")
-                        else:
-                            st.success("✅ Known")
-
-                    # Flow chain table - full width
-                    st.markdown("**🔄 Processor Flow Chain:**")
-
-                    # Build flow chain table
-                    flow_data = []
-
-                    # Add definitions
-                    for definition in var_data.get("definitions", []):
-                        flow_data.append(
-                            {
-                                "Processor Name": definition["processor_name"],
-                                "Processor Type": definition["processor_type"].split(
-                                    "."
-                                )[-1],
-                                "Processor ID": definition["processor_id"],
-                                "Action": "Known",
-                                "Details": f"Creates variable in property: {definition['property_name']}",
-                                "Value/Expression": definition["property_value"],
-                            }
-                        )
-
-                    # Add usages
-                    for usage in var_data.get("usages", []):
-                        action = "USES"
-                        if "RouteOnAttribute" in usage["processor_type"]:
-                            action = "EVALUATES"
-                        elif "LogMessage" in usage["processor_type"]:
-                            action = "LOGS"
-                        elif "ExecuteStreamCommand" in usage["processor_type"]:
-                            action = "EXECUTES"
-
-                        flow_data.append(
-                            {
-                                "Processor Name": usage["processor_name"],
-                                "Processor Type": usage["processor_type"].split(".")[
-                                    -1
-                                ],
-                                "Processor ID": usage["processor_id"],
-                                "Action": action,
-                                "Details": f"Used in property: {usage['property_name']}",
-                                "Value/Expression": f"Usage: {usage['variable_expression']} in {usage['processor_name']}"
-                                + (
-                                    " (with functions)"
-                                    if usage.get("has_functions")
-                                    else ""
-                                ),
-                            }
-                        )
-
-                    if flow_data:
-                        flow_df = pd.DataFrame(flow_data)
-                        st.dataframe(
-                            flow_df, use_container_width=True, hide_index=False
-                        )
-                    else:
-                        st.info("No flow data available for this variable.")
-
-                    # Flow chains visualization
-                    flows = var_data.get("flows", [])
-                    if flows:
-                        st.markdown("#### 🔗 Variable Flow Chains")
-                        for i, flow in enumerate(flows[:5]):  # Show top 5 flows
-                            with st.expander(
-                                f"Flow Chain {i+1} (Length: {flow['chain_length']})",
-                                expanded=i == 0,
-                            ):
-                                # Show processor chain
-                                chain_processors = flow.get("processors", [])
-                                if chain_processors:
-                                    chain_text = " → ".join(
-                                        [
-                                            f"**{p['processor_name']}** ({p['processor_id']})"
-                                            for p in chain_processors
-                                        ]
-                                    )
-                                    st.markdown(chain_text)
-
-                                    # Show relationship types
-                                    relationships = flow.get("relationships", [])
-                                    if relationships:
-                                        rel_text = " → ".join(relationships)
-                                        st.caption(f"Connection types: {rel_text}")
-
-        # Tab 3: Variable Actions
-        with tab3:
             st.markdown("### 📝 Variable Actions Analysis")
             st.info("Analyze how variables are defined and used across processors.")
 
@@ -342,7 +240,24 @@ def display_variable_results(result, uploaded_file):
                 filtered_df = filtered_df.sort_values(
                     "Total Processors", ascending=False
                 )
-                st.dataframe(filtered_df, use_container_width=True, hide_index=False)
+                st.dataframe(
+                    filtered_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Variable Name": st.column_config.TextColumn(
+                            "Variable Name", width="medium"
+                        ),
+                        "Defines": st.column_config.NumberColumn(
+                            "Defines", width="small"
+                        ),
+                        "Uses": st.column_config.NumberColumn("Uses", width="small"),
+                        "Total Processors": st.column_config.NumberColumn(
+                            "Total Processors", width="small"
+                        ),
+                        "Status": st.column_config.TextColumn("Status", width="small"),
+                    },
+                )
 
                 # Variable details
                 if not filtered_df.empty:
@@ -355,7 +270,7 @@ def display_variable_results(result, uploaded_file):
                     selected_var_detail = st.selectbox(
                         "Select variable for detailed analysis:",
                         options=detail_options,
-                        key="action_var_detail",
+                        key="action_var_detail_tab3",
                     )
 
                     # Find the original variable key (may contain whitespace)
@@ -414,7 +329,24 @@ def display_variable_results(result, uploaded_file):
                             st.dataframe(
                                 definitions_df,
                                 use_container_width=True,
-                                hide_index=False,
+                                hide_index=True,
+                                column_config={
+                                    "Processor Name": st.column_config.TextColumn(
+                                        "Processor Name", width="medium"
+                                    ),
+                                    "Processor Type": st.column_config.TextColumn(
+                                        "Type", width="small"
+                                    ),
+                                    "Processor ID": st.column_config.TextColumn(
+                                        "ID", width="small"
+                                    ),
+                                    "Property": st.column_config.TextColumn(
+                                        "Property", width="medium"
+                                    ),
+                                    "Value": st.column_config.TextColumn(
+                                        "Value", width="large"
+                                    ),
+                                },
                             )
                         else:
                             st.warning(
@@ -449,13 +381,38 @@ def display_variable_results(result, uploaded_file):
 
                             usages_df = pd.DataFrame(usages_data)
                             st.dataframe(
-                                usages_df, use_container_width=True, hide_index=False
+                                usages_df,
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    "Processor Name": st.column_config.TextColumn(
+                                        "Processor Name", width="medium"
+                                    ),
+                                    "Processor Type": st.column_config.TextColumn(
+                                        "Type", width="small"
+                                    ),
+                                    "Processor ID": st.column_config.TextColumn(
+                                        "ID", width="small"
+                                    ),
+                                    "Property": st.column_config.TextColumn(
+                                        "Property", width="medium"
+                                    ),
+                                    "Expression": st.column_config.TextColumn(
+                                        "Expression", width="large"
+                                    ),
+                                    "Has Functions": st.column_config.TextColumn(
+                                        "Functions", width="small"
+                                    ),
+                                    "Context": st.column_config.TextColumn(
+                                        "Context", width="medium"
+                                    ),
+                                },
                             )
                         else:
                             st.info("ℹ️ No usages found")
 
-        # Tab 4: Variable Flow Connections
-        with tab4:
+        # Tab 3: Variable Flow Connections
+        with tab3:
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
@@ -502,7 +459,7 @@ def display_variable_results(result, uploaded_file):
                     var_filter_clean = st.selectbox(
                         "Filter by Variable:",
                         clean_var_options,
-                        key="conn_var_filter",
+                        key="conn_var_filter_tab4",
                     )
 
                     # Convert back to ${} format for filtering
@@ -516,7 +473,7 @@ def display_variable_results(result, uploaded_file):
                     conn_type_filter = st.selectbox(
                         "Filter by Connection Type:",
                         ["All"] + sorted(conn_df["Connection Type"].unique().tolist()),
-                        key="conn_type_filter",
+                        key="conn_type_filter_tab4",
                     )
 
                 # Apply filters
@@ -531,7 +488,32 @@ def display_variable_results(result, uploaded_file):
                     ]
 
                 st.dataframe(
-                    filtered_conn_df, use_container_width=True, hide_index=False
+                    filtered_conn_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Variable": st.column_config.TextColumn(
+                            "Variable", width="medium"
+                        ),
+                        "Source Processor": st.column_config.TextColumn(
+                            "Source Processor", width="medium"
+                        ),
+                        "Source ID": st.column_config.TextColumn(
+                            "Source ID", width="small"
+                        ),
+                        "Target Processor": st.column_config.TextColumn(
+                            "Target Processor", width="medium"
+                        ),
+                        "Target ID": st.column_config.TextColumn(
+                            "Target ID", width="small"
+                        ),
+                        "Connection Type": st.column_config.TextColumn(
+                            "Connection Type", width="small"
+                        ),
+                        "Flow Chain": st.column_config.TextColumn(
+                            "Flow Chain", width="large"
+                        ),
+                    },
                 )
 
                 # Variable Flow Chains for selected variable
@@ -551,9 +533,22 @@ def display_variable_results(result, uploaded_file):
                             "Complete flow chains showing how this variable moves through connected processors."
                         )
 
+                        # Control for number of chains to display
+                        max_chains = len(selected_var_flows)
+                        if max_chains > 10:
+                            num_chains_to_show = st.slider(
+                                "Number of flow chains to display:",
+                                min_value=1,
+                                max_value=max_chains,
+                                value=min(10, max_chains),
+                                key=f"flow_chains_slider_{var_filter_clean}",
+                            )
+                        else:
+                            num_chains_to_show = max_chains
+
                         for i, flow in enumerate(
-                            selected_var_flows[:5]
-                        ):  # Show top 5 flows
+                            selected_var_flows[:num_chains_to_show]
+                        ):
                             with st.expander(
                                 f"Flow Chain {i+1} (Length: {flow['chain_length']})",
                                 expanded=i == 0,
@@ -575,9 +570,9 @@ def display_variable_results(result, uploaded_file):
                                         rel_text = " → ".join(relationships)
                                         st.caption(f"Connection types: {rel_text}")
 
-                        if len(selected_var_flows) > 5:
+                        if num_chains_to_show < len(selected_var_flows):
                             st.info(
-                                f"📋 Showing first 5 of {len(selected_var_flows)} total flow chains"
+                                f"📋 Showing {num_chains_to_show} of {len(selected_var_flows)} total flow chains (use slider to show more)"
                             )
             else:
                 st.info("No variable flow connections found.")
