@@ -52,15 +52,117 @@ def display_variable_results(result, uploaded_file):
         # Tabs for different analysis views
         tab1, tab2, tab3, tab4 = st.tabs(
             [
+                "📋 Variable Details",
                 "🔄 Variable Flow Tracking",
                 "📝 Variable Actions",
                 "🌐 Variable Flow Connections",
-                "📋 Variable Summary",
             ]
         )
 
-        # Tab 1: Variable Flow Tracking
+        # Tab 1: Variable Details
         with tab1:
+            st.markdown("### 📋 Variable Details")
+            st.info(
+                "All variables in the workflow with their source processors (where they are extracted from)."
+            )
+
+            # Create comprehensive variable details table
+            all_variables_data = []
+
+            for var_name, var_data in variables.items():
+                clean_var_name = var_name.strip()
+
+                # Get all definitions (processors that extract/create this variable)
+                definitions = var_data.get("definitions", [])
+
+                if definitions:
+                    # Variable has definitions - show each processor that defines it
+                    for defn in definitions:
+                        all_variables_data.append(
+                            {
+                                "Variable Name": clean_var_name,
+                                "Processor Name": defn["processor_name"],
+                                "Processor ID": defn["processor_id"],
+                                "Processor Type": defn["processor_type"].split(".")[-1],
+                                "Source": "DEFINES",
+                                "Property": defn["property_name"],
+                                "Value": defn["property_value"],
+                            }
+                        )
+                else:
+                    # External variable - no definitions found
+                    all_variables_data.append(
+                        {
+                            "Variable Name": clean_var_name,
+                            "Processor Name": "External Variable",
+                            "Processor ID": "N/A",
+                            "Processor Type": "External",
+                            "Source": "EXTERNAL",
+                            "Property": "N/A",
+                            "Value": "Defined outside workflow",
+                        }
+                    )
+
+            if all_variables_data:
+                details_df = pd.DataFrame(all_variables_data)
+
+                # Filter controls
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Variable name filter
+                    unique_vars = sorted(details_df["Variable Name"].unique().tolist())
+                    selected_var_filter = st.selectbox(
+                        "Filter by Variable:",
+                        ["All"] + unique_vars,
+                        key="var_details_filter",
+                    )
+
+                with col2:
+                    # Source type filter
+                    source_filter = st.selectbox(
+                        "Filter by Source:",
+                        ["All", "DEFINES", "EXTERNAL"],
+                        key="source_filter",
+                    )
+
+                # Apply filters
+                filtered_details_df = details_df.copy()
+
+                if selected_var_filter != "All":
+                    filtered_details_df = filtered_details_df[
+                        filtered_details_df["Variable Name"] == selected_var_filter
+                    ]
+
+                if source_filter != "All":
+                    filtered_details_df = filtered_details_df[
+                        filtered_details_df["Source"] == source_filter
+                    ]
+
+                # Show filtered results count
+                if len(filtered_details_df) != len(details_df):
+                    st.info(
+                        f"Showing {len(filtered_details_df)} of {len(details_df)} variable definitions"
+                    )
+
+                # Display table
+                st.dataframe(
+                    filtered_details_df, use_container_width=True, hide_index=False
+                )
+
+                # Download button
+                csv_data = filtered_details_df.to_csv(index=False)
+                st.download_button(
+                    label=f"📥 Download Variable Details ({len(filtered_details_df)} items)",
+                    data=csv_data,
+                    file_name="variable_details.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.warning("No variable details available.")
+
+        # Tab 2: Variable Flow Tracking
+        with tab2:
             st.markdown("### 🔄 Variable Flow Tracking")
             st.info(
                 "Trace how variables flow from definition through modification to usage."
@@ -191,7 +293,7 @@ def display_variable_results(result, uploaded_file):
                                 if chain_processors:
                                     chain_text = " → ".join(
                                         [
-                                            f"**{p['processor_name']}** ({p['processor_type'].split('.')[-1]})"
+                                            f"**{p['processor_name']}** ({p['processor_id']})"
                                             for p in chain_processors
                                         ]
                                     )
@@ -203,8 +305,8 @@ def display_variable_results(result, uploaded_file):
                                         rel_text = " → ".join(relationships)
                                         st.caption(f"Connection types: {rel_text}")
 
-        # Tab 2: Variable Actions
-        with tab2:
+        # Tab 3: Variable Actions
+        with tab3:
             st.markdown("### 📝 Variable Actions Analysis")
             st.info(
                 "Analyze how variables are defined, modified, and used across processors."
@@ -313,10 +415,9 @@ def display_variable_results(result, uploaded_file):
                             st.markdown("*Processors that define/set this variable:*")
 
                             definitions_data = []
-                            for i, defn in enumerate(definitions):
+                            for defn in definitions:
                                 definitions_data.append(
                                     {
-                                        "#": i + 1,
                                         "Processor Name": defn["processor_name"],
                                         "Processor Type": defn["processor_type"].split(
                                             "."
@@ -349,10 +450,9 @@ def display_variable_results(result, uploaded_file):
                             )
 
                             transformations_data = []
-                            for i, trans in enumerate(transformations):
+                            for trans in transformations:
                                 transformations_data.append(
                                     {
-                                        "#": i + 1,
                                         "Processor Name": trans["processor_name"],
                                         "Processor ID": trans["processor_id"],
                                         "Type": trans["transformation_type"].title(),
@@ -380,10 +480,9 @@ def display_variable_results(result, uploaded_file):
                             st.markdown("*Processors that read/use this variable:*")
 
                             usages_data = []
-                            for i, usage in enumerate(usages):
+                            for usage in usages:
                                 usages_data.append(
                                     {
-                                        "#": i + 1,
                                         "Processor Name": usage["processor_name"],
                                         "Processor Type": usage["processor_type"].split(
                                             "."
@@ -411,7 +510,7 @@ def display_variable_results(result, uploaded_file):
         with tab3:
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
-                "Shows how variables move through processor connections (925 variable flows vs 671 unique processor connections in Lineage page)."
+                "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
             )
 
             # Build connection flow data
@@ -471,81 +570,54 @@ def display_variable_results(result, uploaded_file):
                 st.dataframe(
                     filtered_conn_df, use_container_width=True, hide_index=False
                 )
+
+                # Variable Flow Chains for selected variable
+                if var_filter != "All":
+                    selected_var_flows = {}
+                    for var_name, var_data in variables.items():
+                        clean_var_name = var_name.strip()
+                        if f"${{{clean_var_name}}}" == var_filter:
+                            selected_var_flows = var_data.get("flows", [])
+                            break
+
+                    if selected_var_flows:
+                        st.markdown(
+                            f"#### 🔗 Variable Flow Chains for `{var_filter.replace('${', '').replace('}', '')}`"
+                        )
+                        st.info(
+                            "Complete flow chains showing how this variable moves through connected processors."
+                        )
+
+                        for i, flow in enumerate(
+                            selected_var_flows[:5]
+                        ):  # Show top 5 flows
+                            with st.expander(
+                                f"Flow Chain {i+1} (Length: {flow['chain_length']})",
+                                expanded=i == 0,
+                            ):
+                                # Show processor chain
+                                chain_processors = flow.get("processors", [])
+                                if chain_processors:
+                                    chain_text = " → ".join(
+                                        [
+                                            f"**{p['processor_name']}** ({p['processor_id']})"
+                                            for p in chain_processors
+                                        ]
+                                    )
+                                    st.markdown(chain_text)
+
+                                    # Show relationship types
+                                    relationships = flow.get("relationships", [])
+                                    if relationships:
+                                        rel_text = " → ".join(relationships)
+                                        st.caption(f"Connection types: {rel_text}")
+
+                        if len(selected_var_flows) > 5:
+                            st.info(
+                                f"📋 Showing first 5 of {len(selected_var_flows)} total flow chains"
+                            )
             else:
                 st.info("No variable flow connections found.")
-
-        # Tab 4: Variable Summary
-        with tab4:
-            st.markdown("### 📋 Variable Summary Report")
-
-            # Generate summary report
-            report_lines = [
-                f"# Variable Dependencies Analysis Report",
-                f"",
-                f"**Analysis Date:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                f"**Workflow File:** {uploaded_file.name}",
-                f"",
-                f"## Summary Statistics",
-                f"",
-                f"- **Total Variables Found:** {result.get('total_variables', 0)}",
-                f"- **Internally Defined Variables:** {result.get('defined_variables', 0)}",
-                f"- **External Variables:** {result.get('external_variables', 0)}",
-                f"- **Total Processors Analyzed:** {result.get('total_processors', 0)}",
-                f"",
-            ]
-
-            # Top variables by usage
-            if variables:
-                sorted_vars = sorted(
-                    variables.items(),
-                    key=lambda x: x[1]["processor_count"],
-                    reverse=True,
-                )
-
-                report_lines.extend(
-                    [
-                        f"## Most Used Variables",
-                        f"",
-                    ]
-                )
-
-                for i, (var_name, var_data) in enumerate(sorted_vars[:10]):
-                    report_lines.append(
-                        f"{i+1}. **${{{var_name}}}** - Used by {var_data['processor_count']} processors"
-                    )
-
-                report_lines.extend(
-                    [
-                        f"",
-                        f"## External Variable Dependencies",
-                        f"",
-                    ]
-                )
-
-                external_vars = [
-                    (name, data)
-                    for name, data in variables.items()
-                    if data["is_external"]
-                ]
-                if external_vars:
-                    for var_name, var_data in external_vars:
-                        report_lines.append(
-                            f"- **${{{var_name}}}** - Used by {var_data['usage_count']} processors"
-                        )
-                else:
-                    report_lines.append("- No external variables found")
-
-            report = "\n".join(report_lines)
-            st.markdown(report)
-
-            # Download button
-            st.download_button(
-                label="📥 Download Variable Analysis Report",
-                data=report,
-                file_name=f"variable_analysis_{uploaded_file.name.replace('.xml', '')}.md",
-                mime="text/markdown",
-                use_container_width=True,
-            )
 
     except Exception as e:
         st.error(f"❌ Error displaying variable analysis results: {e}")
