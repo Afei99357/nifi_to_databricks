@@ -84,7 +84,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Name": defn["processor_name"],
                                 "Processor ID": defn["processor_id"],
                                 "Processor Type": defn["processor_type"].split(".")[-1],
-                                "Source": "DEFINES",
+                                "Source": "Known",
                                 "Property": defn["property_name"],
                                 "Value": defn["property_value"],
                             }
@@ -125,7 +125,7 @@ def display_variable_results(result, uploaded_file):
                     # Source type filter
                     source_filter = st.selectbox(
                         "Filter by Source:",
-                        ["All", "DEFINES", "Unknown Source"],
+                        ["All", "Known", "Unknown Source"],
                         key="source_filter",
                     )
 
@@ -202,7 +202,7 @@ def display_variable_results(result, uploaded_file):
                         if var_data["is_external"]:
                             st.error("⚠️ Unknown Source")
                         else:
-                            st.success("✅ Internal")
+                            st.success("✅ Known")
 
                     # Flow chain table - full width
                     st.markdown("**🔄 Processor Flow Chain:**")
@@ -219,7 +219,7 @@ def display_variable_results(result, uploaded_file):
                                     "."
                                 )[-1],
                                 "Processor ID": definition["processor_id"],
-                                "Action": "DEFINES",
+                                "Action": "Known",
                                 "Details": f"Creates variable in property: {definition['property_name']}",
                                 "Value/Expression": definition["property_value"],
                             }
@@ -303,7 +303,7 @@ def display_variable_results(result, uploaded_file):
                         "Uses": var_data["usage_count"],
                         "Total Processors": var_data["processor_count"],
                         "Status": (
-                            "Unknown Source" if var_data["is_external"] else "Internal"
+                            "Unknown Source" if var_data["is_external"] else "Known"
                         ),
                     }
                 )
@@ -316,7 +316,7 @@ def display_variable_results(result, uploaded_file):
                 with col1:
                     status_filter = st.selectbox(
                         "Filter by Status:",
-                        ["All", "Internal", "Unknown Source"],
+                        ["All", "Known", "Unknown Source"],
                         key="action_status_filter",
                     )
 
