@@ -49,18 +49,30 @@ def display_variable_results(result, uploaded_file):
             st.warning("No variables found in the workflow.")
             return
 
-        # Tabs for different analysis views
-        tab1, tab2, tab3, tab4 = st.tabs(
-            [
-                "📋 Variable Details",
-                "🔄 Variable Flow Tracking",
-                "📝 Variable Actions",
-                "🌐 Variable Flow Connections",
-            ]
+        # Tab selection with session state persistence
+        tab_options = [
+            "📋 Variable Details",
+            "🔄 Variable Flow Tracking",
+            "📝 Variable Actions",
+            "🌐 Variable Flow Connections",
+        ]
+
+        # Initialize or get current tab selection
+        if "variable_active_tab" not in st.session_state:
+            st.session_state["variable_active_tab"] = tab_options[0]
+
+        selected_tab = st.selectbox(
+            "Choose Analysis View:",
+            options=tab_options,
+            index=tab_options.index(st.session_state["variable_active_tab"]),
+            key="variable_tab_selector",
         )
 
+        # Update session state
+        st.session_state["variable_active_tab"] = selected_tab
+
         # Tab 1: Variable Details
-        with tab1:
+        if selected_tab == "📋 Variable Details":
             st.markdown("### 📋 Variable Details")
             st.info(
                 "All variables in the workflow with their source processors (where they are extracted from)."
@@ -84,7 +96,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Name": defn["processor_name"],
                                 "Processor ID": defn["processor_id"],
                                 "Processor Type": defn["processor_type"].split(".")[-1],
-                                "Source": "DEFINES",
+                                "Source": "Known",
                                 "Property": defn["property_name"],
                                 "Value": defn["property_value"],
                             }
@@ -125,7 +137,7 @@ def display_variable_results(result, uploaded_file):
                     # Source type filter
                     source_filter = st.selectbox(
                         "Filter by Source:",
-                        ["All", "DEFINES", "Unknown Source"],
+                        ["All", "Known", "Unknown Source"],
                         key="source_filter",
                     )
 
@@ -166,7 +178,7 @@ def display_variable_results(result, uploaded_file):
                 st.warning("No variable details available.")
 
         # Tab 2: Variable Flow Tracking
-        with tab2:
+        elif selected_tab == "🔄 Variable Flow Tracking":
             st.markdown("### 🔄 Variable Flow Tracking")
             st.info(
                 "Trace how variables flow from definition through modification to usage."
@@ -202,7 +214,7 @@ def display_variable_results(result, uploaded_file):
                         if var_data["is_external"]:
                             st.error("⚠️ Unknown Source")
                         else:
-                            st.success("✅ Internal")
+                            st.success("✅ Known")
 
                     # Flow chain table - full width
                     st.markdown("**🔄 Processor Flow Chain:**")
@@ -219,7 +231,7 @@ def display_variable_results(result, uploaded_file):
                                     "."
                                 )[-1],
                                 "Processor ID": definition["processor_id"],
-                                "Action": "DEFINES",
+                                "Action": "Known",
                                 "Details": f"Creates variable in property: {definition['property_name']}",
                                 "Value/Expression": definition["property_value"],
                             }
@@ -288,7 +300,7 @@ def display_variable_results(result, uploaded_file):
                                         st.caption(f"Connection types: {rel_text}")
 
         # Tab 3: Variable Actions
-        with tab3:
+        elif selected_tab == "📝 Variable Actions":
             st.markdown("### 📝 Variable Actions Analysis")
             st.info("Analyze how variables are defined and used across processors.")
 
@@ -303,7 +315,7 @@ def display_variable_results(result, uploaded_file):
                         "Uses": var_data["usage_count"],
                         "Total Processors": var_data["processor_count"],
                         "Status": (
-                            "Unknown Source" if var_data["is_external"] else "Internal"
+                            "Unknown Source" if var_data["is_external"] else "Known"
                         ),
                     }
                 )
@@ -316,7 +328,7 @@ def display_variable_results(result, uploaded_file):
                 with col1:
                     status_filter = st.selectbox(
                         "Filter by Status:",
-                        ["All", "Internal", "Unknown Source"],
+                        ["All", "Known", "Unknown Source"],
                         key="action_status_filter",
                     )
 
@@ -455,7 +467,7 @@ def display_variable_results(result, uploaded_file):
                             st.info("ℹ️ No usages found")
 
         # Tab 4: Variable Flow Connections
-        with tab4:
+        elif selected_tab == "🌐 Variable Flow Connections":
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
@@ -551,9 +563,22 @@ def display_variable_results(result, uploaded_file):
                             "Complete flow chains showing how this variable moves through connected processors."
                         )
 
+                        # Control for number of chains to display
+                        max_chains = len(selected_var_flows)
+                        if max_chains > 10:
+                            num_chains_to_show = st.slider(
+                                "Number of flow chains to display:",
+                                min_value=1,
+                                max_value=max_chains,
+                                value=min(10, max_chains),
+                                key=f"flow_chains_slider_{var_filter_clean}",
+                            )
+                        else:
+                            num_chains_to_show = max_chains
+
                         for i, flow in enumerate(
-                            selected_var_flows[:5]
-                        ):  # Show top 5 flows
+                            selected_var_flows[:num_chains_to_show]
+                        ):
                             with st.expander(
                                 f"Flow Chain {i+1} (Length: {flow['chain_length']})",
                                 expanded=i == 0,
@@ -575,9 +600,9 @@ def display_variable_results(result, uploaded_file):
                                         rel_text = " → ".join(relationships)
                                         st.caption(f"Connection types: {rel_text}")
 
-                        if len(selected_var_flows) > 5:
+                        if num_chains_to_show < len(selected_var_flows):
                             st.info(
-                                f"📋 Showing first 5 of {len(selected_var_flows)} total flow chains"
+                                f"📋 Showing {num_chains_to_show} of {len(selected_var_flows)} total flow chains (use slider to show more)"
                             )
             else:
                 st.info("No variable flow connections found.")
