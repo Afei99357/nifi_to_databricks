@@ -178,7 +178,7 @@ def display_variable_results(result, uploaded_file):
                 st.warning("No variable details available.")
 
         # Tab 2: Variable Flow Tracking
-        elif selected_tab == "🔄 Variable Flow Tracking":
+        if selected_tab == "🔄 Variable Flow Tracking":
             st.markdown("### 🔄 Variable Flow Tracking")
             st.info(
                 "Trace how variables flow from definition through modification to usage."
@@ -300,7 +300,7 @@ def display_variable_results(result, uploaded_file):
                                         st.caption(f"Connection types: {rel_text}")
 
         # Tab 3: Variable Actions
-        elif selected_tab == "📝 Variable Actions":
+        if selected_tab == "📝 Variable Actions":
             st.markdown("### 📝 Variable Actions Analysis")
             st.info("Analyze how variables are defined and used across processors.")
 
@@ -467,7 +467,7 @@ def display_variable_results(result, uploaded_file):
                             st.info("ℹ️ No usages found")
 
         # Tab 4: Variable Flow Connections
-        elif selected_tab == "🌐 Variable Flow Connections":
+        if selected_tab == "🌐 Variable Flow Connections":
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
