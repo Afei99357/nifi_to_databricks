@@ -159,6 +159,8 @@ def find_variable_usage(processors: List[Dict[str, Any]]) -> Dict[str, List]:
                     clean_var_name = (
                         var_name.split(":")[0] if ":" in var_name else var_name
                     )
+                    # Remove whitespace and newlines from variable names
+                    clean_var_name = clean_var_name.strip()
 
                     variable_usage[clean_var_name].append(
                         {
@@ -328,6 +330,8 @@ def analyze_variable_transformations(
                         clean_input_var = (
                             input_var.split(":")[0] if ":" in input_var else input_var
                         )
+                        # Remove whitespace and newlines from variable names
+                        clean_input_var = clean_input_var.strip()
 
                         transformations[clean_input_var].append(
                             {

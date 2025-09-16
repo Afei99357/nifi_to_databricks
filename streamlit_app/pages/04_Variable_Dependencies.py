@@ -54,7 +54,7 @@ def display_variable_results(result, uploaded_file):
             [
                 "🔄 Variable Flow Tracking",
                 "📝 Variable Actions",
-                "🌐 Flow Connections",
+                "🌐 Variable Flow Connections",
                 "📋 Variable Summary",
             ]
         )
@@ -66,19 +66,23 @@ def display_variable_results(result, uploaded_file):
                 "Trace how variables flow from definition through modification to usage."
             )
 
-            # Variable selector
-            variable_names = sorted(variables.keys())
-            if variable_names:
-                selected_var = st.selectbox(
+            # Variable selector - clean variable names for display
+            clean_variable_names = {name.strip(): name for name in variables.keys()}
+            display_names = sorted(clean_variable_names.keys())
+
+            if display_names:
+                selected_display_var = st.selectbox(
                     "Select Variable to Trace:",
-                    options=variable_names,
+                    options=display_names,
                     key="flow_var_selector",
                 )
+                # Get the original key for data lookup
+                selected_var = clean_variable_names.get(selected_display_var)
 
                 if selected_var and selected_var in variables:
                     var_data = variables[selected_var]
 
-                    st.markdown(f"#### Variable Lineage: `{selected_var}`")
+                    st.markdown(f"#### Variable Lineage: `{selected_display_var}`")
 
                     # Flow Statistics - horizontal layout
                     col1, col2, col3, col4 = st.columns(4)
@@ -108,14 +112,10 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Type": definition["processor_type"].split(
                                     "."
                                 )[-1],
-                                "Processor ID": definition["processor_id"][:8] + "...",
+                                "Processor ID": definition["processor_id"],
                                 "Action": "DEFINES",
-                                "Details": f"Property: {definition['property_name']}",
-                                "Value/Expression": (
-                                    definition["property_value"][:50] + "..."
-                                    if len(definition["property_value"]) > 50
-                                    else definition["property_value"]
-                                ),
+                                "Details": f"Creates variable in property: {definition['property_name']}",
+                                "Value/Expression": definition["property_value"],
                             }
                         )
 
@@ -127,19 +127,17 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Type": transform["processor_type"].split(
                                     "."
                                 )[-1],
-                                "Processor ID": transform["processor_id"][:8] + "...",
+                                "Processor ID": transform["processor_id"],
                                 "Action": (
                                     "MODIFIES"
                                     if transform["transformation_type"]
                                     == "modification"
                                     else "TRANSFORMS"
                                 ),
-                                "Details": f"→ {transform['output_variable']}",
-                                "Value/Expression": (
-                                    transform["transformation_expression"][:50] + "..."
-                                    if len(transform["transformation_expression"]) > 50
-                                    else transform["transformation_expression"]
-                                ),
+                                "Details": f"Transforms into: {transform['output_variable']}",
+                                "Value/Expression": transform[
+                                    "transformation_expression"
+                                ],
                             }
                         )
 
@@ -159,9 +157,9 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Type": usage["processor_type"].split(".")[
                                     -1
                                 ],
-                                "Processor ID": usage["processor_id"][:8] + "...",
+                                "Processor ID": usage["processor_id"],
                                 "Action": action,
-                                "Details": f"In: {usage['property_name']}",
+                                "Details": f"Used in property: {usage['property_name']}",
                                 "Value/Expression": usage["variable_expression"]
                                 + (
                                     " (with functions)"
@@ -173,7 +171,9 @@ def display_variable_results(result, uploaded_file):
 
                     if flow_data:
                         flow_df = pd.DataFrame(flow_data)
-                        st.dataframe(flow_df, use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            flow_df, use_container_width=True, hide_index=False
+                        )
                     else:
                         st.info("No flow data available for this variable.")
 
@@ -213,9 +213,10 @@ def display_variable_results(result, uploaded_file):
             # Create action summary table
             action_data = []
             for var_name, var_data in variables.items():
+                clean_var_name = var_name.strip()  # Clean variable name for display
                 action_data.append(
                     {
-                        "Variable Name": f"${{{var_name}}}",
+                        "Variable Name": f"${{{clean_var_name}}}",
                         "Defines": var_data["definition_count"],
                         "Modifies": len(var_data.get("transformations", [])),
                         "Uses": var_data["usage_count"],
@@ -256,25 +257,32 @@ def display_variable_results(result, uploaded_file):
 
                 # Sort by total flow
                 filtered_df = filtered_df.sort_values("Total Flow", ascending=False)
-                st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+                st.dataframe(filtered_df, use_container_width=True, hide_index=False)
 
                 # Variable details
                 if not filtered_df.empty:
+                    # Clean variable names for detailed selection
+                    detail_options = ["None"] + [
+                        v.replace("${", "").replace("}", "").strip()
+                        for v in filtered_df["Variable Name"].tolist()
+                    ]
+
                     selected_var_detail = st.selectbox(
                         "Select variable for detailed analysis:",
-                        options=["None"]
-                        + [
-                            v.replace("${", "").replace("}", "")
-                            for v in filtered_df["Variable Name"].tolist()
-                        ],
+                        options=detail_options,
                         key="action_var_detail",
                     )
 
-                    if (
-                        selected_var_detail != "None"
-                        and selected_var_detail in variables
-                    ):
-                        var_detail = variables[selected_var_detail]
+                    # Find the original variable key (may contain whitespace)
+                    original_var_key = None
+                    if selected_var_detail != "None":
+                        for var_key in variables.keys():
+                            if var_key.strip() == selected_var_detail:
+                                original_var_key = var_key
+                                break
+
+                    if original_var_key and original_var_key in variables:
+                        var_detail = variables[original_var_key]
 
                         st.markdown(
                             f"#### Variable Details: `${{{selected_var_detail}}}`"
@@ -323,7 +331,7 @@ def display_variable_results(result, uploaded_file):
                             st.dataframe(
                                 definitions_df,
                                 use_container_width=True,
-                                hide_index=True,
+                                hide_index=False,
                             )
                         else:
                             st.warning(
@@ -360,7 +368,7 @@ def display_variable_results(result, uploaded_file):
                             st.dataframe(
                                 transformations_df,
                                 use_container_width=True,
-                                hide_index=True,
+                                hide_index=False,
                             )
                         else:
                             st.info("ℹ️ No transformations found")
@@ -394,15 +402,17 @@ def display_variable_results(result, uploaded_file):
 
                             usages_df = pd.DataFrame(usages_data)
                             st.dataframe(
-                                usages_df, use_container_width=True, hide_index=True
+                                usages_df, use_container_width=True, hide_index=False
                             )
                         else:
                             st.info("ℹ️ No usages found")
 
-        # Tab 3: Flow Connections
+        # Tab 3: Variable Flow Connections
         with tab3:
-            st.markdown("### 🌐 Variable Flow Through Connections")
-            st.info("Shows how variables move through processor connections.")
+            st.markdown("### 🌐 Variable Flow Connections")
+            st.info(
+                "Shows how variables move through processor connections (925 variable flows vs 671 unique processor connections in Lineage page)."
+            )
 
             # Build connection flow data
             connection_flows = []
@@ -420,9 +430,9 @@ def display_variable_results(result, uploaded_file):
                             {
                                 "Variable": f"${{{var_name}}}",
                                 "Source Processor": source["processor_name"],
-                                "Source ID": source["processor_id"][:8] + "...",
+                                "Source ID": source["processor_id"],
                                 "Target Processor": target["processor_name"],
-                                "Target ID": target["processor_id"][:8] + "...",
+                                "Target ID": target["processor_id"],
                                 "Connection Type": rel,
                                 "Flow Chain": f"{source['processor_name']} → {target['processor_name']}",
                             }
@@ -459,7 +469,7 @@ def display_variable_results(result, uploaded_file):
                     ]
 
                 st.dataframe(
-                    filtered_conn_df, use_container_width=True, hide_index=True
+                    filtered_conn_df, use_container_width=True, hide_index=False
                 )
             else:
                 st.info("No variable flow connections found.")
