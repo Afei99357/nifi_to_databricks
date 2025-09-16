@@ -14,7 +14,6 @@ __all__ = [
     "find_variable_definitions",
     "find_variable_usage",
     "trace_variable_flows",
-    "analyze_variable_transformations",
 ]
 
 
@@ -40,7 +39,6 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
     variable_definitions = find_variable_definitions(processors)
     variable_usage = find_variable_usage(processors)
     variable_flows = trace_variable_flows(processors, connections)
-    variable_transformations = analyze_variable_transformations(processors)
 
     # Build comprehensive mapping
     all_variables = set(variable_definitions.keys()) | set(variable_usage.keys())
@@ -50,14 +48,12 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
         definitions = variable_definitions.get(var_name, [])
         usages = variable_usage.get(var_name, [])
         flows = variable_flows.get(var_name, [])
-        transformations = variable_transformations.get(var_name, [])
 
         variable_analysis[var_name] = {
             "variable_name": var_name,
             "definitions": definitions,
             "usages": usages,
             "flows": flows,
-            "transformations": transformations,
             "definition_count": len(definitions),
             "usage_count": len(usages),
             "processor_count": len(
@@ -87,7 +83,7 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
 
 def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, List]:
     """
-    Find processors that DEFINE variables (typically UpdateAttribute processors).
+    Find processors that DEFINE/SET variables (any assignment to a variable name).
 
     Args:
         processors: List of all processors from XML
@@ -107,10 +103,12 @@ def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, Lis
         if "UpdateAttribute" in proc_type or "EvaluateJsonPath" in proc_type:
             for prop_name, prop_value in properties.items():
                 if isinstance(prop_value, str) and prop_value:
-                    # Property names without ${} are likely variable definitions
-                    # Property values can contain expressions that define variables
+                    # Property names without ${} are variable assignments
                     if not re.search(r"\$\{[^}]+\}", prop_name):
-                        # This property defines a variable with prop_name as the variable name
+                        # This property defines/sets a variable
+                        definition_type = (
+                            "static" if "${" not in prop_value else "dynamic"
+                        )
                         variable_definitions[prop_name].append(
                             {
                                 "processor_id": proc_id,
@@ -118,9 +116,7 @@ def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, Lis
                                 "processor_type": proc_type,
                                 "property_name": prop_name,
                                 "property_value": prop_value,
-                                "definition_type": (
-                                    "static" if "${" not in prop_value else "dynamic"
-                                ),
+                                "definition_type": definition_type,
                             }
                         )
 
@@ -129,7 +125,7 @@ def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, Lis
 
 def find_variable_usage(processors: List[Dict[str, Any]]) -> Dict[str, List]:
     """
-    Find processors that USE variables (${variable} patterns).
+    Find processors that USE/READ variables (${variable} patterns).
 
     Args:
         processors: List of all processors from XML
@@ -295,59 +291,3 @@ def trace_processor_flow(
 
     dfs(start_proc_id, [], [])
     return flow_chains
-
-
-def analyze_variable_transformations(
-    processors: List[Dict[str, Any]],
-) -> Dict[str, List]:
-    """
-    Analyze how variables are transformed/modified by processors.
-
-    Args:
-        processors: List of all processors
-
-    Returns:
-        Dictionary mapping variable names to their transformations
-    """
-    transformations = defaultdict(list)
-
-    for proc in processors:
-        proc_id = proc.get("id", "unknown")
-        proc_name = proc.get("name", "unknown")
-        proc_type = proc.get("type", "unknown")
-        properties = proc.get("properties", {})
-
-        # Look for UpdateAttribute processors that modify variables
-        if "UpdateAttribute" in proc_type:
-            for prop_name, prop_value in properties.items():
-                if isinstance(prop_value, str) and "${" in prop_value:
-                    # This processor transforms variables
-                    # Extract input variables and output variable
-                    input_vars = re.findall(r"\$\{([^}]+)\}", prop_value)
-                    output_var = prop_name
-
-                    for input_var in input_vars:
-                        clean_input_var = (
-                            input_var.split(":")[0] if ":" in input_var else input_var
-                        )
-                        # Remove whitespace and newlines from variable names
-                        clean_input_var = clean_input_var.strip()
-
-                        transformations[clean_input_var].append(
-                            {
-                                "processor_id": proc_id,
-                                "processor_name": proc_name,
-                                "processor_type": proc_type,
-                                "input_variable": clean_input_var,
-                                "output_variable": output_var,
-                                "transformation_expression": prop_value,
-                                "transformation_type": (
-                                    "modification"
-                                    if clean_input_var == output_var
-                                    else "derivation"
-                                ),
-                                "has_functions": ":" in input_var,
-                            }
-                        )
-
-    return dict(transformations)

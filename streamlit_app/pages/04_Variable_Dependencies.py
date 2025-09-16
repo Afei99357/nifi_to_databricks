@@ -38,7 +38,7 @@ def display_variable_results(result, uploaded_file):
         with col2:
             st.metric("Defined Variables", result.get("defined_variables", 0))
         with col3:
-            st.metric("External Variables", result.get("external_variables", 0))
+            st.metric("Unknown Source Variables", result.get("external_variables", 0))
         with col4:
             st.metric("Total Processors", result.get("total_processors", 0))
 
@@ -101,7 +101,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Type": usage["processor_type"].split(".")[
                                     -1
                                 ],
-                                "Source": "EXTERNAL",
+                                "Source": "Unknown Source",
                                 "Property": usage["property_name"],
                                 "Value": f"Usage: {usage['variable_expression']} in {usage['processor_name']}",
                             }
@@ -125,7 +125,7 @@ def display_variable_results(result, uploaded_file):
                     # Source type filter
                     source_filter = st.selectbox(
                         "Filter by Source:",
-                        ["All", "DEFINES", "EXTERNAL"],
+                        ["All", "DEFINES", "Unknown Source"],
                         key="source_filter",
                     )
 
@@ -200,7 +200,7 @@ def display_variable_results(result, uploaded_file):
                         st.metric("Usages", var_data["usage_count"])
                     with col4:
                         if var_data["is_external"]:
-                            st.error("⚠️ External")
+                            st.error("⚠️ Unknown Source")
                         else:
                             st.success("✅ Internal")
 
@@ -222,28 +222,6 @@ def display_variable_results(result, uploaded_file):
                                 "Action": "DEFINES",
                                 "Details": f"Creates variable in property: {definition['property_name']}",
                                 "Value/Expression": definition["property_value"],
-                            }
-                        )
-
-                    # Add transformations
-                    for transform in var_data.get("transformations", []):
-                        flow_data.append(
-                            {
-                                "Processor Name": transform["processor_name"],
-                                "Processor Type": transform["processor_type"].split(
-                                    "."
-                                )[-1],
-                                "Processor ID": transform["processor_id"],
-                                "Action": (
-                                    "MODIFIES"
-                                    if transform["transformation_type"]
-                                    == "modification"
-                                    else "TRANSFORMS"
-                                ),
-                                "Details": f"Transforms into: {transform['output_variable'].strip()}",
-                                "Value/Expression": transform[
-                                    "transformation_expression"
-                                ],
                             }
                         )
 
@@ -312,9 +290,7 @@ def display_variable_results(result, uploaded_file):
         # Tab 3: Variable Actions
         with tab3:
             st.markdown("### 📝 Variable Actions Analysis")
-            st.info(
-                "Analyze how variables are defined, modified, and used across processors."
-            )
+            st.info("Analyze how variables are defined and used across processors.")
 
             # Create action summary table
             action_data = []
@@ -324,10 +300,11 @@ def display_variable_results(result, uploaded_file):
                     {
                         "Variable Name": f"${{{clean_var_name}}}",
                         "Defines": var_data["definition_count"],
-                        "Modifies": len(var_data.get("transformations", [])),
                         "Uses": var_data["usage_count"],
-                        "Total Flow": var_data["processor_count"],
-                        "Status": "External" if var_data["is_external"] else "Internal",
+                        "Total Processors": var_data["processor_count"],
+                        "Status": (
+                            "Unknown Source" if var_data["is_external"] else "Internal"
+                        ),
                     }
                 )
 
@@ -339,7 +316,7 @@ def display_variable_results(result, uploaded_file):
                 with col1:
                     status_filter = st.selectbox(
                         "Filter by Status:",
-                        ["All", "Internal", "External"],
+                        ["All", "Internal", "Unknown Source"],
                         key="action_status_filter",
                     )
 
@@ -361,8 +338,10 @@ def display_variable_results(result, uploaded_file):
                 if min_usage > 0:
                     filtered_df = filtered_df[filtered_df["Uses"] >= min_usage]
 
-                # Sort by total flow
-                filtered_df = filtered_df.sort_values("Total Flow", ascending=False)
+                # Sort by total processors
+                filtered_df = filtered_df.sort_values(
+                    "Total Processors", ascending=False
+                )
                 st.dataframe(filtered_df, use_container_width=True, hide_index=False)
 
                 # Variable details
@@ -400,7 +379,6 @@ def display_variable_results(result, uploaded_file):
                             **What this shows:** The variable `${{{selected_var_detail}}}` analysis reveals:
 
                             • **Definitions**: Processors that SET this variable's value (typically UpdateAttribute processors)
-                            • **Transformations**: Processors that MODIFY or derive new variables from this one
                             • **Usages**: Processors that READ/USE this variable in their operations
 
                             This helps you understand the data flow and dependencies in your NiFi workflow.
@@ -440,46 +418,8 @@ def display_variable_results(result, uploaded_file):
                             )
                         else:
                             st.warning(
-                                "🔍 **External Variable** - No definitions found (defined outside workflow)"
+                                "🔍 **Unknown Source Variable** - No definitions found (source unknown)"
                             )
-
-                        # Transformations Table
-                        transformations = var_detail.get("transformations", [])
-                        st.markdown(
-                            f"#### ⚙️ Transformations ({len(transformations)} processors)"
-                        )
-                        if transformations:
-                            st.markdown(
-                                "*Processors that modify or derive new variables from this one:*"
-                            )
-
-                            transformations_data = []
-                            for trans in transformations:
-                                transformations_data.append(
-                                    {
-                                        "Processor Name": trans["processor_name"],
-                                        "Processor ID": trans["processor_id"],
-                                        "Type": trans["transformation_type"].title(),
-                                        "Input Variable": trans[
-                                            "input_variable"
-                                        ].strip(),
-                                        "Output Variable": trans[
-                                            "output_variable"
-                                        ].strip(),
-                                        "Expression": trans[
-                                            "transformation_expression"
-                                        ],
-                                    }
-                                )
-
-                            transformations_df = pd.DataFrame(transformations_data)
-                            st.dataframe(
-                                transformations_df,
-                                use_container_width=True,
-                                hide_index=False,
-                            )
-                        else:
-                            st.info("ℹ️ No transformations found")
 
                         # Usages Table
                         usages = var_detail.get("usages", [])
