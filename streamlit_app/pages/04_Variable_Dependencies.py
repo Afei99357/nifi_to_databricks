@@ -78,7 +78,7 @@ def display_variable_results(result, uploaded_file):
                 if selected_var and selected_var in variables:
                     var_data = variables[selected_var]
 
-                    st.markdown(f"#### Variable Lineage: `${{{selected_var}}}`")
+                    st.markdown(f"#### Variable Lineage: `{selected_var}`")
 
                     # Flow Statistics - horizontal layout
                     col1, col2, col3, col4 = st.columns(4)
@@ -323,22 +323,12 @@ def display_variable_results(result, uploaded_file):
                                         full_id = defn["processor_id"]
                                         st.code(f"ID: {full_id}", language=None)
 
-                                        # Full value with expandable view
+                                        # Show full values directly
                                         full_value = defn["property_value"]
-                                        if len(full_value) > 60:
-                                            st.write(
-                                                f"**Property:** `{defn['property_name']}`"
-                                            )
-                                            st.write(
-                                                f"**Value:** `{full_value[:60]}...`"
-                                            )
-                                            with st.expander("Show full value"):
-                                                st.code(full_value, language=None)
-                                        else:
-                                            st.write(
-                                                f"**Property:** `{defn['property_name']}`"
-                                            )
-                                            st.write(f"**Value:** `{full_value}`")
+                                        st.write(
+                                            f"**Property:** `{defn['property_name']}`"
+                                        )
+                                        st.write(f"**Value:** `{full_value}`")
 
                                     if i < len(definitions) - 1:
                                         st.divider()
@@ -376,14 +366,8 @@ def display_variable_results(result, uploaded_file):
 
                                         # Full transformation expression
                                         full_expr = trans["transformation_expression"]
-                                        if len(full_expr) > 80:
-                                            st.write(
-                                                f"**Expression:** `{full_expr[:80]}...`"
-                                            )
-                                            with st.expander("Show full expression"):
-                                                st.code(full_expr, language=None)
-                                        else:
-                                            st.code(full_expr, language=None)
+                                        st.write(f"**Expression:**")
+                                        st.code(full_expr, language=None)
 
                                     if i < len(transformations) - 1:
                                         st.divider()
