@@ -103,7 +103,7 @@ def display_variable_results(result, uploaded_file):
                                 ],
                                 "Source": "EXTERNAL",
                                 "Property": usage["property_name"],
-                                "Value": f"Used in: {usage['variable_expression']}",
+                                "Value": f"Usage: {usage['variable_expression']} in {usage['processor_name']}",
                             }
                         )
 
@@ -266,7 +266,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor ID": usage["processor_id"],
                                 "Action": action,
                                 "Details": f"Used in property: {usage['property_name']}",
-                                "Value/Expression": usage["variable_expression"]
+                                "Value/Expression": f"Usage: {usage['variable_expression']} in {usage['processor_name']}"
                                 + (
                                     " (with functions)"
                                     if usage.get("has_functions")
@@ -497,7 +497,7 @@ def display_variable_results(result, uploaded_file):
                                         )[-1],
                                         "Processor ID": usage["processor_id"],
                                         "Property": usage["property_name"],
-                                        "Expression": usage["variable_expression"],
+                                        "Expression": f"Usage: {usage['variable_expression']} in {usage['processor_name']}",
                                         "Has Functions": (
                                             "Yes"
                                             if usage.get("has_functions")
@@ -552,10 +552,24 @@ def display_variable_results(result, uploaded_file):
                 # Filter controls
                 col1, col2 = st.columns(2)
                 with col1:
-                    var_filter = st.selectbox(
+                    # Clean variable names for dropdown (remove ${} wrapper)
+                    clean_var_options = ["All"] + sorted(
+                        [
+                            var.replace("${", "").replace("}", "")
+                            for var in conn_df["Variable"].unique().tolist()
+                        ]
+                    )
+                    var_filter_clean = st.selectbox(
                         "Filter by Variable:",
-                        ["All"] + sorted(conn_df["Variable"].unique().tolist()),
+                        clean_var_options,
                         key="conn_var_filter",
+                    )
+
+                    # Convert back to ${} format for filtering
+                    var_filter = (
+                        f"${{{var_filter_clean}}}"
+                        if var_filter_clean != "All"
+                        else "All"
                     )
 
                 with col2:
@@ -591,7 +605,7 @@ def display_variable_results(result, uploaded_file):
 
                     if selected_var_flows:
                         st.markdown(
-                            f"#### 🔗 Variable Flow Chains for `{var_filter.replace('${', '').replace('}', '')}`"
+                            f"#### 🔗 Variable Flow Chains for `{var_filter_clean}`"
                         )
                         st.info(
                             "Complete flow chains showing how this variable moves through connected processors."
