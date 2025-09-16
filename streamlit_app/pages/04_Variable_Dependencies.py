@@ -306,9 +306,6 @@ def display_variable_results(result, uploaded_file):
 
                     # Flow chains visualization
                     flows = var_data.get("flows", [])
-                    st.write(
-                        f"**Debug:** Found {len(flows)} flow chains for variable `{selected_display_var}`"
-                    )
                     if flows:
                         st.markdown("#### 🔗 Variable Flow Chains")
 
@@ -351,10 +348,6 @@ def display_variable_results(result, uploaded_file):
                             st.info(
                                 f"📋 Showing {num_chains_to_show} of {len(flows)} total flow chains (use slider to show more)"
                             )
-                    else:
-                        st.warning(
-                            f"**Debug:** No flow chains found for variable `{selected_display_var}`. This variable may not have processor-to-processor connections."
-                        )
 
         # Tab 3: Variable Actions
         with tab3:
