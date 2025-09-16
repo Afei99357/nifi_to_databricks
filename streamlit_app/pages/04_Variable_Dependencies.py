@@ -293,128 +293,109 @@ def display_variable_results(result, uploaded_file):
                             """
                         )
 
-                        # Enhanced detailed view with expandable sections
+                        # Clean table-based detailed view
                         st.markdown("### 📋 Detailed Analysis")
 
-                        # Definitions Section
+                        # Definitions Table
                         definitions = var_detail.get("definitions", [])
+                        st.markdown(
+                            f"#### 📝 Definitions ({len(definitions)} processors)"
+                        )
                         if definitions:
-                            with st.expander(
-                                f"📝 Definitions ({len(definitions)} processors)",
-                                expanded=True,
-                            ):
-                                st.markdown(
-                                    "*Processors that define/set this variable:*"
+                            st.markdown("*Processors that define/set this variable:*")
+
+                            definitions_data = []
+                            for i, defn in enumerate(definitions):
+                                definitions_data.append(
+                                    {
+                                        "#": i + 1,
+                                        "Processor Name": defn["processor_name"],
+                                        "Processor Type": defn["processor_type"].split(
+                                            "."
+                                        )[-1],
+                                        "Processor ID": defn["processor_id"],
+                                        "Property": defn["property_name"],
+                                        "Value": defn["property_value"],
+                                    }
                                 )
 
-                                for i, defn in enumerate(definitions):
-                                    col1, col2 = st.columns([1, 3])
-
-                                    with col1:
-                                        st.markdown(
-                                            f"**{i+1}.** **{defn['processor_name']}**"
-                                        )
-                                        st.caption(
-                                            f"Type: {defn['processor_type'].split('.')[-1]}"
-                                        )
-
-                                    with col2:
-                                        # Full processor ID with copy button
-                                        full_id = defn["processor_id"]
-                                        st.code(f"ID: {full_id}", language=None)
-
-                                        # Show full values directly
-                                        full_value = defn["property_value"]
-                                        st.write(
-                                            f"**Property:** `{defn['property_name']}`"
-                                        )
-                                        st.write(f"**Value:** `{full_value}`")
-
-                                    if i < len(definitions) - 1:
-                                        st.divider()
+                            definitions_df = pd.DataFrame(definitions_data)
+                            st.dataframe(
+                                definitions_df,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
                         else:
                             st.warning(
                                 "🔍 **External Variable** - No definitions found (defined outside workflow)"
                             )
 
-                        # Transformations Section
+                        # Transformations Table
                         transformations = var_detail.get("transformations", [])
+                        st.markdown(
+                            f"#### ⚙️ Transformations ({len(transformations)} processors)"
+                        )
                         if transformations:
-                            with st.expander(
-                                f"⚙️ Transformations ({len(transformations)} processors)",
-                                expanded=True,
-                            ):
-                                st.markdown(
-                                    "*Processors that modify or derive new variables from this one:*"
+                            st.markdown(
+                                "*Processors that modify or derive new variables from this one:*"
+                            )
+
+                            transformations_data = []
+                            for i, trans in enumerate(transformations):
+                                transformations_data.append(
+                                    {
+                                        "#": i + 1,
+                                        "Processor Name": trans["processor_name"],
+                                        "Processor ID": trans["processor_id"],
+                                        "Type": trans["transformation_type"].title(),
+                                        "Input Variable": trans["input_variable"],
+                                        "Output Variable": trans["output_variable"],
+                                        "Expression": trans[
+                                            "transformation_expression"
+                                        ],
+                                    }
                                 )
 
-                                for i, trans in enumerate(transformations):
-                                    col1, col2 = st.columns([1, 3])
-
-                                    with col1:
-                                        st.markdown(
-                                            f"**{i+1}.** **{trans['processor_name']}**"
-                                        )
-                                        st.caption(
-                                            f"Type: {trans['transformation_type'].title()}"
-                                        )
-
-                                    with col2:
-                                        st.write(
-                                            f"**Output Variable:** `${{{trans['output_variable']}}}`"
-                                        )
-
-                                        # Full transformation expression
-                                        full_expr = trans["transformation_expression"]
-                                        st.write(f"**Expression:**")
-                                        st.code(full_expr, language=None)
-
-                                    if i < len(transformations) - 1:
-                                        st.divider()
+                            transformations_df = pd.DataFrame(transformations_data)
+                            st.dataframe(
+                                transformations_df,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
                         else:
                             st.info("ℹ️ No transformations found")
 
-                        # Usages Section
+                        # Usages Table
                         usages = var_detail.get("usages", [])
+                        st.markdown(f"#### 📖 Usages ({len(usages)} processors)")
                         if usages:
-                            usage_count = len(usages)
-                            with st.expander(
-                                f"📖 Usages ({usage_count} processors)",
-                                expanded=usage_count <= 10,
-                            ):
-                                st.markdown("*Processors that read/use this variable:*")
+                            st.markdown("*Processors that read/use this variable:*")
 
-                                # Show all usages with pagination if many
-                                display_count = min(len(usages), 20)  # Show up to 20
+                            usages_data = []
+                            for i, usage in enumerate(usages):
+                                usages_data.append(
+                                    {
+                                        "#": i + 1,
+                                        "Processor Name": usage["processor_name"],
+                                        "Processor Type": usage["processor_type"].split(
+                                            "."
+                                        )[-1],
+                                        "Processor ID": usage["processor_id"],
+                                        "Property": usage["property_name"],
+                                        "Expression": usage["variable_expression"],
+                                        "Has Functions": (
+                                            "Yes"
+                                            if usage.get("has_functions")
+                                            else "No"
+                                        ),
+                                        "Context": usage["usage_context"],
+                                    }
+                                )
 
-                                for i, usage in enumerate(usages[:display_count]):
-                                    col1, col2 = st.columns([1, 3])
-
-                                    with col1:
-                                        st.markdown(
-                                            f"**{i+1}.** **{usage['processor_name']}**"
-                                        )
-                                        st.caption(
-                                            f"Type: {usage['processor_type'].split('.')[-1]}"
-                                        )
-
-                                    with col2:
-                                        st.write(
-                                            f"**Used in:** `{usage['property_name']}`"
-                                        )
-                                        st.write(
-                                            f"**Expression:** `{usage['variable_expression']}`"
-                                        )
-                                        if usage.get("has_functions"):
-                                            st.caption("🔧 Contains NiFi functions")
-
-                                    if i < display_count - 1:
-                                        st.divider()
-
-                                if len(usages) > 20:
-                                    st.info(
-                                        f"📋 Showing first 20 of {len(usages)} total usages"
-                                    )
+                            usages_df = pd.DataFrame(usages_data)
+                            st.dataframe(
+                                usages_df, use_container_width=True, hide_index=True
+                            )
                         else:
                             st.info("ℹ️ No usages found")
 
