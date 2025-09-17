@@ -49,17 +49,34 @@ def display_variable_results(result, uploaded_file):
             st.warning("No variables found in the workflow.")
             return
 
-        # Tabs for different analysis views
-        tab1, tab2, tab3 = st.tabs(
-            [
-                "📋 Variable Details",
-                "📝 Variable Actions",
-                "🌐 Variable Flow Connections",
-            ]
+        # Sticky tabs implementation
+        TABS = [
+            "📋 Variable Details",
+            "📝 Variable Actions",
+            "🌐 Variable Flow Connections",
+        ]
+
+        # Read active tab from URL first, then session
+        active = st.query_params.get("tab", TABS[0])
+        if active not in TABS:
+            active = st.session_state.get("active_tab", TABS[0])
+
+        # Render a faux tab bar
+        idx = TABS.index(active)
+        choice = st.radio(
+            "Section",
+            TABS,
+            index=idx,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="active_tab",
         )
 
+        # Keep URL in sync so refresh/back works
+        st.query_params.update({"tab": choice})
+
         # Tab 1: Variable Details
-        with tab1:
+        if choice == "📋 Variable Details":
             st.markdown("### 📋 Variable Details")
             st.info(
                 "All variables in the workflow with their source processors (where they are extracted from)."
@@ -184,7 +201,7 @@ def display_variable_results(result, uploaded_file):
                 st.warning("No variable details available.")
 
         # Tab 2: Variable Actions
-        with tab2:
+        elif choice == "📝 Variable Actions":
             st.markdown("### 📝 Variable Actions Analysis")
             st.info("Analyze how variables are defined and used across processors.")
 
@@ -407,7 +424,7 @@ def display_variable_results(result, uploaded_file):
                             st.info("ℹ️ No usages found")
 
         # Tab 3: Variable Flow Connections
-        with tab3:
+        elif choice == "🌐 Variable Flow Connections":
             st.markdown("### 🌐 Variable Flow Connections")
             st.info(
                 "Shows variable flow paths between connected processors. Each row represents one hop where a variable flows from a defining processor to a using processor through NiFi connections. Only variables with actual flow paths are included (not all variables flow between processors)."
