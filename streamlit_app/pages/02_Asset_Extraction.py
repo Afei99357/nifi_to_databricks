@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
 import tempfile
 
@@ -12,151 +11,230 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import streamlit as st
 
-from tools.migration_orchestrator import extract_nifi_assets_only
+from tools.table_extraction import extract_all_tables_from_nifi_xml, get_table_summary
 
 # Configure the page
-st.set_page_config(page_title="Asset Extraction", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Table Extraction", page_icon="🗄️", layout="wide")
 
 
-def display_asset_results(result, uploaded_file):
-    """Display asset extraction results from either fresh run or cache"""
-    # Handle both string results (error case) and dict results
-    if isinstance(result, str):
-        st.error(f"❌ Asset extraction failed: {result}")
+def display_table_results(tables, uploaded_file):
+    """Display table extraction results"""
+    if isinstance(tables, str):
+        st.error(f"❌ Table extraction failed: {tables}")
         return
 
-    if not isinstance(result, dict):
-        st.error(f"❌ Asset extraction failed: Invalid result format - {type(result)}")
+    if not isinstance(tables, list):
+        st.error(f"❌ Table extraction failed: Invalid result format - {type(tables)}")
         return
 
     try:
+        # Get summary statistics
+        summary = get_table_summary(tables)
+
         # Display summary metrics
-        if result.get("summary"):
-            summary = result["summary"]
+        st.markdown("### 📊 Table Extraction Summary")
 
-            # Top row metrics
-            col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Tables", summary["total_tables"])
+        with col2:
+            st.metric("Data Sources", len(summary["data_sources"]))
+        with col3:
+            st.metric("Detection Methods", len(summary["detection_methods"]))
+        with col4:
+            st.metric("Processor Types", len(summary["top_processors"]))
+
+        if not tables:
+            st.info("No tables found in the workflow.")
+            return
+
+        # Data source breakdown
+        if summary["data_sources"]:
+            st.markdown("### 📈 Data Sources Breakdown")
+            ds_df = pd.DataFrame(
+                list(summary["data_sources"].items()),
+                columns=["Data Source", "Table Count"],
+            )
+            col1, col2 = st.columns([1, 2])
             with col1:
-                st.metric("Total Processors", summary.get("total_processors", 0))
+                st.dataframe(ds_df, hide_index=True, use_container_width=True)
             with col2:
-                st.metric("Script Files", summary.get("script_files_count", 0))
-            with col3:
-                st.metric("Table References", summary.get("table_references_count", 0))
+                st.bar_chart(ds_df.set_index("Data Source")["Table Count"])
 
-            # Bottom row metrics
-            col4, col5, col6 = st.columns(3)
-            with col4:
-                st.metric("HDFS Paths", summary.get("hdfs_paths_count", 0))
-            with col5:
-                st.metric("Database Hosts", summary.get("database_hosts_count", 0))
-            with col6:
-                st.metric("External Hosts", summary.get("external_hosts_count", 0))
+        # Detection methods breakdown
+        if summary["detection_methods"]:
+            st.markdown("### 🔍 Detection Methods")
+            dm_df = pd.DataFrame(
+                list(summary["detection_methods"].items()),
+                columns=["Detection Method", "Count"],
+            )
+            st.dataframe(dm_df, hide_index=True, use_container_width=True)
 
-        # Create consolidated table data
-        if result.get("assets"):
-            assets = result["assets"]
-            table_data = []
+        # Main table display
+        st.markdown("### 🗄️ Extracted Tables")
 
-            # Add script files
-            for script in assets.get("script_files", []):
-                table_data.append({"Asset Type": "Script File", "Asset Value": script})
+        # Create main dataframe
+        table_df = pd.DataFrame(tables)
 
-            # Add table references
-            for table in assets.get("table_references", []):
-                table_data.append(
-                    {"Asset Type": "Table Reference", "Asset Value": table}
+        # Filter controls
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            # Data source filter
+            data_sources = ["All"] + sorted(table_df["data_source"].unique().tolist())
+            selected_source = st.selectbox(
+                "Filter by Data Source:", data_sources, key="data_source_filter"
+            )
+
+        with col2:
+            # Processor type filter
+            proc_types = ["All"] + sorted(table_df["processor_type"].unique().tolist())
+            selected_proc_type = st.selectbox(
+                "Filter by Processor Type:", proc_types, key="processor_type_filter"
+            )
+
+        with col3:
+            # Text search filter
+            search_term = st.text_input(
+                "Search Table Names:",
+                placeholder="Enter table name (e.g., 'stdf', 'files')",
+                key="table_search",
+            )
+
+        # Apply filters
+        filtered_df = table_df.copy()
+
+        if selected_source != "All":
+            filtered_df = filtered_df[filtered_df["data_source"] == selected_source]
+
+        if selected_proc_type != "All":
+            filtered_df = filtered_df[
+                filtered_df["processor_type"] == selected_proc_type
+            ]
+
+        if search_term:
+            filtered_df = filtered_df[
+                filtered_df["table_name"].str.contains(
+                    search_term, case=False, na=False
+                )
+            ]
+
+        # Show filtered results count
+        if len(filtered_df) != len(table_df):
+            st.info(f"Showing {len(filtered_df)} of {len(table_df)} tables")
+
+        # Display main table with better formatting
+        if not filtered_df.empty:
+            # Prepare display dataframe with cleaner column names
+            display_df = filtered_df[
+                [
+                    "table_name",
+                    "data_source",
+                    "processor_name",
+                    "processor_type",
+                    "detection_method",
+                ]
+            ].copy()
+            display_df.columns = [
+                "Table Name",
+                "Data Source",
+                "Processor Name",
+                "Processor Type",
+                "Detection Method",
+            ]
+
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Table Name": st.column_config.TextColumn(
+                        "Table Name", width="medium"
+                    ),
+                    "Data Source": st.column_config.TextColumn(
+                        "Data Source", width="small"
+                    ),
+                    "Processor Name": st.column_config.TextColumn(
+                        "Processor Name", width="medium"
+                    ),
+                    "Processor Type": st.column_config.TextColumn(
+                        "Processor Type", width="medium"
+                    ),
+                    "Detection Method": st.column_config.TextColumn(
+                        "Detection Method", width="small"
+                    ),
+                },
+            )
+
+            # Detailed view for selected table
+            if len(filtered_df) > 0:
+                st.markdown("### 🔍 Table Details")
+
+                # Table selection for details
+                table_options = ["None"] + filtered_df["table_name"].tolist()
+                selected_table = st.selectbox(
+                    "Select table for detailed information:",
+                    table_options,
+                    key="table_detail_select",
                 )
 
-            # Add HDFS paths
-            for path in assets.get("hdfs_paths", []):
-                table_data.append({"Asset Type": "HDFS Path", "Asset Value": path})
+                if selected_table != "None":
+                    table_details = filtered_df[
+                        filtered_df["table_name"] == selected_table
+                    ].iloc[0]
 
-            # Add database hosts
-            for host in assets.get("database_hosts", []):
-                table_data.append({"Asset Type": "Database Host", "Asset Value": host})
-
-            # Add external hosts
-            for host in assets.get("external_hosts", []):
-                table_data.append({"Asset Type": "External Host", "Asset Value": host})
-
-            # Display table with filtering
-            if table_data:
-                st.markdown("### 📦 Discovered Assets")
-                df = pd.DataFrame(table_data)
-
-                # Filter controls
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    # Asset type filter
-                    asset_types = ["All"] + sorted(df["Asset Type"].unique().tolist())
-                    selected_type = st.selectbox(
-                        "Filter by Asset Type:", asset_types, key="asset_type_filter"
-                    )
-
-                with col2:
-                    # Text search filter
-                    search_term = st.text_input(
-                        "Search Asset Values:",
-                        placeholder="Enter search term (e.g., 'script', 'table', 'icn8')",
-                        key="asset_search",
-                    )
-
-                # Apply filters
-                filtered_df = df.copy()
-
-                # Filter by asset type
-                if selected_type != "All":
-                    filtered_df = filtered_df[
-                        filtered_df["Asset Type"] == selected_type
-                    ]
-
-                # Filter by search term
-                if search_term:
-                    filtered_df = filtered_df[
-                        filtered_df["Asset Value"].str.contains(
-                            search_term, case=False, na=False
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Table Name:** `{table_details['table_name']}`")
+                        st.markdown(f"**Data Source:** {table_details['data_source']}")
+                        st.markdown(
+                            f"**Detection Method:** {table_details['detection_method']}"
                         )
-                    ]
 
-                # Show filtered results count
-                if len(filtered_df) != len(df):
-                    st.info(f"Showing {len(filtered_df)} of {len(df)} assets")
+                    with col2:
+                        st.markdown(
+                            f"**Processor Name:** {table_details['processor_name']}"
+                        )
+                        st.markdown(
+                            f"**Processor Type:** {table_details['processor_type']}"
+                        )
+                        st.markdown(
+                            f"**Property Name:** {table_details['property_name']}"
+                        )
 
-                # Display filtered table
-                if not filtered_df.empty:
-                    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("No assets match the current filters.")
+                    if table_details.get("processor_id"):
+                        st.markdown(
+                            f"**Processor ID:** `{table_details['processor_id']}`"
+                        )
 
-                # Download buttons
-                col3, col4 = st.columns(2)
-                with col3:
-                    # Download filtered results
-                    filtered_csv = filtered_df.to_csv(index=False)
-                    st.download_button(
-                        label=f"📥 Download Filtered Assets ({len(filtered_df)} items)",
-                        data=filtered_csv,
-                        file_name=f"nifi_assets_filtered_{uploaded_file.name.replace('.xml', '')}.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
-                with col4:
-                    # Download all results
-                    csv = df.to_csv(index=False)
-                    st.download_button(
-                        label=f"📥 Download All Assets ({len(df)} items)",
-                        data=csv,
-                        file_name=f"nifi_assets_all_{uploaded_file.name.replace('.xml', '')}.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
-            else:
-                st.info("No assets found in the workflow.")
         else:
-            st.info("No assets found in the workflow.")
+            st.warning("No tables match the current filters.")
+
+        # Download buttons
+        if not table_df.empty:
+            col1, col2 = st.columns(2)
+            with col1:
+                # Download filtered results
+                filtered_csv = filtered_df.to_csv(index=False)
+                st.download_button(
+                    label=f"📥 Download Filtered Tables ({len(filtered_df)} items)",
+                    data=filtered_csv,
+                    file_name=f"nifi_tables_filtered_{uploaded_file.name.replace('.xml', '')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            with col2:
+                # Download all results
+                all_csv = table_df.to_csv(index=False)
+                st.download_button(
+                    label=f"📥 Download All Tables ({len(table_df)} items)",
+                    data=all_csv,
+                    file_name=f"nifi_tables_all_{uploaded_file.name.replace('.xml', '')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
 
     except Exception as e:
-        st.error(f"❌ Error displaying asset extraction results: {e}")
+        st.error(f"❌ Error displaying table extraction results: {e}")
         st.write(f"**Debug - Exception type:** {type(e)}")
         st.write(f"**Debug - Exception details:** {str(e)}")
         import traceback
@@ -165,7 +243,10 @@ def display_asset_results(result, uploaded_file):
 
 
 def main():
-    st.title("📦 NiFi Asset Extraction")
+    st.title("🗄️ Table Extraction")
+    st.markdown(
+        "**Extract all table references from NiFi workflows across SQL, NoSQL, Hive, HBase, and other data sources.**"
+    )
 
     # Check for uploaded file from Dashboard
     uploaded_file = st.session_state.get("uploaded_file", None)
@@ -178,20 +259,19 @@ def main():
             st.switch_page("Dashboard.py")
         return
 
-    # Check for cached asset results
-    asset_cache_key = f"asset_results_{uploaded_file.name}"
-    cached_result = st.session_state.get(asset_cache_key, None)
+    # Check for cached table results
+    table_cache_key = f"table_results_{uploaded_file.name}"
+    cached_result = st.session_state.get(table_cache_key, None)
 
-    # Check if extraction is running
-    extraction_running = st.session_state.get("asset_extraction_running", False)
+    # Check if table extraction is running
+    extraction_running = st.session_state.get("table_extraction_running", False)
 
     # Check for auto-start flag from Dashboard
-    auto_start = st.session_state.get("auto_start_asset_extraction", False)
+    auto_start = st.session_state.get("auto_start_table_extraction", False)
 
-    # Dynamic layout based on whether Extract Assets button should be shown
-    # Hide button if results exist OR if auto-starting from Dashboard
+    # Dynamic layout based on whether Extract Tables button should be shown
     if cached_result or auto_start:
-        # Only show Back to Dashboard button (no Extract Assets button needed)
+        # Only show Back to Dashboard button
         if st.button(
             "🔙 Back to Dashboard",
             disabled=extraction_running,
@@ -206,7 +286,7 @@ def main():
         with col1:
             run_extraction = (
                 st.button(
-                    "📦 Extract Assets",
+                    "🗄️ Extract Tables",
                     use_container_width=True,
                     disabled=extraction_running,
                 )
@@ -225,16 +305,16 @@ def main():
 
     # Clear auto-start flag after checking
     if auto_start:
-        st.session_state["auto_start_asset_extraction"] = False
+        st.session_state["auto_start_table_extraction"] = False
 
     # Display cached results if available
     if cached_result and not run_extraction:
         st.info(
-            "📋 Showing cached asset extraction results. Click 'Extract Assets' to regenerate."
+            "📋 Showing cached table extraction results. Click 'Extract Tables' to regenerate."
         )
-        display_asset_results(cached_result, uploaded_file)
+        display_table_results(cached_result, uploaded_file)
 
-    # Run extraction
+    # Run table extraction
     if uploaded_file and run_extraction and not extraction_running:
         # Save temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
@@ -242,36 +322,33 @@ def main():
             tmp_xml_path = tmp_file.name
 
         # Set extraction running flag
-        st.session_state["asset_extraction_running"] = True
+        st.session_state["table_extraction_running"] = True
 
         try:
-            # Show spinner with warning during extraction
+            # Show spinner during extraction
             with st.spinner(
-                "📦 Extracting NiFi assets... Please do not navigate away."
+                "🗄️ Extracting table references... Please do not navigate away."
             ):
-                result = extract_nifi_assets_only(
-                    xml_path=tmp_xml_path,
-                    progress_callback=None,  # Disable verbose logging
-                )
+                tables = extract_all_tables_from_nifi_xml(xml_path=tmp_xml_path)
 
-            st.success("✅ Asset extraction completed!")
+            st.success("✅ Table extraction completed!")
 
             # Cache the result
-            st.session_state[asset_cache_key] = result
+            st.session_state[table_cache_key] = tables
 
             # Display the results
-            display_asset_results(result, uploaded_file)
+            display_table_results(tables, uploaded_file)
 
         except Exception as e:
-            st.error(f"❌ Asset extraction failed: {e}")
+            st.error(f"❌ Table extraction failed: {e}")
             st.write("**Debug info:**")
             st.code(str(e))
 
             # Cache the error for consistency
-            st.session_state[asset_cache_key] = str(e)
+            st.session_state[table_cache_key] = str(e)
         finally:
             # Clear extraction running flag
-            st.session_state["asset_extraction_running"] = False
+            st.session_state["table_extraction_running"] = False
             # Clean up temp file
             if os.path.exists(tmp_xml_path):
                 os.unlink(tmp_xml_path)
