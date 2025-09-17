@@ -12,13 +12,11 @@ import streamlit as st
 from tools.xml_tools import extract_processor_info
 
 # Configure the page
-st.set_page_config(
-    page_title="NiFi to Databricks Migration Tool", page_icon="", layout="wide"
-)
+st.set_page_config(page_title="NiFi Analyzer Tools", page_icon="", layout="wide")
 
 
 def main():
-    st.title("NiFi to Databricks Migration Tools")
+    st.title("NiFi Analyzer Tools")
 
     st.markdown("Upload your NiFi XML template file to begin the migration process.")
 
