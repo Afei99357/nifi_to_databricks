@@ -26,10 +26,17 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     # Use the full template parser to get processors with properties
     template_data = parse_nifi_template_impl(xml_content)
     processors = template_data.get("processors", [])
+    controller_services = template_data.get("controller_services", [])
+
+    # Create mapping of controller service ID to connection details
+    controller_service_map = _build_controller_service_map(controller_services)
+
     all_tables = []
 
     for processor in processors:
-        tables = extract_table_references_from_processor(processor)
+        tables = extract_table_references_from_processor(
+            processor, controller_service_map
+        )
         all_tables.extend(tables)
 
     # Remove duplicates based on table name and data source
@@ -38,8 +45,85 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     return unique_tables
 
 
+def _build_controller_service_map(
+    controller_services: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """Build mapping of controller service ID to connection details."""
+    service_map = {}
+
+    for service in controller_services:
+        service_id = service.get("id")
+        service_type = service.get("type", "")
+        properties = service.get("properties", {})
+
+        if not service_id:
+            continue
+
+        connection_info = {}
+
+        # Extract database connection URL
+        if "Database Connection URL" in properties:
+            connection_url = properties["Database Connection URL"]
+            connection_info["connection_url"] = connection_url
+            connection_info["source_detail"] = _parse_connection_url(connection_url)
+
+        # Extract HBase configuration
+        elif "Hadoop Configuration Files" in properties:
+            config_files = properties["Hadoop Configuration Files"]
+            connection_info["config_files"] = config_files
+            connection_info["source_detail"] = f"HBase Cluster ({config_files})"
+
+        # Extract hostname for other services
+        elif "Hostname" in properties:
+            hostname = properties["Hostname"]
+            connection_info["hostname"] = hostname
+            connection_info["source_detail"] = f"SFTP: {hostname}"
+
+        # Set service type
+        connection_info["service_type"] = service_type
+        connection_info["service_name"] = service.get("name", "")
+
+        service_map[service_id] = connection_info
+
+    return service_map
+
+
+def _parse_connection_url(connection_url: str) -> str:
+    """Parse database connection URL to extract readable source information."""
+    if not connection_url:
+        return "Unknown Database"
+
+    try:
+        # Handle Oracle JDBC URLs
+        if "oracle:thin:" in connection_url.lower():
+            # Extract host:port/database from oracle:thin:@host:port:database
+            parts = connection_url.split("@")
+            if len(parts) > 1:
+                host_db = parts[1]
+                return f"Oracle: {host_db}"
+
+        # Handle Hive JDBC URLs
+        elif "hive2://" in connection_url.lower():
+            # Extract host:port/database from hive2://host:port/database
+            parts = connection_url.replace("jdbc:hive2://", "").split(";")[0]
+            return f"Hive: {parts}"
+
+        # Handle other JDBC URLs
+        elif "jdbc:" in connection_url.lower():
+            # Generic JDBC parsing
+            url_part = connection_url.replace("jdbc:", "").split("//")
+            if len(url_part) > 1:
+                return f"Database: {url_part[1].split('?')[0]}"
+
+        return connection_url
+
+    except Exception:
+        return connection_url
+
+
 def extract_table_references_from_processor(
     processor: Dict[str, Any],
+    controller_service_map: Dict[str, Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Extract all table references from a single processor.
@@ -56,6 +140,15 @@ def extract_table_references_from_processor(
     processor_name = processor.get("name", "")
     processor_id = processor.get("id", "")
 
+    # Initialize controller service map if not provided
+    if controller_service_map is None:
+        controller_service_map = {}
+
+    # Find controller service references in processor properties
+    controller_service_info = _find_controller_service_for_processor(
+        properties, controller_service_map
+    )
+
     for prop_name, prop_value in properties.items():
         if not prop_value or not isinstance(prop_value, str):
             continue
@@ -64,25 +157,52 @@ def extract_table_references_from_processor(
 
         # 1. Direct table name properties
         table_from_property = _extract_table_from_property(
-            prop_name, prop_value, processor_type, processor_name, processor_id
+            prop_name,
+            prop_value,
+            processor_type,
+            processor_name,
+            processor_id,
+            controller_service_info,
         )
         if table_from_property:
             tables.append(table_from_property)
 
         # 2. Extract from SQL queries
         sql_tables = _extract_tables_from_sql_property(
-            prop_name, prop_value, processor_type, processor_name, processor_id
+            prop_name,
+            prop_value,
+            processor_type,
+            processor_name,
+            processor_id,
+            controller_service_info,
         )
         tables.extend(sql_tables)
 
         # 3. Extract from Hive warehouse paths
         hive_table = _extract_hive_table_from_path_property(
-            prop_name, prop_value, processor_type, processor_name, processor_id
+            prop_name,
+            prop_value,
+            processor_type,
+            processor_name,
+            processor_id,
+            controller_service_info,
         )
         if hive_table:
             tables.append(hive_table)
 
     return tables
+
+
+def _find_controller_service_for_processor(
+    properties: Dict[str, Any], controller_service_map: Dict[str, Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Find controller service information for a processor."""
+    # Look for controller service references in processor properties
+    for prop_name, prop_value in properties.items():
+        if isinstance(prop_value, str) and prop_value in controller_service_map:
+            return controller_service_map[prop_value]
+
+    return {}
 
 
 def _extract_table_from_property(
@@ -91,6 +211,7 @@ def _extract_table_from_property(
     processor_type: str,
     processor_name: str,
     processor_id: str,
+    controller_service_info: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """Extract table reference from direct table name properties."""
 
@@ -133,6 +254,7 @@ def _extract_tables_from_sql_property(
     processor_type: str,
     processor_name: str,
     processor_id: str,
+    controller_service_info: Dict[str, Any] = None,
 ) -> List[Dict[str, Any]]:
     """Extract table references from SQL query properties."""
 
@@ -151,7 +273,9 @@ def _extract_tables_from_sql_property(
                 "data_source": "SQL Database",
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": processor_type,
+                "processor_type": (
+                    processor_type.split(".")[-1] if processor_type else "Unknown"
+                ),
                 "processor_id": processor_id,
                 "detection_method": "sql_parsing",
             }
@@ -167,6 +291,7 @@ def _extract_hive_table_from_path_property(
     processor_type: str,
     processor_name: str,
     processor_id: str,
+    controller_service_info: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """Extract Hive table from warehouse path properties."""
 
@@ -179,7 +304,9 @@ def _extract_hive_table_from_path_property(
                 "data_source": "Hive",
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": processor_type,
+                "processor_type": (
+                    processor_type.split(".")[-1] if processor_type else "Unknown"
+                ),
                 "processor_id": processor_id,
                 "detection_method": "hive_path",
             }

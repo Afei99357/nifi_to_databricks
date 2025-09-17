@@ -148,6 +148,7 @@ def display_table_results(tables, uploaded_file):
                 display_df,
                 use_container_width=True,
                 hide_index=True,
+                height=None,  # Remove height limit to show all rows
                 column_config={
                     "Table Name": st.column_config.TextColumn(
                         "Table Name", width="medium"
