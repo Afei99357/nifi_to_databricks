@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Development setup script for NiFi to Databricks migration tool
+# Development setup script for NiFi Analyzer Tools
 
 set -e
 

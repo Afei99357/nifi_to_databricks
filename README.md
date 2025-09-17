@@ -1,4 +1,4 @@
-# NiFi to Databricks Migration Tool
+# NiFi Analyzer Tools
 
 An intelligent migration tool that converts Apache NiFi workflows into Databricks pipelines using AI-powered analysis and code generation. The system provides both a **Streamlit web app** for interactive migrations and **programmatic APIs** for automated workflows.
 
