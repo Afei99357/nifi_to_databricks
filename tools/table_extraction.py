@@ -364,8 +364,9 @@ def _extract_tables_from_sql(sql_content: str) -> List[str]:
         r"\bINSERT\s+INTO\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
         # UPDATE
         r"\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # CREATE TABLE
-        r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+        # CREATE TABLE - two separate patterns to avoid IF NOT EXISTS backtracking
+        r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+IF\s+NOT\s+EXISTS\s+`?([a-zA-Z_][a-zA-Z0-9_.]*)`?",
+        r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?!IF)([a-zA-Z_][a-zA-Z0-9_.]*)",
         # DROP TABLE
         r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
         # ALTER TABLE
