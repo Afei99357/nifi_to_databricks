@@ -17,10 +17,15 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of table dictionaries with metadata
     """
-    from tools.xml_tools import extract_processor_info
+    from tools.xml_tools import parse_nifi_template_impl
 
     # Parse processors from XML
-    processors = extract_processor_info(xml_path)
+    with open(xml_path, "r", encoding="utf-8") as f:
+        xml_content = f.read()
+
+    # Use the full template parser to get processors with properties
+    template_data = parse_nifi_template_impl(xml_content)
+    processors = template_data.get("processors", [])
     all_tables = []
 
     for processor in processors:
