@@ -131,6 +131,7 @@ def display_table_results(tables, uploaded_file):
                     "data_source",
                     "processor_name",
                     "processor_type",
+                    "processor_id",
                     "detection_method",
                 ]
             ].copy()
@@ -139,6 +140,7 @@ def display_table_results(tables, uploaded_file):
                 "Data Source",
                 "Processor Name",
                 "Processor Type",
+                "Processor ID",
                 "Detection Method",
             ]
 
@@ -158,6 +160,9 @@ def display_table_results(tables, uploaded_file):
                     ),
                     "Processor Type": st.column_config.TextColumn(
                         "Processor Type", width="medium"
+                    ),
+                    "Processor ID": st.column_config.TextColumn(
+                        "Processor ID", width="small"
                     ),
                     "Detection Method": st.column_config.TextColumn(
                         "Detection Method", width="small"
