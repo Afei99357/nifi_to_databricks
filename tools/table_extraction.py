@@ -117,7 +117,9 @@ def _extract_table_from_property(
                 "data_source": _detect_data_source(processor_type),
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": processor_type,
+                "processor_type": (
+                    processor_type.split(".")[-1] if processor_type else "Unknown"
+                ),
                 "processor_id": processor_id,
                 "detection_method": "property_name",
             }
