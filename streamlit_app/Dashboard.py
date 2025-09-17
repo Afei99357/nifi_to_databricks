@@ -49,9 +49,9 @@ def main():
                 st.switch_page("pages/01_Processor_Classification.py")
 
         with col2:
-            if st.button("📦 Extract Assets", use_container_width=True):
-                # Set flag to auto-start asset extraction when arriving at page
-                st.session_state["auto_start_asset_extraction"] = True
+            if st.button("🗄️ Extract Tables", use_container_width=True):
+                # Set flag to auto-start table extraction when arriving at page
+                st.session_state["auto_start_table_extraction"] = True
                 st.switch_page("pages/02_Asset_Extraction.py")
 
         with col3:
@@ -73,11 +73,12 @@ def main():
             # Clear uploaded file and any cached results
             if "uploaded_file" in st.session_state:
                 del st.session_state["uploaded_file"]
-            # Clear any migration/lineage/asset/processor/dependency results for the file
+            # Clear any migration/lineage/table/processor/dependency results for the file
             for key in list(st.session_state.keys()):
                 if (
                     "migration_results_" in key
                     or "lineage_results_" in key
+                    or "table_results_" in key
                     or "asset_results_" in key
                     or "dependency_results_" in key
                     or "processor_info_" in key
