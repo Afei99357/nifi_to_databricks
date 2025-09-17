@@ -53,6 +53,7 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
         proc_info = {
             "name": _trim(processor.findtext("name") or "Unknown"),
             "type": _trim(processor.findtext("type") or "Unknown"),
+            "id": processor.get("id"),
             "properties": {},
             "parentGroupId": parent_group_id,
             "parentGroupName": parent_group_name,
