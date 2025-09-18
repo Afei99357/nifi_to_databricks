@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from typing import Any, Dict, List
 
-from .xml_tools import parse_nifi_template
+from .xml_tools import parse_nifi_template_impl
 
 
 def _get_cls(proc: Dict[str, Any]) -> str:
@@ -136,7 +136,7 @@ def detect_data_flow_chains(xml_content: str, pruned_processors_json: str) -> st
     and connection parsing functionality.
 
     Leverages existing tools:
-    - parse_nifi_template: for connection parsing
+    - parse_nifi_template_impl: for connection parsing
     - build_migration_plan: for topological DAG construction
 
     Args:
