@@ -49,10 +49,10 @@ def main():
                 st.switch_page("pages/01_Processor_Classification.py")
 
         with col2:
-            if st.button("🗄️ Extract Tables", use_container_width=True):
+            if st.button("🗄️ Extract Assets", use_container_width=True):
                 # Set flag to auto-start table extraction when arriving at page
                 st.session_state["auto_start_table_extraction"] = True
-                st.switch_page("pages/02_Table_Extraction.py")
+                st.switch_page("pages/02_Asset_Extraction.py")
 
         with col3:
             if st.button("📊 Lineage & Connections", use_container_width=True):
