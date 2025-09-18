@@ -15,7 +15,7 @@ from tools.script_extraction import extract_all_scripts_from_nifi_xml
 from tools.table_extraction import extract_all_tables_from_nifi_xml, get_table_summary
 
 # Configure the page
-st.set_page_config(page_title="Table Extraction", page_icon="🗄️", layout="wide")
+st.set_page_config(page_title="Asset Extraction", page_icon="🗄️", layout="wide")
 
 
 def display_script_results(scripts, uploaded_file):
@@ -423,7 +423,7 @@ def display_table_results(tables, uploaded_file):
 
 
 def main():
-    st.title("🗄️ Table & Script Extraction")
+    st.title("🗄️ Asset Extraction")
     st.markdown(
         "**Extract table references and external scripts from NiFi workflows.**"
     )
