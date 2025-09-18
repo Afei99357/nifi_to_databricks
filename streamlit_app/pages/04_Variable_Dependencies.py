@@ -17,8 +17,9 @@ from tools.variable_extraction import extract_variable_dependencies
 st.set_page_config(page_title="Variable Dependencies", page_icon="🔄", layout="wide")
 
 
-def display_variable_results(result, uploaded_file):
+def display_variable_results(result, uploaded_file=None):
     """Display comprehensive variable dependency analysis results"""
+    # Note: uploaded_file parameter preserved for API compatibility but not currently used
     # Handle error cases
     if isinstance(result, str):
         st.error(f"❌ Variable analysis failed: {result}")
@@ -332,36 +333,49 @@ def display_variable_results(result, uploaded_file):
                 filtered_df = filtered_df.sort_values(
                     "Total Processors", ascending=False
                 )
-                st.dataframe(
-                    filtered_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Variable Name": st.column_config.TextColumn(
-                            "Variable Name", width="medium"
-                        ),
-                        "Defines": st.column_config.NumberColumn(
-                            "Defines", width="small"
-                        ),
-                        "Uses": st.column_config.NumberColumn("Uses", width="small"),
-                        "Total Processors": st.column_config.NumberColumn(
-                            "Total Processors", width="small"
-                        ),
-                        "Status": st.column_config.TextColumn("Status", width="small"),
-                    },
-                )
+
+                # Collapsible table display section (defaultly closed)
+                with st.expander("📊 Variable Summary Table", expanded=False):
+                    st.dataframe(
+                        filtered_df,
+                        use_container_width=True,
+                        hide_index=False,
+                        column_config={
+                            "Variable Name": st.column_config.TextColumn(
+                                "Variable Name", width="medium"
+                            ),
+                            "Defines": st.column_config.NumberColumn(
+                                "Defines", width="small"
+                            ),
+                            "Uses": st.column_config.NumberColumn(
+                                "Uses", width="small"
+                            ),
+                            "Total Processors": st.column_config.NumberColumn(
+                                "Total Processors", width="small"
+                            ),
+                            "Status": st.column_config.TextColumn(
+                                "Status", width="small"
+                            ),
+                        },
+                    )
 
                 # Variable details
                 if not filtered_df.empty:
                     # Clean variable names for detailed selection
-                    detail_options = ["None"] + [
+                    clean_var_names = [
                         v.replace("${", "").replace("}", "").strip()
                         for v in filtered_df["Variable Name"].tolist()
                     ]
+                    detail_options = ["None"] + clean_var_names
+
+                    # Default to first variable instead of "None"
 
                     selected_var_detail = st.selectbox(
                         "Select variable for detailed analysis:",
                         options=detail_options,
+                        index=(
+                            1 if clean_var_names else 0
+                        ),  # Select first variable by default
                     )
 
                     # Find the original variable key (may contain whitespace)
@@ -420,7 +434,7 @@ def display_variable_results(result, uploaded_file):
                             st.dataframe(
                                 definitions_df,
                                 use_container_width=True,
-                                hide_index=True,
+                                hide_index=False,
                                 column_config={
                                     "Processor Name": st.column_config.TextColumn(
                                         "Processor Name", width="medium"
@@ -474,7 +488,7 @@ def display_variable_results(result, uploaded_file):
                             st.dataframe(
                                 usages_df,
                                 use_container_width=True,
-                                hide_index=True,
+                                hide_index=False,
                                 column_config={
                                     "Processor Name": st.column_config.TextColumn(
                                         "Processor Name", width="medium"
@@ -579,7 +593,7 @@ def display_variable_results(result, uploaded_file):
                 st.dataframe(
                     filtered_conn_df,
                     use_container_width=True,
-                    hide_index=True,
+                    hide_index=False,
                     column_config={
                         "Variable": st.column_config.TextColumn(
                             "Variable", width="medium"
