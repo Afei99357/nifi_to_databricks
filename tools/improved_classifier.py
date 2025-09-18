@@ -752,16 +752,27 @@ def analyze_processors_batch(processors: List[Dict[str, Any]]) -> List[Dict[str,
                 # Need LLM analysis - add to batch
                 llm_batch.append((key, p))
 
-    # Second pass: Batch process LLM calls
+    # Second pass: Mark all remaining as unknown (LLM disabled)
     if llm_batch:
         print(
-            f"🧠 [LLM BATCH] Processing {len(llm_batch)} processors requiring LLM analysis..."
+            f"🤖 [LLM DISABLED] Marking {len(llm_batch)} processors as unknown (LLM classification disabled)"
         )
-        llm_results = _classify_processors_batch_llm([p[1] for p in llm_batch])
 
-        # Cache LLM results
-        for (key, original_proc), llm_result in zip(llm_batch, llm_results):
-            cache[key] = llm_result
+        # Cache unknown results for all processors that need LLM
+        for key, original_proc in llm_batch:
+            cache[key] = {
+                "processor_type": original_proc.get("type", ""),
+                "properties": original_proc.get("properties", {}),
+                "id": original_proc.get("id", ""),
+                "name": original_proc.get("name", ""),
+                "data_manipulation_type": "unknown",
+                "analysis_method": "llm_disabled",
+                "actual_data_processing": "Classification requires manual review (LLM disabled)",
+                "transforms_data_content": None,
+                "business_purpose": "Requires manual classification",
+                "data_impact_level": "unknown",
+                "key_operations": ["manual_review_needed"],
+            }
 
     # Third pass: Build final results
     for p in processors:

@@ -4,12 +4,29 @@ Extracts all table references from NiFi XML regardless of database type (SQL, No
 """
 
 import re
-from typing import Any, Dict, List, Set
+from collections import Counter
+from typing import Any, Dict, List, Set, Tuple
+
+# NiFi Expression Language pattern
+EL_PATTERN = re.compile(r"\$\{[^}]+\}")
+
+
+def _normalize_el(value: str, replacement: str = "elvar") -> str:
+    """Replace NiFi Expression Language ${...} with safe tokens."""
+    return EL_PATTERN.sub(replacement, value)
+
+
+def _canonical_type(name: str) -> str:
+    """Canonicalize processor type to short, lowercase form."""
+    if not name:
+        return "unknown"
+    short = name.split(".")[-1]
+    return short.lower()
 
 
 def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     """
-    Extract all table references from NiFi XML file.
+    Extract all table references from NiFi XML file using multi-pass validation.
 
     Args:
         xml_path: Path to NiFi XML file
@@ -31,13 +48,22 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     # Create mapping of controller service ID to connection details
     controller_service_map = _build_controller_service_map(controller_services)
 
+    # Multi-pass extraction pipeline (simplified for better results)
     all_tables = []
-
     for processor in processors:
         tables = extract_table_references_from_processor(
             processor, controller_service_map
         )
         all_tables.extend(tables)
+
+    # Apply basic anti-pattern filtering only
+    filtered_tables = []
+    anti_patterns = _get_anti_patterns()
+    for table in all_tables:
+        if table["table_name"].lower() not in anti_patterns:
+            filtered_tables.append(table)
+
+    all_tables = filtered_tables
 
     # Remove duplicates based on table name and data source
     unique_tables = _remove_duplicate_tables(all_tables)
@@ -154,7 +180,6 @@ def extract_table_references_from_processor(
             continue
 
         prop_value = prop_value.strip()
-
         # 1. Direct table name properties
         table_from_property = _extract_table_from_property(
             prop_name,
@@ -215,6 +240,10 @@ def _extract_table_from_property(
 ) -> Dict[str, Any]:
     """Extract table reference from direct table name properties."""
 
+    # Skip GenerateFlowFile processors - they create workflow entities, not database tables
+    if "GenerateFlowFile" in processor_type:
+        return None
+
     # Properties that typically contain table names
     table_property_keywords = [
         "table",
@@ -224,25 +253,31 @@ def _extract_table_from_property(
         "bucket",
         "schema",
         "dataset",
-        "entity",
         "model",
     ]
 
     prop_lower = prop_name.lower()
 
+    # Be more selective about what to skip - only obvious config keys
+    obvious_config_names = {"entity"}
+    if prop_lower in obvious_config_names:
+        return None
+
     # Check if property name suggests it contains a table name
     if any(keyword in prop_lower for keyword in table_property_keywords):
-        if _is_valid_table_name(prop_value):
+        # Create context for validation
+        context = {
+            "processor_type": processor_type,
+            "property_name": prop_name,
+        }
+
+        if _is_valid_table_name(prop_value, context):
             return {
                 "table_name": prop_value,
-                "data_source": _detect_data_source(processor_type),
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": (
-                    processor_type.split(".")[-1] if processor_type else "Unknown"
-                ),
+                "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
-                "detection_method": "property_name",
             }
 
     return None
@@ -265,19 +300,21 @@ def _extract_tables_from_sql_property(
 
     # Check if property contains SQL
     if any(keyword in prop_lower for keyword in sql_property_keywords):
-        sql_tables = _extract_tables_from_sql(prop_value)
+        # Create context for SQL parsing
+        sql_context = {
+            "processor_type": processor_type,
+            "property_name": prop_name,
+        }
+
+        sql_tables = _extract_tables_from_sql(prop_value, sql_context)
 
         return [
             {
                 "table_name": table,
-                "data_source": "SQL Database",
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": (
-                    processor_type.split(".")[-1] if processor_type else "Unknown"
-                ),
+                "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
-                "detection_method": "sql_parsing",
             }
             for table in sql_tables
         ]
@@ -301,95 +338,151 @@ def _extract_hive_table_from_path_property(
         if hive_table:
             return {
                 "table_name": hive_table,
-                "data_source": "Hive",
                 "property_name": prop_name,
                 "processor_name": processor_name,
-                "processor_type": (
-                    processor_type.split(".")[-1] if processor_type else "Unknown"
-                ),
+                "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
-                "detection_method": "hive_path",
             }
 
     return None
 
 
-def _detect_data_source(processor_type: str) -> str:
-    """Detect data source type from processor type."""
-    if not processor_type:
-        return "Unknown"
-
-    type_lower = processor_type.lower()
-
-    # Map processor types to data sources
-    source_mapping = {
-        "hbase": "HBase",
-        "mongo": "MongoDB",
-        "cassandra": "Cassandra",
-        "kafka": "Kafka",
-        "elasticsearch": "Elasticsearch",
-        "solr": "Solr",
-        "redis": "Redis",
-        "sql": "SQL Database",
-        "jdbc": "SQL Database",
-        "database": "SQL Database",
-        "oracle": "Oracle",
-        "mysql": "MySQL",
-        "postgres": "PostgreSQL",
-        "sqlserver": "SQL Server",
-        "hive": "Hive",
-        "delta": "Delta Lake",
-        "parquet": "Parquet",
-        "avro": "Avro",
-    }
-
-    for keyword, source in source_mapping.items():
-        if keyword in type_lower:
-            return source
-
-    return "Unknown"
-
-
-def _extract_tables_from_sql(sql_content: str) -> List[str]:
-    """Extract table references from SQL queries."""
+def _extract_tables_from_sql(
+    sql_content: str, context: Dict[str, Any] = None
+) -> List[str]:
+    """Extract table references from SQL queries with context-aware validation."""
     tables = set()
 
-    # Common SQL patterns for table references
-    patterns = [
-        # FROM clause
-        r"\bFROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # JOIN clauses
-        r"\b(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+|CROSS\s+)?JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # INSERT INTO
-        r"\bINSERT\s+INTO\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # UPDATE
-        r"\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # CREATE TABLE - two separate patterns to avoid IF NOT EXISTS backtracking
-        r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+IF\s+NOT\s+EXISTS\s+`?([a-zA-Z_][a-zA-Z0-9_.]*)`?",
-        r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?!IF)([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # DROP TABLE
-        r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # ALTER TABLE
-        r"\bALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # TRUNCATE TABLE
-        r"\bTRUNCATE\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # DELETE FROM
-        r"\bDELETE\s+FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
-        # WITH clause (CTE)
-        r"\bWITH\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+AS",
-        # MERGE/UPSERT
-        r"\bMERGE\s+(?:INTO\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
-    ]
+    if context is None:
+        context = {}
 
-    for pattern in patterns:
-        matches = re.findall(pattern, sql_content, re.IGNORECASE | re.MULTILINE)
+    # Preprocess SQL to handle common issues
+    sql_clean = _preprocess_sql_for_parsing(sql_content)
+
+    # Enhanced SQL patterns with better context awareness
+    table_patterns = _get_context_aware_sql_patterns()
+
+    for pattern_info in table_patterns:
+        pattern = pattern_info["pattern"]
+        priority = pattern_info["priority"]
+        context_hints = pattern_info.get("context", {})
+
+        matches = re.findall(pattern, sql_clean, re.IGNORECASE | re.MULTILINE)
         for match in matches:
-            # Clean up table name
-            table_name = match.strip()
-            if _is_valid_table_name(table_name):
-                tables.add(table_name)
+            # Handle tuple matches from groups
+            if isinstance(match, tuple):
+                table_name = next((m for m in match if m), "").strip()
+            else:
+                table_name = match.strip()
+
+            if not table_name:
+                continue
+
+            # Clean up captured subquery tokens
+            candidate = table_name.strip().strip(",")
+            if candidate.startswith("(") or candidate.endswith(")"):
+                continue
+
+            # Normalize EL before validation
+            candidate = _normalize_el(candidate)
+
+            # Create enhanced context for validation
+            validation_context = {
+                **context,
+                "sql_pattern_priority": priority,
+                "sql_context": context_hints,
+                "from_sql": True,
+            }
+
+            if _is_valid_table_name(candidate, validation_context):
+                tables.add(candidate)
 
     return list(tables)
+
+
+def _preprocess_sql_for_parsing(sql_content: str) -> str:
+    """Preprocess SQL to improve parsing accuracy."""
+    # Remove comments
+    sql_clean = re.sub(r"--.*?$", "", sql_content, flags=re.MULTILINE)
+    sql_clean = re.sub(r"/\*.*?\*/", "", sql_clean, flags=re.DOTALL)
+
+    # Normalize whitespace
+    sql_clean = re.sub(r"\s+", " ", sql_clean)
+
+    # Remove backticks and quotes around identifiers
+    sql_clean = re.sub(r'[`"\']([a-zA-Z_][a-zA-Z0-9_.]*)["`\']', r"\1", sql_clean)
+
+    return sql_clean.strip()
+
+
+def _get_context_aware_sql_patterns() -> List[Dict[str, Any]]:
+    """Get SQL patterns with priority and context information."""
+    return [
+        {
+            "pattern": r"\bFROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "from", "confidence": 0.9},
+        },
+        {
+            "pattern": r"\b(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+|CROSS\s+)?JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "join", "confidence": 0.9},
+        },
+        {
+            "pattern": r"\bINSERT\s+INTO\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "insert", "confidence": 0.95},
+        },
+        {
+            "pattern": r"\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "update", "confidence": 0.95},
+        },
+        {
+            "pattern": r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "create", "confidence": 0.98},
+        },
+        {
+            "pattern": r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?!IF\s+NOT\s+EXISTS)([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "create", "confidence": 0.98},
+        },
+        {
+            "pattern": r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "medium",
+            "context": {"clause": "drop", "confidence": 0.8},
+        },
+        {
+            "pattern": r"\bALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "medium",
+            "context": {"clause": "alter", "confidence": 0.8},
+        },
+        {
+            "pattern": r"\bTRUNCATE\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "medium",
+            "context": {"clause": "truncate", "confidence": 0.8},
+        },
+        {
+            "pattern": r"\bDELETE\s+FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "high",
+            "context": {"clause": "delete", "confidence": 0.9},
+        },
+        {
+            "pattern": r"\bMERGE\s+(?:INTO\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "priority": "medium",
+            "context": {"clause": "merge", "confidence": 0.8},
+        },
+        {
+            "pattern": r"\bWITH\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+AS",
+            "priority": "low",
+            "context": {
+                "clause": "with",
+                "confidence": 0.3,
+                "note": "CTE name, might not be real table",
+            },
+        },
+    ]
 
 
 def _extract_hive_table_from_path(path: str) -> str:
@@ -414,14 +507,46 @@ def _extract_hive_table_from_path(path: str) -> str:
     return None
 
 
-def _is_valid_table_name(table_name: str) -> bool:
-    """Validate if a string looks like a valid table name."""
+def _is_valid_table_name(table_name: str, context: Dict[str, Any] = None) -> bool:
+    """Validate if a string looks like a valid table name using pattern recognition."""
     if not table_name:
         return False
 
-    # Skip variables
-    if "${" in table_name:
-        return False
+    # Initialize context if not provided
+    if context is None:
+        context = {}
+
+    # NEW: Normalize NiFi EL before validation
+    normalized = _normalize_el(table_name)
+
+    # Calculate table name score using normalized name
+    score = _calculate_table_name_score(normalized, context)
+
+    # More forgiving threshold for real NiFi flows
+    VALIDITY_THRESHOLD = 0.35
+
+    return score >= VALIDITY_THRESHOLD
+
+
+def _calculate_table_name_score(table_name: str, context: Dict[str, Any]) -> float:
+    """Calculate a score (0-1) indicating how likely this is a real table name."""
+    score = 0.0
+
+    # Basic format validation (required)
+    if not _passes_basic_format_checks(table_name):
+        return 0.0
+
+    # Pattern recognition scoring
+    score += _score_table_name_patterns(table_name) * 0.4
+    score += _score_naming_conventions(table_name) * 0.3
+    score += _score_context_clues(table_name, context) * 0.2
+    score += _score_database_formats(table_name) * 0.1
+
+    return min(score, 1.0)
+
+
+def _passes_basic_format_checks(table_name: str) -> bool:
+    """Basic format validation that must pass for any table name."""
 
     # Skip obvious non-tables
     invalid_chars = ["*", "?", ";", " ", "\n", "\t", "(", ")", "[", "]"]
@@ -436,11 +561,328 @@ def _is_valid_table_name(table_name: str) -> bool:
     if table_name.startswith("/") or "\\" in table_name:
         return False
 
-    # Must look like a table name (letters, numbers, dots, underscores)
-    if re.match(r"^[a-zA-Z_][a-zA-Z0-9_.]*$", table_name):
-        return True
+    # Skip too short names (likely not real table names)
+    if len(table_name) < 2:
+        return False
 
-    return False
+    # Allow leading digits if qualified name or previously quoted/EL
+    if not re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_.]*$", table_name):
+        return False
+
+    return True
+
+
+def _score_table_name_patterns(table_name: str) -> float:
+    """Score based on common table name patterns."""
+    score = 0.0
+    name_lower = table_name.lower()
+
+    # Common table name patterns (positive indicators)
+    positive_patterns = [
+        r"^[a-z_]+_(?:table|tbl|data|log|hist|temp|staging)$",  # suffix patterns
+        r"^(?:dim|fact|stage|temp|raw|clean)_[a-z_]+$",  # prefix patterns
+        r"^[a-z]+\.[a-z_]+$",  # database.table format
+        r"^[a-z_]+(?:_[0-9]+)?$",  # table with version numbers
+        r"^[a-z_]{3,20}$",  # reasonable length names
+    ]
+
+    for pattern in positive_patterns:
+        if re.match(pattern, name_lower):
+            score += 0.3
+            break
+
+    # Length scoring
+    if 3 <= len(table_name) <= 30:
+        score += 0.2
+    elif len(table_name) > 30:
+        score -= 0.1
+
+    # Database.table format bonus
+    if "." in table_name and len(table_name.split(".")) == 2:
+        parts = table_name.split(".")
+        if all(len(part) >= 2 for part in parts):
+            score += 0.3
+
+    return min(score, 1.0)
+
+
+def _score_naming_conventions(table_name: str) -> float:
+    """Score based on common database naming conventions."""
+    score = 0.0
+    name_lower = table_name.lower()
+
+    # Common database table indicators
+    table_indicators = [
+        "table",
+        "tbl",
+        "data",
+        "log",
+        "hist",
+        "temp",
+        "staging",
+        "archive",
+        "backup",
+        "cache",
+        "queue",
+        "event",
+        "audit",
+        "dim",
+        "fact",
+        "raw",
+        "clean",
+        "processed",
+        "transformed",
+    ]
+
+    # Business domain indicators
+    domain_indicators = [
+        "user",
+        "customer",
+        "order",
+        "product",
+        "invoice",
+        "payment",
+        "transaction",
+        "account",
+        "profile",
+        "session",
+        "metric",
+        "stdf",
+        "probe",
+        "wafer",
+        "lot",
+        "unit",
+        "test",
+        "measurement",
+    ]
+
+    # Check for table indicators
+    for indicator in table_indicators:
+        if indicator in name_lower:
+            score += 0.4
+            break
+
+    # Check for domain indicators
+    for indicator in domain_indicators:
+        if indicator in name_lower:
+            score += 0.3
+            break
+
+    # Underscore convention (common in databases)
+    if "_" in table_name:
+        score += 0.2
+
+    # All lowercase (common convention)
+    if table_name.islower():
+        score += 0.1
+
+    return min(score, 1.0)
+
+
+def _score_context_clues(table_name: str, context: Dict[str, Any]) -> float:
+    """Score based on processor context and property information."""
+    score = 0.0
+
+    # Canonicalize processor type for consistent matching
+    processor_type = _canonical_type(context.get("processor_type", ""))
+    property_name = context.get("property_name", "").lower()
+    detection_method = context.get("detection_method", "")
+
+    # Processor type context
+    data_processors = [
+        "hbase",
+        "sql",
+        "jdbc",
+        "mongo",
+        "cassandra",
+        "hive",
+        "executesql",
+    ]
+    if any(proc in processor_type for proc in data_processors):
+        score += 0.5
+
+    # Property name context (more permissive for real NiFi property names)
+    table_properties = ["table", "collection", "dataset", "model", "schema"]
+    if any(prop in property_name for prop in table_properties):
+        score += 0.4
+
+    # Detection method context
+    if detection_method == "sql_parsing":
+        sql_context = context.get("sql_context", {})
+        sql_confidence = sql_context.get("confidence", 0.5)
+        score += sql_confidence * 0.3
+
+    # Controller service context boost
+    data_source = context.get("data_source", "").lower()
+    if data_source in {"sql database", "hive"}:
+        score += 0.2
+
+    # Pattern learning from historical data (fixed casing issue)
+    patterns = context.get("patterns", {})
+    if patterns:
+        processor_patterns = patterns.get("processor_patterns", {})
+        processor_types = processor_patterns.get("processor_types", {})
+
+        # Boost score if this processor type commonly has tables
+        if processor_type in processor_types:
+            frequency = processor_types[processor_type]
+            total = patterns.get("total_candidates", 1)
+            if (
+                frequency / total > 0.1
+            ):  # More than 10% of tables from this processor type
+                score += 0.2
+
+    # Skip GenerateFlowFile context
+    if "generateflowfile" in processor_type:
+        score -= 0.8
+
+    # Penalize if from non-SQL property but claiming to be SQL table
+    if (
+        context.get("from_sql")
+        and "sql" not in property_name
+        and "query" not in property_name
+    ):
+        score -= 0.1
+
+    return max(score, 0.0)
+
+
+def _score_database_formats(table_name: str) -> float:
+    """Score based on database-specific format patterns."""
+    score = 0.0
+
+    # HBase table format (namespace:table)
+    if ":" in table_name and len(table_name.split(":")) == 2:
+        score += 0.8
+
+    # SQL qualified names (2-part or 3-part: schema.table or catalog.schema.table)
+    if "." in table_name:
+        parts = table_name.split(".")
+        if 2 <= len(parts) <= 3 and all(
+            re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_]*$", p) for p in parts
+        ):
+            score += 0.6
+
+    # MongoDB collection patterns
+    if table_name.endswith("s") and len(table_name) > 4:  # plural collections
+        score += 0.2
+
+    return min(score, 1.0)
+
+
+def _get_anti_patterns() -> Set[str]:
+    """Get set of known anti-patterns that are definitely not table names."""
+    return {
+        # SQL keywords
+        "select",
+        "from",
+        "where",
+        "join",
+        "inner",
+        "left",
+        "right",
+        "outer",
+        "full",
+        "union",
+        "order",
+        "group",
+        "having",
+        "limit",
+        "offset",
+        "distinct",
+        "count",
+        "sum",
+        "avg",
+        "max",
+        "min",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "as",
+        "and",
+        "or",
+        "not",
+        "null",
+        "true",
+        "false",
+        "exists",
+        "in",
+        "between",
+        "like",
+        "is",
+        "desc",
+        "asc",
+        "by",
+        "into",
+        "values",
+        "insert",
+        "update",
+        "delete",
+        "create",
+        "drop",
+        "alter",
+        "table",
+        "index",
+        "view",
+        "database",
+        "schema",
+        "column",
+        "primary",
+        "foreign",
+        "key",
+        "constraint",
+        "default",
+        "auto_increment",
+        "unique",
+        "cascade",
+        "on",
+        "references",
+        "check",
+        # Detected false positives from real data
+        "because",
+        "dates",
+        "grps",
+        "leadlag",
+        "now",
+        "startgrouping",
+        "if",
+        "then",
+        "else",
+        "when",
+        "case",
+        "end",
+        # Configuration properties
+        "prod_table",
+        "staging_table",
+        "external_table",
+        "entity",
+        "table_name",
+        "database_name",
+        "schema_name",
+        "connection_url",
+        "driver_class",
+        "host",
+        "port",
+        "username",
+        "password",
+        # Common non-table words
+        "true",
+        "false",
+        "yes",
+        "no",
+        "none",
+        "null",
+        "empty",
+        "default",
+        "auto",
+        "manual",
+        "enabled",
+        "disabled",
+        "active",
+        "inactive",
+    }
 
 
 def _remove_duplicate_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
