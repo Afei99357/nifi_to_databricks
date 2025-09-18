@@ -60,9 +60,9 @@ def display_script_results(scripts, uploaded_file):
                     {
                         "Script Path": script["path"],
                         "Script Type": script["type"],
-                        "Migration Priority": script["migration_priority"],
                         "Processor Name": result["processor_name"],
                         "Processor Type": result["processor_type"],
+                        "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
                     }
                 )
@@ -76,9 +76,9 @@ def display_script_results(scripts, uploaded_file):
                             else executable["command"]
                         ),
                         "Script Type": executable["type"],
-                        "Migration Priority": executable["migration_priority"],
                         "Processor Name": result["processor_name"],
                         "Processor Type": result["processor_type"],
+                        "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
                     }
                 )
@@ -88,7 +88,7 @@ def display_script_results(scripts, uploaded_file):
             script_df = pd.DataFrame(script_details)
 
             # Filter controls
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
                 script_types = ["All"] + sorted(
                     script_df["Script Type"].unique().tolist()
@@ -98,14 +98,6 @@ def display_script_results(scripts, uploaded_file):
                 )
 
             with col2:
-                priorities = ["All"] + sorted(
-                    script_df["Migration Priority"].unique().tolist()
-                )
-                selected_priority = st.selectbox(
-                    "Filter by Priority:", priorities, key="priority_filter"
-                )
-
-            with col3:
                 search_script = st.text_input(
                     "Search Scripts:",
                     placeholder="Enter script name",
@@ -118,11 +110,6 @@ def display_script_results(scripts, uploaded_file):
             if selected_script_type != "All":
                 filtered_script_df = filtered_script_df[
                     filtered_script_df["Script Type"] == selected_script_type
-                ]
-
-            if selected_priority != "All":
-                filtered_script_df = filtered_script_df[
-                    filtered_script_df["Migration Priority"] == selected_priority
                 ]
 
             if search_script:
@@ -152,14 +139,14 @@ def display_script_results(scripts, uploaded_file):
                         "Script Type": st.column_config.TextColumn(
                             "Script Type", width="small"
                         ),
-                        "Migration Priority": st.column_config.TextColumn(
-                            "Migration Priority", width="small"
-                        ),
                         "Processor Name": st.column_config.TextColumn(
                             "Processor Name", width="medium"
                         ),
                         "Processor Type": st.column_config.TextColumn(
                             "Processor Type", width="medium"
+                        ),
+                        "Group Name": st.column_config.TextColumn(
+                            "Group Name", width="medium"
                         ),
                         "Processor ID": st.column_config.TextColumn(
                             "Processor ID", width="small"

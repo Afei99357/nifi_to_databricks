@@ -167,6 +167,7 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
     processor_id = processor.get("id", "")
     processor_name = processor.get("name", "")
     processor_type = processor.get("type", "")
+    processor_group = processor.get("parentGroupName", "Root")
     properties = processor.get("properties", {})
 
     result = {
@@ -175,6 +176,7 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
         "processor_type": (
             processor_type.split(".")[-1] if processor_type else "Unknown"
         ),
+        "processor_group": processor_group,
         "scripts": [],
         "executables": [],
         "external_hosts": [],
@@ -238,7 +240,6 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
             "path": script_file,
             "type": _classify_script_type(script_file),
             "property_source": "detected_from_properties",
-            "migration_priority": "high" if script_file.startswith("/") else "medium",
         }
         result["scripts"].append(script_info)
 
@@ -246,7 +247,6 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
         exec_info = {
             "command": executable,
             "type": "executable_command",
-            "migration_priority": "high",
         }
         result["executables"].append(exec_info)
 
