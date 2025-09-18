@@ -34,11 +34,15 @@ def display_script_results(scripts, uploaded_file):
         st.markdown("### 📊 Script Extraction Summary")
 
         total_processors = len(scripts)
-        total_external_scripts = sum(len(result["scripts"]) for result in scripts)
+        total_external_scripts = sum(
+            len(result.get("external_scripts", [])) for result in scripts
+        )
         total_inline_scripts = sum(
             len(result.get("inline_scripts", [])) for result in scripts
         )
-        total_executables = sum(len(result["executables"]) for result in scripts)
+        total_external_hosts = sum(
+            len(result.get("external_hosts", [])) for result in scripts
+        )
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -48,7 +52,7 @@ def display_script_results(scripts, uploaded_file):
         with col3:
             st.metric("Inline Scripts", total_inline_scripts)
         with col4:
-            st.metric("Executable Commands", total_executables)
+            st.metric("External Hosts", total_external_hosts)
 
         if not scripts:
             st.info("No scripts found in the workflow.")
@@ -58,7 +62,7 @@ def display_script_results(scripts, uploaded_file):
         script_details = []
         for result in scripts:
             # External script files
-            for script in result["scripts"]:
+            for script in result.get("external_scripts", []):
                 script_details.append(
                     {
                         "Script Path": script["path"],
@@ -68,38 +72,28 @@ def display_script_results(scripts, uploaded_file):
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
-                    }
-                )
-
-            # Executable commands
-            for executable in result["executables"]:
-                script_details.append(
-                    {
-                        "Script Path": (
-                            executable["command"][:80] + "..."
-                            if len(executable["command"]) > 80
-                            else executable["command"]
-                        ),
-                        "Script Type": executable["type"],
-                        "Source Type": "Executable Command",
-                        "Processor Name": result["processor_name"],
-                        "Processor Type": result["processor_type"],
-                        "Group Name": result["processor_group"],
-                        "Processor ID": result["processor_id"],
+                        "Confidence": "N/A",
                     }
                 )
 
             # Inline scripts
             for inline_script in result.get("inline_scripts", []):
+                # Create script path with query references if available
+                script_path = f"{inline_script['property_name']} ({inline_script['line_count']} lines)"
+                if inline_script.get("referenced_queries"):
+                    refs = ", ".join(inline_script["referenced_queries"])
+                    script_path = f"{script_path} → {refs}"
+
                 script_details.append(
                     {
-                        "Script Path": f"{inline_script['property_name']} ({inline_script['line_count']} lines)",
+                        "Script Path": script_path,
                         "Script Type": inline_script["script_type"],
                         "Source Type": "Inline Script",
                         "Processor Name": result["processor_name"],
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
+                        "Confidence": f"{inline_script.get('confidence', 0.0):.2f}",
                     }
                 )
 
@@ -108,7 +102,7 @@ def display_script_results(scripts, uploaded_file):
             script_df = pd.DataFrame(script_details)
 
             # Filter controls
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 script_types = ["All"] + sorted(
                     script_df["Script Type"].unique().tolist()
@@ -118,6 +112,17 @@ def display_script_results(scripts, uploaded_file):
                 )
 
             with col2:
+                # Confidence filter (only for inline scripts)
+                min_confidence = st.slider(
+                    "Min Confidence:",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.3,
+                    step=0.05,
+                    key="confidence_filter",
+                )
+
+            with col3:
                 search_script = st.text_input(
                     "Search Scripts:",
                     placeholder="Enter script name",
@@ -131,6 +136,14 @@ def display_script_results(scripts, uploaded_file):
                 filtered_script_df = filtered_script_df[
                     filtered_script_df["Script Type"] == selected_script_type
                 ]
+
+            # Apply confidence filter (only to scripts with numeric confidence)
+            if min_confidence > 0:
+                mask = (filtered_script_df["Confidence"] == "N/A") | (
+                    pd.to_numeric(filtered_script_df["Confidence"], errors="coerce")
+                    >= min_confidence
+                )
+                filtered_script_df = filtered_script_df[mask]
 
             if search_script:
                 filtered_script_df = filtered_script_df[
@@ -171,6 +184,9 @@ def display_script_results(scripts, uploaded_file):
                         "Processor ID": st.column_config.TextColumn(
                             "Processor ID", width="small"
                         ),
+                        "Confidence": st.column_config.TextColumn(
+                            "Confidence", width="small"
+                        ),
                     },
                 )
             else:
@@ -186,9 +202,15 @@ def display_script_results(scripts, uploaded_file):
                         "processor_type": result["processor_type"],
                         "property_name": inline_script["property_name"],
                         "script_type": inline_script["script_type"],
-                        "content_preview": inline_script["content_preview"],
+                        "content_preview": inline_script.get(
+                            "content_preview", inline_script.get("content", "")[:800]
+                        ),
                         "line_count": inline_script["line_count"],
-                        "content_length": inline_script["content_length"],
+                        "confidence": inline_script.get("confidence", 0.0),
+                        "referenced_queries": inline_script.get(
+                            "referenced_queries", []
+                        ),
+                        "full_content": inline_script.get("content", ""),
                     }
                 )
 
@@ -209,11 +231,21 @@ def display_script_results(scripts, uploaded_file):
                         st.markdown(f"**Script Type:** {script_data['script_type']}")
                     with col2:
                         st.markdown(f"**Lines:** {script_data['line_count']}")
-                        st.markdown(f"**Characters:** {script_data['content_length']}")
+                        st.markdown(f"**Confidence:** {script_data['confidence']:.2f}")
+                        if script_data["referenced_queries"]:
+                            st.markdown(
+                                f"**References:** {', '.join(script_data['referenced_queries'])}"
+                            )
 
                     st.markdown("**Script Preview:**")
+                    # Show full content for shorter scripts, preview for longer ones
+                    content_to_show = (
+                        script_data["full_content"]
+                        if len(script_data["full_content"]) <= 800
+                        else script_data["content_preview"]
+                    )
                     st.code(
-                        script_data["content_preview"],
+                        content_to_show,
                         language=script_data["script_type"],
                     )
 
