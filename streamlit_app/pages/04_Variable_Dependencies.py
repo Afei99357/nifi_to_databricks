@@ -538,7 +538,7 @@ def display_variable_results(result, uploaded_file=None):
 
                         connection_flows.append(
                             {
-                                "Variable": f"${{{clean_var_name}}}",
+                                "Variable": clean_var_name,  # Show clean variable name without ${} wrapper
                                 "Source Processor": source["processor_name"],
                                 "Source ID": source["processor_id"],
                                 "Target Processor": target["processor_name"],
@@ -554,23 +554,13 @@ def display_variable_results(result, uploaded_file=None):
                 # Filter controls
                 col1, col2 = st.columns(2)
                 with col1:
-                    # Clean variable names for dropdown (remove ${} wrapper)
-                    clean_var_options = ["All"] + sorted(
-                        [
-                            var.replace("${", "").replace("}", "")
-                            for var in conn_df["Variable"].unique().tolist()
-                        ]
+                    # Variable names are already clean in the dataframe
+                    var_options = ["All"] + sorted(
+                        conn_df["Variable"].unique().tolist()
                     )
-                    var_filter_clean = st.selectbox(
-                        "Filter by Variable:",
-                        clean_var_options,
-                    )
-
-                    # Convert back to ${} format for filtering
-                    var_filter = (
-                        f"${{{var_filter_clean}}}"
-                        if var_filter_clean != "All"
-                        else "All"
+                    var_filter = st.selectbox(
+                        "Filter by Variable (💡 select one to see detailed flow chains):",
+                        var_options,
                     )
 
                 with col2:
@@ -624,14 +614,12 @@ def display_variable_results(result, uploaded_file=None):
                     selected_var_flows = []
                     for var_name, var_data in variables.items():
                         clean_var_name = var_name.strip()
-                        if f"${{{clean_var_name}}}" == var_filter:
+                        if clean_var_name == var_filter:
                             selected_var_flows = var_data.get("flows", [])
                             break
 
                     if selected_var_flows:
-                        st.markdown(
-                            f"#### 🔗 Variable Flow Chains for `{var_filter_clean}`"
-                        )
+                        st.markdown(f"#### 🔗 Variable Flow Chains for `{var_filter}`")
                         st.info(
                             "Complete flow chains showing how this variable moves through connected processors."
                         )
