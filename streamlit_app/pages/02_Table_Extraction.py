@@ -34,41 +34,39 @@ def display_table_results(tables, uploaded_file):
         # Display summary metrics
         st.markdown("### 📊 Table Extraction Summary")
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total Tables", summary["total_tables"])
         with col2:
-            st.metric("Data Sources", len(summary["data_sources"]))
-        with col3:
-            st.metric("Detection Methods", len(summary["detection_methods"]))
-        with col4:
             st.metric("Processor Types", len(summary["top_processors"]))
+        with col3:
+            st.metric("Property Types", len(summary["property_types"]))
 
         if not tables:
             st.info("No tables found in the workflow.")
             return
 
-        # Data source breakdown
-        if summary["data_sources"]:
-            st.markdown("### 📈 Data Sources Breakdown")
-            ds_df = pd.DataFrame(
-                list(summary["data_sources"].items()),
-                columns=["Data Source", "Table Count"],
+        # Processor types breakdown
+        if summary["top_processors"]:
+            st.markdown("### 🔧 Top Processor Types")
+            pt_df = pd.DataFrame(
+                list(summary["top_processors"].items()),
+                columns=["Processor Type", "Table Count"],
             )
             col1, col2 = st.columns([1, 2])
             with col1:
-                st.dataframe(ds_df, hide_index=True, use_container_width=True)
+                st.dataframe(pt_df, hide_index=True, use_container_width=True)
             with col2:
-                st.bar_chart(ds_df.set_index("Data Source")["Table Count"])
+                st.bar_chart(pt_df.set_index("Processor Type")["Table Count"])
 
-        # Detection methods breakdown
-        if summary["detection_methods"]:
-            st.markdown("### 🔍 Detection Methods")
-            dm_df = pd.DataFrame(
-                list(summary["detection_methods"].items()),
-                columns=["Detection Method", "Count"],
+        # Property types breakdown
+        if summary["property_types"]:
+            st.markdown("### 📝 Property Types")
+            pr_df = pd.DataFrame(
+                list(summary["property_types"].items()),
+                columns=["Property Name", "Count"],
             )
-            st.dataframe(dm_df, hide_index=True, use_container_width=True)
+            st.dataframe(pr_df, hide_index=True, use_container_width=True)
 
         # Main table display
         st.markdown("### 🗄️ Extracted Tables")
@@ -77,22 +75,15 @@ def display_table_results(tables, uploaded_file):
         table_df = pd.DataFrame(tables)
 
         # Filter controls
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
-            # Data source filter
-            data_sources = ["All"] + sorted(table_df["data_source"].unique().tolist())
-            selected_source = st.selectbox(
-                "Filter by Data Source:", data_sources, key="data_source_filter"
-            )
-
-        with col2:
             # Processor type filter
             proc_types = ["All"] + sorted(table_df["processor_type"].unique().tolist())
             selected_proc_type = st.selectbox(
                 "Filter by Processor Type:", proc_types, key="processor_type_filter"
             )
 
-        with col3:
+        with col2:
             # Text search filter
             search_term = st.text_input(
                 "Search Table Names:",
@@ -102,9 +93,6 @@ def display_table_results(tables, uploaded_file):
 
         # Apply filters
         filtered_df = table_df.copy()
-
-        if selected_source != "All":
-            filtered_df = filtered_df[filtered_df["data_source"] == selected_source]
 
         if selected_proc_type != "All":
             filtered_df = filtered_df[
@@ -128,20 +116,18 @@ def display_table_results(tables, uploaded_file):
             display_df = filtered_df[
                 [
                     "table_name",
-                    "data_source",
                     "processor_name",
-                    "processor_id",
                     "processor_type",
-                    "detection_method",
+                    "property_name",
+                    "processor_id",
                 ]
             ].copy()
             display_df.columns = [
                 "Table Name",
-                "Data Source",
                 "Processor Name",
-                "Processor ID",
                 "Processor Type",
-                "Detection Method",
+                "Property Name",
+                "Processor ID",
             ]
 
             st.dataframe(
@@ -153,20 +139,17 @@ def display_table_results(tables, uploaded_file):
                     "Table Name": st.column_config.TextColumn(
                         "Table Name", width="medium"
                     ),
-                    "Data Source": st.column_config.TextColumn(
-                        "Data Source", width="small"
-                    ),
                     "Processor Name": st.column_config.TextColumn(
                         "Processor Name", width="medium"
                     ),
+                    "Processor Type": st.column_config.TextColumn(
+                        "Processor Type", width="small"
+                    ),
+                    "Property Name": st.column_config.TextColumn(
+                        "Property Name", width="medium"
+                    ),
                     "Processor ID": st.column_config.TextColumn(
                         "Processor ID", width="small"
-                    ),
-                    "Processor Type": st.column_config.TextColumn(
-                        "Processor Type", width="medium"
-                    ),
-                    "Detection Method": st.column_config.TextColumn(
-                        "Detection Method", width="small"
                     ),
                 },
             )
@@ -191,23 +174,17 @@ def display_table_results(tables, uploaded_file):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**Table Name:** `{table_details['table_name']}`")
-                        st.markdown(f"**Data Source:** {table_details['data_source']}")
-                        st.markdown(
-                            f"**Detection Method:** {table_details['detection_method']}"
-                        )
-
-                    with col2:
                         st.markdown(
                             f"**Processor Name:** {table_details['processor_name']}"
-                        )
-                        st.markdown(
-                            f"**Processor Type:** {table_details['processor_type']}"
                         )
                         st.markdown(
                             f"**Property Name:** {table_details['property_name']}"
                         )
 
-                    if table_details.get("processor_id"):
+                    with col2:
+                        st.markdown(
+                            f"**Processor Type:** {table_details['processor_type']}"
+                        )
                         st.markdown(
                             f"**Processor ID:** `{table_details['processor_id']}`"
                         )

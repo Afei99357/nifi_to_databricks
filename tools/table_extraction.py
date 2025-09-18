@@ -891,8 +891,8 @@ def _remove_duplicate_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any
     seen = set()
 
     for table in tables:
-        # Create unique key based on table name and data source
-        key = (table["table_name"].lower(), table["data_source"])
+        # Create unique key based on table name and processor type
+        key = (table["table_name"].lower(), table["processor_type"])
 
         if key not in seen:
             unique_tables.append(table)
@@ -907,22 +907,9 @@ def get_table_summary(tables: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not tables:
         return {
             "total_tables": 0,
-            "data_sources": {},
-            "detection_methods": {},
             "top_processors": {},
+            "property_types": {},
         }
-
-    # Count by data source
-    data_sources = {}
-    for table in tables:
-        source = table["data_source"]
-        data_sources[source] = data_sources.get(source, 0) + 1
-
-    # Count by detection method
-    detection_methods = {}
-    for table in tables:
-        method = table["detection_method"]
-        detection_methods[method] = detection_methods.get(method, 0) + 1
 
     # Count by processor type
     processor_types = {}
@@ -930,11 +917,18 @@ def get_table_summary(tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         proc_type = table["processor_type"]
         processor_types[proc_type] = processor_types.get(proc_type, 0) + 1
 
+    # Count by property type
+    property_types = {}
+    for table in tables:
+        prop_name = table["property_name"]
+        property_types[prop_name] = property_types.get(prop_name, 0) + 1
+
     return {
         "total_tables": len(tables),
-        "data_sources": data_sources,
-        "detection_methods": detection_methods,
         "top_processors": dict(
             sorted(processor_types.items(), key=lambda x: x[1], reverse=True)[:5]
+        ),
+        "property_types": dict(
+            sorted(property_types.items(), key=lambda x: x[1], reverse=True)[:5]
         ),
     }
