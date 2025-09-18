@@ -52,13 +52,13 @@ def main():
             if st.button("🗄️ Extract Tables", use_container_width=True):
                 # Set flag to auto-start table extraction when arriving at page
                 st.session_state["auto_start_table_extraction"] = True
-                st.switch_page("pages/02_Asset_Extraction.py")
+                st.switch_page("pages/02_Table_Extraction.py")
 
         with row1_col3:
             if st.button("📜 Extract Scripts", use_container_width=True):
                 # Set flag to auto-start script extraction when arriving at page
                 st.session_state["auto_start_script_extraction"] = True
-                st.switch_page("pages/05_Script_Extraction.py")
+                st.switch_page("pages/03_Script_Extraction.py")
 
         # Second row
         row2_col1, row2_col2 = st.columns(2)
@@ -67,13 +67,13 @@ def main():
             if st.button("📊 Lineage & Connections", use_container_width=True):
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
-                st.switch_page("pages/03_Lineage_Connections.py")
+                st.switch_page("pages/04_Lineage_Connections.py")
 
         with row2_col2:
             if st.button("🔄 Variable Dependencies", use_container_width=True):
                 # Set flag to auto-start variable analysis when arriving at page
                 st.session_state["auto_start_variable_analysis"] = True
-                st.switch_page("pages/04_Variable_Dependencies.py")
+                st.switch_page("pages/05_Variable_Dependencies.py")
 
         # Second row for utility actions
         st.markdown("")  # Add some spacing
