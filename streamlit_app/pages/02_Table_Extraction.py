@@ -34,30 +34,15 @@ def display_table_results(tables, uploaded_file):
         # Display summary metrics
         st.markdown("### 📊 Table Extraction Summary")
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             st.metric("Total Tables", summary["total_tables"])
         with col2:
-            st.metric("Processor Types", len(summary["top_processors"]))
-        with col3:
             st.metric("Property Types", len(summary["property_types"]))
 
         if not tables:
             st.info("No tables found in the workflow.")
             return
-
-        # Processor types breakdown
-        if summary["top_processors"]:
-            st.markdown("### 🔧 Top Processor Types")
-            pt_df = pd.DataFrame(
-                list(summary["top_processors"].items()),
-                columns=["Processor Type", "Table Count"],
-            )
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.dataframe(pt_df, hide_index=True, use_container_width=True)
-            with col2:
-                st.bar_chart(pt_df.set_index("Processor Type")["Table Count"])
 
         # Property types breakdown
         if summary["property_types"]:
@@ -154,75 +139,22 @@ def display_table_results(tables, uploaded_file):
                 },
             )
 
-            # Detailed view for selected table
-            if len(filtered_df) > 0:
-                st.markdown("### 🔍 Table Details")
-
-                # Table selection for details
-                table_options = ["None"] + filtered_df["table_name"].tolist()
-                selected_table = st.selectbox(
-                    "Select table for detailed information:",
-                    table_options,
-                    key="table_detail_select",
-                )
-
-                if selected_table != "None":
-                    table_details = filtered_df[
-                        filtered_df["table_name"] == selected_table
-                    ].iloc[0]
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown(f"**Table Name:** `{table_details['table_name']}`")
-                        st.markdown(
-                            f"**Processor Name:** {table_details['processor_name']}"
-                        )
-                        st.markdown(
-                            f"**Property Name:** {table_details['property_name']}"
-                        )
-
-                    with col2:
-                        st.markdown(
-                            f"**Processor Type:** {table_details['processor_type']}"
-                        )
-                        st.markdown(
-                            f"**Processor ID:** `{table_details['processor_id']}`"
-                        )
-
         else:
             st.warning("No tables match the current filters.")
 
-        # Download buttons
-        if not table_df.empty:
-            col1, col2 = st.columns(2)
-            with col1:
-                # Download filtered results
-                filtered_csv = filtered_df.to_csv(index=False)
-                st.download_button(
-                    label=f"📥 Download Filtered Tables ({len(filtered_df)} items)",
-                    data=filtered_csv,
-                    file_name=f"nifi_tables_filtered_{uploaded_file.name.replace('.xml', '')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-            with col2:
-                # Download all results
-                all_csv = table_df.to_csv(index=False)
-                st.download_button(
-                    label=f"📥 Download All Tables ({len(table_df)} items)",
-                    data=all_csv,
-                    file_name=f"nifi_tables_all_{uploaded_file.name.replace('.xml', '')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+        # Download button
+        if not filtered_df.empty:
+            csv_data = filtered_df.to_csv(index=False)
+            st.download_button(
+                label=f"📥 Download Tables ({len(filtered_df)} items)",
+                data=csv_data,
+                file_name=f"nifi_tables_{uploaded_file.name.replace('.xml', '')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
     except Exception as e:
         st.error(f"❌ Error displaying table extraction results: {e}")
-        st.write(f"**Debug - Exception type:** {type(e)}")
-        st.write(f"**Debug - Exception details:** {str(e)}")
-        import traceback
-
-        st.code(traceback.format_exc())
 
 
 def main():

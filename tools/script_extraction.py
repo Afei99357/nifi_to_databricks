@@ -131,6 +131,126 @@ def _classify_script_type(script_path: str) -> str:
         return "unknown_script"
 
 
+def _detect_inline_script(prop_name: str, prop_value: str) -> Dict[str, Any]:
+    """Detect if a property contains inline script content rather than a file path."""
+    if not prop_value or len(prop_value.strip()) < 10:
+        return None
+
+    prop_name_lower = prop_name.lower()
+
+    # Property names that typically contain inline scripts
+    inline_script_properties = [
+        "script body",
+        "script_body",
+        "scriptbody",
+        "script content",
+        "script_content",
+        "scriptcontent",
+        "script text",
+        "script_text",
+        "scripttext",
+        "script code",
+        "script_code",
+        "scriptcode",
+        "query",
+        "sql",
+        "statement",
+        "command body",
+        "command_body",
+        "commandbody",
+        "python script",
+        "python_script",
+        "pythonscript",
+        "shell script",
+        "shell_script",
+        "shellscript",
+        "groovy script",
+        "groovy_script",
+        "groovyscript",
+    ]
+
+    # Check if property name suggests inline script
+    has_script_property_name = any(
+        keyword in prop_name_lower for keyword in inline_script_properties
+    )
+
+    # Detect script patterns in content
+    script_indicators = [
+        # Python patterns
+        r"import\s+\w+",
+        r"from\s+\w+\s+import",
+        r"def\s+\w+\s*\(",
+        r"if\s+__name__\s*==",
+        # Shell patterns
+        r"#!/bin/(bash|sh)",
+        r"echo\s+",
+        r"for\s+\w+\s+in",
+        r"if\s*\[\s*.+\s*\]",
+        # SQL patterns
+        r"SELECT\s+",
+        r"INSERT\s+INTO",
+        r"UPDATE\s+",
+        r"CREATE\s+TABLE",
+        r"FROM\s+\w+",
+        # Java/Groovy patterns
+        r"public\s+class",
+        r"import\s+java\.",
+        r"System\.out\.print",
+        # General programming patterns
+        r"\{\s*\n.*\n.*\}",
+        r"=\s*function\s*\(",
+        r"var\s+\w+\s*=",
+    ]
+
+    has_script_patterns = any(
+        re.search(pattern, prop_value, re.IGNORECASE | re.MULTILINE)
+        for pattern in script_indicators
+    )
+
+    # Multi-line content is likely script code
+    has_multiple_lines = "\n" in prop_value.strip() and len(prop_value.split("\n")) > 2
+
+    # Not a file path (doesn't start with / or contain common path patterns)
+    is_not_file_path = not (
+        prop_value.startswith("/")
+        or prop_value.startswith("./")
+        or any(ext in prop_value for ext in SCRIPT_EXTENSIONS)
+    )
+
+    # Determine if this looks like inline script content
+    if (
+        (has_script_property_name or has_script_patterns)
+        and has_multiple_lines
+        and is_not_file_path
+    ):
+        # Determine script type
+        script_type = "unknown"
+        if re.search(r"import\s+\w+|def\s+\w+|python", prop_value, re.IGNORECASE):
+            script_type = "python"
+        elif re.search(
+            r"#!/bin/(bash|sh)|echo\s+|bash|shell", prop_value, re.IGNORECASE
+        ):
+            script_type = "shell"
+        elif re.search(r"SELECT|INSERT|UPDATE|CREATE|sql", prop_value, re.IGNORECASE):
+            script_type = "sql"
+        elif re.search(
+            r"import\s+java|public\s+class|groovy", prop_value, re.IGNORECASE
+        ):
+            script_type = "java_groovy"
+
+        return {
+            "property_name": prop_name,
+            "script_type": script_type,
+            "content_preview": (
+                prop_value[:200] + "..." if len(prop_value) > 200 else prop_value
+            ),
+            "content_length": len(prop_value),
+            "line_count": len(prop_value.split("\n")),
+        }
+
+    return None
+
+
 def _extract_external_hosts_from_scripts(script_content: str) -> Set[str]:
     """Extract external host dependencies from script content."""
     hosts = set()
@@ -178,6 +298,7 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "processor_group": processor_group,
         "scripts": [],
+        "inline_scripts": [],
         "executables": [],
         "external_hosts": [],
         "script_count": 0,
@@ -185,6 +306,7 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     script_files = set()
+    inline_scripts = []
     executable_commands = set()
     external_hosts = set()
 
@@ -198,6 +320,11 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
 
         if _is_script_false_positive(prop_value):
             continue
+
+        # Check for inline script content (multi-line scripts in properties)
+        inline_script = _detect_inline_script(prop_name, prop_value)
+        if inline_script:
+            inline_scripts.append(inline_script)
 
         # 1. Direct script file paths
         if (
@@ -250,8 +377,13 @@ def extract_scripts_from_processor(processor: Dict[str, Any]) -> Dict[str, Any]:
         }
         result["executables"].append(exec_info)
 
+    # Add inline scripts to results
+    result["inline_scripts"] = inline_scripts
+
     result["external_hosts"] = list(external_hosts)
-    result["script_count"] = len(script_files) + len(executable_commands)
+    result["script_count"] = (
+        len(script_files) + len(executable_commands) + len(inline_scripts)
+    )
     result["has_external_dependencies"] = len(external_hosts) > 0
 
     return result

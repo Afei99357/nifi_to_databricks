@@ -34,18 +34,21 @@ def display_script_results(scripts, uploaded_file):
         st.markdown("### 📊 Script Extraction Summary")
 
         total_processors = len(scripts)
-        total_scripts = sum(result["script_count"] for result in scripts)
+        total_external_scripts = sum(len(result["scripts"]) for result in scripts)
+        total_inline_scripts = sum(
+            len(result.get("inline_scripts", [])) for result in scripts
+        )
+        total_executables = sum(len(result["executables"]) for result in scripts)
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Processors with Scripts", total_processors)
         with col2:
-            st.metric("Total Scripts", total_scripts)
+            st.metric("External Scripts", total_external_scripts)
         with col3:
-            external_deps = set()
-            for result in scripts:
-                external_deps.update(result["external_hosts"])
-            st.metric("External Dependencies", len(external_deps))
+            st.metric("Inline Scripts", total_inline_scripts)
+        with col4:
+            st.metric("Executable Commands", total_executables)
 
         if not scripts:
             st.info("No scripts found in the workflow.")
@@ -54,11 +57,13 @@ def display_script_results(scripts, uploaded_file):
         # Create detailed table
         script_details = []
         for result in scripts:
+            # External script files
             for script in result["scripts"]:
                 script_details.append(
                     {
                         "Script Path": script["path"],
                         "Script Type": script["type"],
+                        "Source Type": "External File",
                         "Processor Name": result["processor_name"],
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
@@ -66,6 +71,7 @@ def display_script_results(scripts, uploaded_file):
                     }
                 )
 
+            # Executable commands
             for executable in result["executables"]:
                 script_details.append(
                     {
@@ -75,6 +81,21 @@ def display_script_results(scripts, uploaded_file):
                             else executable["command"]
                         ),
                         "Script Type": executable["type"],
+                        "Source Type": "Executable Command",
+                        "Processor Name": result["processor_name"],
+                        "Processor Type": result["processor_type"],
+                        "Group Name": result["processor_group"],
+                        "Processor ID": result["processor_id"],
+                    }
+                )
+
+            # Inline scripts
+            for inline_script in result.get("inline_scripts", []):
+                script_details.append(
+                    {
+                        "Script Path": f"{inline_script['property_name']} ({inline_script['line_count']} lines)",
+                        "Script Type": inline_script["script_type"],
+                        "Source Type": "Inline Script",
                         "Processor Name": result["processor_name"],
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
@@ -155,7 +176,51 @@ def display_script_results(scripts, uploaded_file):
             else:
                 st.warning("No scripts match the current filters.")
 
+        # Inline script details with preview
+        inline_script_data = []
+        for result in scripts:
+            for inline_script in result.get("inline_scripts", []):
+                inline_script_data.append(
+                    {
+                        "processor_name": result["processor_name"],
+                        "processor_type": result["processor_type"],
+                        "property_name": inline_script["property_name"],
+                        "script_type": inline_script["script_type"],
+                        "content_preview": inline_script["content_preview"],
+                        "line_count": inline_script["line_count"],
+                        "content_length": inline_script["content_length"],
+                    }
+                )
+
+        if inline_script_data:
+            st.markdown("### 📝 Inline Script Content")
+            st.info(
+                "These scripts are written directly in processor properties and will need to be migrated to external files or adapted for Databricks."
+            )
+
+            for i, script_data in enumerate(inline_script_data):
+                with st.expander(
+                    f"🐍 {script_data['processor_name']} - {script_data['property_name']} ({script_data['script_type']})"
+                ):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Processor:** {script_data['processor_name']}")
+                        st.markdown(f"**Property:** {script_data['property_name']}")
+                        st.markdown(f"**Script Type:** {script_data['script_type']}")
+                    with col2:
+                        st.markdown(f"**Lines:** {script_data['line_count']}")
+                        st.markdown(f"**Characters:** {script_data['content_length']}")
+
+                    st.markdown("**Script Preview:**")
+                    st.code(
+                        script_data["content_preview"],
+                        language=script_data["script_type"],
+                    )
+
         # External dependencies
+        external_deps = set()
+        for result in scripts:
+            external_deps.update(result["external_hosts"])
         if external_deps:
             st.markdown("### 🌐 External Dependencies")
             deps_df = pd.DataFrame(list(external_deps), columns=["External Host"])

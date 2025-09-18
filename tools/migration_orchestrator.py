@@ -53,12 +53,12 @@ def extract_nifi_assets_only(
         _log("🔍 Parsing NiFi XML...")
         import json
 
-        from tools.xml_tools import parse_nifi_template
+        from tools.xml_tools import parse_nifi_template_impl
 
         with open(xml_path, "r", encoding="utf-8") as f:
             xml_content = f.read()
 
-        template_data = json.loads(parse_nifi_template(xml_content))
+        template_data = parse_nifi_template_impl(xml_content)
         processors = template_data.get("processors", [])
 
         _log(f"📋 Found {len(processors)} processors, extracting assets...")

@@ -3,14 +3,11 @@
 
 from __future__ import annotations
 
-import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
 __all__ = [
-    "parse_nifi_template",
     "parse_nifi_template_impl",
-    "extract_nifi_parameters_and_services_impl",
     "extract_processor_info",
 ]
 
@@ -95,95 +92,6 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
         "connection_count": len(connections),
         "process_groups": process_groups,
     }
-
-
-def parse_nifi_template(xml_content: str) -> str:
-    """
-    Parse a NiFi XML template and return JSON string.
-    Legacy interface for existing tool compatibility.
-    """
-    try:
-        result = parse_nifi_template_impl(xml_content)
-        result.update(
-            {
-                "continue_required": False,
-                "tool_name": "parse_nifi_template",
-            }
-        )
-        return json.dumps(result, indent=2)
-    except ET.ParseError as e:
-        return f"Error parsing XML: {str(e)}"
-    except Exception as e:
-        return f"Unexpected error: {str(e)}"
-
-
-def extract_nifi_parameters_and_services_impl(xml_content: str) -> Dict[str, Any]:
-    """
-    Extract Parameter Contexts and Controller Services from NiFi XML template.
-
-    Parameters:
-        xml_content: The raw NiFi XML content
-
-    Returns:
-        Dict with parameter_contexts, controller_services, and suggested_mappings
-    """
-    root = ET.fromstring(xml_content)
-
-    result: Dict[str, Any] = {
-        "parameter_contexts": [],
-        "controller_services": [],
-        "suggested_mappings": [],
-    }
-
-    # Parameter Contexts
-    for pc in root.findall(".//parameterContexts/parameterContext"):
-        name = _trim(pc.findtext("component/name") or "unnamed")
-        params = []
-        for p in pc.findall(".//component/parameters/parameter"):
-            params.append(
-                {
-                    "name": p.findtext("parameter/name"),
-                    "value": p.findtext("parameter/value"),
-                    "sensitive": (p.findtext("parameter/sensitive") == "true"),
-                }
-            )
-        result["parameter_contexts"].append({"name": name, "parameters": params})
-
-    # Controller Services
-    for cs in root.findall(".//controllerServices/controllerService"):
-        c = cs.find("component")
-        entries = c.findall(".//properties/entry") if c is not None else []
-        props = {e.findtext("name"): e.findtext("value") for e in entries}
-        result["controller_services"].append(
-            {
-                "id": cs.findtext("id"),
-                "name": c.findtext("name") if c is not None else None,
-                "type": c.findtext("type") if c is not None else None,
-                "properties": props,
-            }
-        )
-
-    # Generate Databricks mapping suggestions
-    for cs in result["controller_services"]:
-        service_type = (cs.get("type") or "").lower()
-        if "dbcp" in service_type or "jdbc" in service_type:
-            result["suggested_mappings"].append(
-                {
-                    "nifi": cs.get("name"),
-                    "databricks_equivalent": "JDBC via spark.read/write + Databricks Secrets",
-                    "how": "Store URL/user/password in a secret scope; attach JDBC drivers to cluster.",
-                }
-            )
-        elif "sslcontextservice" in service_type:
-            result["suggested_mappings"].append(
-                {
-                    "nifi": cs.get("name"),
-                    "databricks_equivalent": "Secure endpoints + secrets-backed cert paths",
-                    "how": "Upload certs to secured location; reference via secrets or init scripts.",
-                }
-            )
-
-    return result
 
 
 def extract_processor_info(xml_content: str) -> List[Dict[str, str]]:

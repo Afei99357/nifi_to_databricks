@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from databricks_langchain import ChatDatabricks
 
-from .xml_tools import parse_nifi_template
+from .xml_tools import parse_nifi_template_impl
 
 
 def _repair_json_if_available(content: str) -> str:
@@ -823,7 +823,7 @@ def analyze_workflow_patterns(
         with open(xml_path, "r", encoding="utf-8") as f:
             xml_content = f.read()
 
-        template_data = json.loads(parse_nifi_template(xml_content))
+        template_data = parse_nifi_template_impl(xml_content)
         processors = template_data.get("processors", [])
         classification_results = analyze_processors_batch(processors)
         summary = _summarize(classification_results)
