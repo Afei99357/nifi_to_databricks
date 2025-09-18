@@ -686,7 +686,6 @@ def _score_context_clues(table_name: str, context: Dict[str, Any]) -> float:
     # Canonicalize processor type for consistent matching
     processor_type = _canonical_type(context.get("processor_type", ""))
     property_name = context.get("property_name", "").lower()
-    detection_method = context.get("detection_method", "")
 
     # Processor type context
     data_processors = [
@@ -706,16 +705,11 @@ def _score_context_clues(table_name: str, context: Dict[str, Any]) -> float:
     if any(prop in property_name for prop in table_properties):
         score += 0.4
 
-    # Detection method context
-    if detection_method == "sql_parsing":
+    # SQL parsing context boost
+    if context.get("from_sql"):
         sql_context = context.get("sql_context", {})
         sql_confidence = sql_context.get("confidence", 0.5)
         score += sql_confidence * 0.3
-
-    # Controller service context boost
-    data_source = context.get("data_source", "").lower()
-    if data_source in {"sql database", "hive"}:
-        score += 0.2
 
     # Pattern learning from historical data (fixed casing issue)
     patterns = context.get("patterns", {})
