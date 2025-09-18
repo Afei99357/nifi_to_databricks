@@ -131,10 +131,8 @@ def display_variable_results(result, uploaded_file):
                 # Enhanced column-based filter controls
                 st.markdown("#### 🔧 Filter Controls")
 
-                # Create filter columns for each data column
-                filter_col1, filter_col2, filter_col3, filter_col4, filter_col5 = (
-                    st.columns(5)
-                )
+                # Create filter columns (removed Processor Type for cleaner layout)
+                filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
 
                 with filter_col1:
                     unique_vars = ["All"] + sorted(
@@ -153,14 +151,6 @@ def display_variable_results(result, uploaded_file):
                     )
 
                 with filter_col3:
-                    unique_types = ["All"] + sorted(
-                        details_df["Processor Type"].unique().tolist()
-                    )
-                    selected_type_filter = st.selectbox(
-                        "Processor Type:", unique_types, key="type_filter"
-                    )
-
-                with filter_col4:
                     unique_groups = ["All"] + sorted(
                         details_df["Group Name"].unique().tolist()
                     )
@@ -168,7 +158,7 @@ def display_variable_results(result, uploaded_file):
                         "Group Name:", unique_groups, key="group_filter"
                     )
 
-                with filter_col5:
+                with filter_col4:
                     unique_sources = ["All"] + sorted(
                         details_df["Source"].unique().tolist()
                     )
@@ -204,11 +194,6 @@ def display_variable_results(result, uploaded_file):
                         == selected_processor_filter
                     ]
 
-                if selected_type_filter != "All":
-                    filtered_details_df = filtered_details_df[
-                        filtered_details_df["Processor Type"] == selected_type_filter
-                    ]
-
                 if selected_group_filter != "All":
                     filtered_details_df = filtered_details_df[
                         filtered_details_df["Group Name"] == selected_group_filter
@@ -236,8 +221,6 @@ def display_variable_results(result, uploaded_file):
                     active_filters.append(f"Variable: {selected_var_filter}")
                 if selected_processor_filter != "All":
                     active_filters.append(f"Processor: {selected_processor_filter}")
-                if selected_type_filter != "All":
-                    active_filters.append(f"Type: {selected_type_filter}")
                 if selected_group_filter != "All":
                     active_filters.append(f"Group: {selected_group_filter}")
                 if selected_source_filter != "All":
