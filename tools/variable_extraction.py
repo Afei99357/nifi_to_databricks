@@ -114,6 +114,9 @@ def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, Lis
                                 "processor_id": proc_id,
                                 "processor_name": proc_name,
                                 "processor_type": proc_type,
+                                "parent_group_name": proc.get(
+                                    "parentGroupName", "Root"
+                                ),
                                 "property_name": prop_name,
                                 "property_value": prop_value,
                                 "definition_type": definition_type,
@@ -163,6 +166,7 @@ def find_variable_usage(processors: List[Dict[str, Any]]) -> Dict[str, List]:
                             "processor_id": proc_id,
                             "processor_name": proc_name,
                             "processor_type": proc_type,
+                            "parent_group_name": proc.get("parentGroupName", "Root"),
                             "property_name": prop_name,
                             "property_value": prop_value,
                             "variable_expression": f"${{{var_name}}}",

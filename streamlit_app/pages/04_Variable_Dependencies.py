@@ -100,6 +100,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Name": defn["processor_name"],
                                 "Processor ID": defn["processor_id"],
                                 "Processor Type": defn["processor_type"].split(".")[-1],
+                                "Group Name": defn.get("parent_group_name", "Root"),
                                 "Source": "Known",
                                 "Property": defn["property_name"],
                                 "Value": defn["property_value"],
@@ -117,6 +118,7 @@ def display_variable_results(result, uploaded_file):
                                 "Processor Type": usage["processor_type"].split(".")[
                                     -1
                                 ],
+                                "Group Name": usage.get("parent_group_name", "Root"),
                                 "Source": "Unknown Source",
                                 "Property": usage["property_name"],
                                 "Value": f"Usage: {usage['variable_expression']} in {usage['processor_name']}",
@@ -126,38 +128,129 @@ def display_variable_results(result, uploaded_file):
             if all_variables_data:
                 details_df = pd.DataFrame(all_variables_data)
 
-                # Filter controls
-                col1, col2 = st.columns(2)
-                with col1:
-                    # Variable name filter
-                    unique_vars = sorted(details_df["Variable Name"].unique().tolist())
+                # Enhanced column-based filter controls
+                st.markdown("#### 🔧 Filter Controls")
+
+                # Create filter columns for each data column
+                filter_col1, filter_col2, filter_col3, filter_col4, filter_col5 = (
+                    st.columns(5)
+                )
+
+                with filter_col1:
+                    unique_vars = ["All"] + sorted(
+                        details_df["Variable Name"].unique().tolist()
+                    )
                     selected_var_filter = st.selectbox(
-                        "Filter by Variable:",
-                        ["All"] + unique_vars,
+                        "Variable Name:", unique_vars, key="var_filter"
                     )
 
-                with col2:
-                    # Source type filter
-                    source_filter = st.selectbox(
-                        "Filter by Source:",
-                        ["All", "Known", "Unknown Source"],
+                with filter_col2:
+                    unique_processors = ["All"] + sorted(
+                        details_df["Processor Name"].unique().tolist()
+                    )
+                    selected_processor_filter = st.selectbox(
+                        "Processor Name:", unique_processors, key="proc_filter"
                     )
 
-                # Apply filters
+                with filter_col3:
+                    unique_types = ["All"] + sorted(
+                        details_df["Processor Type"].unique().tolist()
+                    )
+                    selected_type_filter = st.selectbox(
+                        "Processor Type:", unique_types, key="type_filter"
+                    )
+
+                with filter_col4:
+                    unique_groups = ["All"] + sorted(
+                        details_df["Group Name"].unique().tolist()
+                    )
+                    selected_group_filter = st.selectbox(
+                        "Group Name:", unique_groups, key="group_filter"
+                    )
+
+                with filter_col5:
+                    unique_sources = ["All"] + sorted(
+                        details_df["Source"].unique().tolist()
+                    )
+                    selected_source_filter = st.selectbox(
+                        "Source:", unique_sources, key="source_filter"
+                    )
+
+                # Add text search across all columns
+                st.markdown("#### 🔍 Text Search")
+                search_text = st.text_input(
+                    "Search across all columns:",
+                    placeholder="Enter text to search in any column...",
+                    key="global_search",
+                )
+
+                # Clear filters button
+                if st.button("🗑️ Clear All Filters", key="clear_filters"):
+                    # Clear all filters by rerunning with default values
+                    st.rerun()
+
+                # Apply all filters
                 filtered_details_df = details_df.copy()
 
+                # Apply dropdown filters
                 if selected_var_filter != "All":
                     filtered_details_df = filtered_details_df[
                         filtered_details_df["Variable Name"] == selected_var_filter
                     ]
 
-                if source_filter != "All":
+                if selected_processor_filter != "All":
                     filtered_details_df = filtered_details_df[
-                        filtered_details_df["Source"] == source_filter
+                        filtered_details_df["Processor Name"]
+                        == selected_processor_filter
                     ]
 
-                # Show filtered results count
-                if len(filtered_details_df) != len(details_df):
+                if selected_type_filter != "All":
+                    filtered_details_df = filtered_details_df[
+                        filtered_details_df["Processor Type"] == selected_type_filter
+                    ]
+
+                if selected_group_filter != "All":
+                    filtered_details_df = filtered_details_df[
+                        filtered_details_df["Group Name"] == selected_group_filter
+                    ]
+
+                if selected_source_filter != "All":
+                    filtered_details_df = filtered_details_df[
+                        filtered_details_df["Source"] == selected_source_filter
+                    ]
+
+                # Apply text search across all columns
+                if search_text:
+                    search_mask = (
+                        filtered_details_df.astype(str)
+                        .apply(
+                            lambda x: x.str.contains(search_text, case=False, na=False)
+                        )
+                        .any(axis=1)
+                    )
+                    filtered_details_df = filtered_details_df[search_mask]
+
+                # Show active filters and results count
+                active_filters = []
+                if selected_var_filter != "All":
+                    active_filters.append(f"Variable: {selected_var_filter}")
+                if selected_processor_filter != "All":
+                    active_filters.append(f"Processor: {selected_processor_filter}")
+                if selected_type_filter != "All":
+                    active_filters.append(f"Type: {selected_type_filter}")
+                if selected_group_filter != "All":
+                    active_filters.append(f"Group: {selected_group_filter}")
+                if selected_source_filter != "All":
+                    active_filters.append(f"Source: {selected_source_filter}")
+                if search_text:
+                    active_filters.append(f"Search: '{search_text}'")
+
+                if active_filters:
+                    st.info(
+                        f"📊 **Showing {len(filtered_details_df)} of {len(details_df)} records** | "
+                        f"**Active filters:** {', '.join(active_filters)}"
+                    )
+                elif len(filtered_details_df) != len(details_df):
                     st.info(
                         f"Showing {len(filtered_details_df)} of {len(details_df)} variable definitions"
                     )
@@ -179,6 +272,9 @@ def display_variable_results(result, uploaded_file):
                         ),
                         "Processor Type": st.column_config.TextColumn(
                             "Processor Type", width="small"
+                        ),
+                        "Group Name": st.column_config.TextColumn(
+                            "Group Name", width="medium"
                         ),
                         "Source": st.column_config.TextColumn("Source", width="small"),
                         "Property": st.column_config.TextColumn(
