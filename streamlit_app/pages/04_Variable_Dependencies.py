@@ -242,7 +242,7 @@ def display_variable_results(result, uploaded_file):
                 st.dataframe(
                     filtered_details_df,
                     use_container_width=True,
-                    hide_index=True,
+                    hide_index=False,
                     column_config={
                         "Variable Name": st.column_config.TextColumn(
                             "Variable Name", width="medium"
