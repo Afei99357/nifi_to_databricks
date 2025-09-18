@@ -50,8 +50,9 @@ def main():
 
         with col2:
             if st.button("🗄️ Extract Assets", use_container_width=True):
-                # Set flag to auto-start table extraction when arriving at page
+                # Set flags to auto-start both table and script extraction when arriving at page
                 st.session_state["auto_start_table_extraction"] = True
+                st.session_state["auto_start_script_extraction"] = True
                 st.switch_page("pages/02_Asset_Extraction.py")
 
         with col3:

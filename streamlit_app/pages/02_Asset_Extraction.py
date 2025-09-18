@@ -556,17 +556,12 @@ def main():
             "script_extraction_running", False
         )
 
-        # Control buttons
-        col1, col2 = st.columns(2)
+        # Check for auto-start flag from Dashboard
+        auto_start_scripts = st.session_state.get("auto_start_script_extraction", False)
 
-        with col1:
-            run_script_extraction = st.button(
-                "📜 Extract Scripts",
-                use_container_width=True,
-                disabled=script_extraction_running,
-            )
-
-        with col2:
+        # Dynamic layout based on whether Extract Scripts button should be shown
+        if cached_scripts or auto_start_scripts:
+            # Only show Back to Dashboard button
             if st.button(
                 "🔙 Back to Dashboard",
                 disabled=script_extraction_running,
@@ -577,6 +572,33 @@ def main():
                 ),
             ):
                 st.switch_page("Dashboard.py")
+            run_script_extraction = auto_start_scripts
+        else:
+            # Show both buttons when no results exist
+            col1, col2 = st.columns(2)
+
+            with col1:
+                run_script_extraction = st.button(
+                    "📜 Extract Scripts",
+                    use_container_width=True,
+                    disabled=script_extraction_running,
+                )
+
+            with col2:
+                if st.button(
+                    "🔙 Back to Dashboard",
+                    disabled=script_extraction_running,
+                    help=(
+                        "Cannot navigate during extraction"
+                        if script_extraction_running
+                        else None
+                    ),
+                ):
+                    st.switch_page("Dashboard.py")
+
+        # Clear auto-start flag after checking
+        if auto_start_scripts:
+            st.session_state["auto_start_script_extraction"] = False
 
         # Display cached results if available
         if cached_scripts and not run_script_extraction:
