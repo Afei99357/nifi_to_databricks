@@ -39,29 +39,37 @@ def main():
         # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        # Navigation buttons - 4 columns
-        col1, col2, col3, col4 = st.columns(4)
+        # Navigation buttons - 5 columns in 2 rows
+        row1_col1, row1_col2, row1_col3 = st.columns(3)
 
-        with col1:
+        with row1_col1:
             if st.button("🚀 Classify Processors", use_container_width=True):
                 # Set flag to auto-start migration when arriving at migration page
                 st.session_state["auto_start_migration"] = True
                 st.switch_page("pages/01_Processor_Classification.py")
 
-        with col2:
-            if st.button("🗄️ Extract Assets", use_container_width=True):
-                # Set flags to auto-start both table and script extraction when arriving at page
+        with row1_col2:
+            if st.button("🗄️ Extract Tables", use_container_width=True):
+                # Set flag to auto-start table extraction when arriving at page
                 st.session_state["auto_start_table_extraction"] = True
-                st.session_state["auto_start_script_extraction"] = True
                 st.switch_page("pages/02_Asset_Extraction.py")
 
-        with col3:
+        with row1_col3:
+            if st.button("📜 Extract Scripts", use_container_width=True):
+                # Set flag to auto-start script extraction when arriving at page
+                st.session_state["auto_start_script_extraction"] = True
+                st.switch_page("pages/05_Script_Extraction.py")
+
+        # Second row
+        row2_col1, row2_col2 = st.columns(2)
+
+        with row2_col1:
             if st.button("📊 Lineage & Connections", use_container_width=True):
                 # Set flag to auto-start table lineage analysis when arriving at page
                 st.session_state["auto_start_table_lineage"] = True
                 st.switch_page("pages/03_Lineage_Connections.py")
 
-        with col4:
+        with row2_col2:
             if st.button("🔄 Variable Dependencies", use_container_width=True):
                 # Set flag to auto-start variable analysis when arriving at page
                 st.session_state["auto_start_variable_analysis"] = True
