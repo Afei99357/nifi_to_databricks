@@ -220,34 +220,190 @@ def display_script_results(scripts, uploaded_file):
                 "These scripts are written directly in processor properties and will need to be migrated to external files or adapted for Databricks."
             )
 
-            for i, script_data in enumerate(inline_script_data):
-                with st.expander(
-                    f"🐍 {script_data['processor_name']} - {script_data['property_name']} ({script_data['script_type']})"
-                ):
+            # Create searchable interface
+            col1, col2, col3 = st.columns([2, 1, 1])
+
+            with col1:
+                # Searchable selectbox for quick navigation
+                script_options = ["Select a script..."] + [
+                    f"{script['processor_name']} → {script['property_name']} ({script['script_type']})"
+                    for script in inline_script_data
+                ]
+                selected_script_idx = st.selectbox(
+                    "🔍 Jump to specific script:",
+                    range(len(script_options)),
+                    format_func=lambda i: script_options[i],
+                    key="script_selector",
+                )
+
+            with col2:
+                # Filter by script type
+                script_types = ["All"] + sorted(
+                    set(script["script_type"] for script in inline_script_data)
+                )
+                selected_type = st.selectbox(
+                    "Filter by type:", script_types, key="inline_type_filter"
+                )
+
+            with col3:
+                # Filter by processor type
+                processor_types = ["All"] + sorted(
+                    set(script["processor_type"] for script in inline_script_data)
+                )
+                selected_proc_type = st.selectbox(
+                    "Filter by processor:", processor_types, key="inline_proc_filter"
+                )
+
+            # Apply filters
+            filtered_inline_data = inline_script_data.copy()
+            if selected_type != "All":
+                filtered_inline_data = [
+                    s for s in filtered_inline_data if s["script_type"] == selected_type
+                ]
+            if selected_proc_type != "All":
+                filtered_inline_data = [
+                    s
+                    for s in filtered_inline_data
+                    if s["processor_type"] == selected_proc_type
+                ]
+
+            # Show count
+            if len(filtered_inline_data) != len(inline_script_data):
+                st.info(
+                    f"Showing {len(filtered_inline_data)} of {len(inline_script_data)} inline scripts"
+                )
+
+            # Display mode selection
+            display_mode = st.radio(
+                "Display mode:",
+                ["📋 Table View", "📄 Detailed View", "🎯 Selected Script Only"],
+                horizontal=True,
+                key="display_mode",
+            )
+
+            if display_mode == "📋 Table View":
+                # Compact table view with clickable rows
+                if filtered_inline_data:
+                    table_data = []
+                    for i, script in enumerate(filtered_inline_data):
+                        table_data.append(
+                            {
+                                "Index": i + 1,
+                                "Processor": script["processor_name"],
+                                "Property": script["property_name"],
+                                "Type": script["script_type"],
+                                "Lines": script["line_count"],
+                                "Confidence": f"{script['confidence']:.2f}",
+                                "Preview": (
+                                    script["content_preview"][:100] + "..."
+                                    if len(script["content_preview"]) > 100
+                                    else script["content_preview"]
+                                ),
+                            }
+                        )
+
+                    st.dataframe(
+                        pd.DataFrame(table_data),
+                        use_container_width=True,
+                        height=400,
+                        column_config={
+                            "Preview": st.column_config.TextColumn(
+                                "Preview", width="large"
+                            ),
+                            "Confidence": st.column_config.NumberColumn(
+                                "Confidence", format="%.2f"
+                            ),
+                        },
+                    )
+
+            elif display_mode == "🎯 Selected Script Only":
+                # Show only the selected script
+                if selected_script_idx > 0:  # Skip "Select a script..." option
+                    script_data = inline_script_data[selected_script_idx - 1]
+                    st.markdown(
+                        f"#### {script_data['processor_name']} → {script_data['property_name']}"
+                    )
+
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.markdown(f"**Processor:** {script_data['processor_name']}")
-                        st.markdown(f"**Property:** {script_data['property_name']}")
                         st.markdown(f"**Script Type:** {script_data['script_type']}")
-                    with col2:
                         st.markdown(f"**Lines:** {script_data['line_count']}")
+                    with col2:
                         st.markdown(f"**Confidence:** {script_data['confidence']:.2f}")
                         if script_data["referenced_queries"]:
                             st.markdown(
                                 f"**References:** {', '.join(script_data['referenced_queries'])}"
                             )
 
-                    st.markdown("**Script Preview:**")
-                    # Show full content for shorter scripts, preview for longer ones
-                    content_to_show = (
-                        script_data["full_content"]
-                        if len(script_data["full_content"]) <= 800
-                        else script_data["content_preview"]
-                    )
+                    st.markdown("**Full Script Content:**")
                     st.code(
-                        content_to_show,
-                        language=script_data["script_type"],
+                        script_data["full_content"], language=script_data["script_type"]
                     )
+                else:
+                    st.info("👆 Please select a script from the dropdown above")
+
+            else:  # Detailed View (improved version)
+                # Paginated expandable view
+                if filtered_inline_data:
+                    # Pagination
+                    items_per_page = st.selectbox(
+                        "Scripts per page:", [5, 10, 20, 50], index=1, key="pagination"
+                    )
+                    total_pages = (len(filtered_inline_data) - 1) // items_per_page + 1
+
+                    if total_pages > 1:
+                        page = st.selectbox(
+                            f"Page (1-{total_pages}):",
+                            range(1, total_pages + 1),
+                            key="page_selector",
+                        )
+                    else:
+                        page = 1
+
+                    start_idx = (page - 1) * items_per_page
+                    end_idx = min(start_idx + items_per_page, len(filtered_inline_data))
+                    page_data = filtered_inline_data[start_idx:end_idx]
+
+                    st.markdown(
+                        f"**Showing scripts {start_idx + 1}-{end_idx} of {len(filtered_inline_data)}**"
+                    )
+
+                    for i, script_data in enumerate(page_data):
+                        with st.expander(
+                            f"🐍 {script_data['processor_name']} → {script_data['property_name']} ({script_data['script_type']}) - {script_data['line_count']} lines"
+                        ):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(
+                                    f"**Processor:** {script_data['processor_name']}"
+                                )
+                                st.markdown(
+                                    f"**Property:** {script_data['property_name']}"
+                                )
+                                st.markdown(
+                                    f"**Script Type:** {script_data['script_type']}"
+                                )
+                            with col2:
+                                st.markdown(f"**Lines:** {script_data['line_count']}")
+                                st.markdown(
+                                    f"**Confidence:** {script_data['confidence']:.2f}"
+                                )
+                                if script_data["referenced_queries"]:
+                                    st.markdown(
+                                        f"**References:** {', '.join(script_data['referenced_queries'])}"
+                                    )
+
+                            st.markdown("**Script Content:**")
+                            content_to_show = (
+                                script_data["full_content"]
+                                if len(script_data["full_content"]) <= 1000
+                                else script_data["content_preview"]
+                            )
+                            st.code(
+                                content_to_show, language=script_data["script_type"]
+                            )
+                else:
+                    st.warning("No inline scripts match the current filters.")
 
         # External dependencies
         external_deps = set()
