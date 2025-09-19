@@ -183,7 +183,7 @@ def main():
                     display_df = filtered_df[["name", "type", "id", "comments"]]
                     display_df.columns = ["Name", "Type", "ID", "Comments"]
 
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    st.dataframe(display_df, use_container_width=True, hide_index=False)
 
                     # Download button
                     csv = filtered_df.to_csv(index=False)
