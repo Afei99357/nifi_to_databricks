@@ -288,7 +288,6 @@ def display_script_results(scripts, uploaded_file):
                     for i, script in enumerate(filtered_inline_data):
                         table_data.append(
                             {
-                                "Index": i + 1,
                                 "Processor": script["processor_name"],
                                 "Property": script["property_name"],
                                 "Type": script["script_type"],
