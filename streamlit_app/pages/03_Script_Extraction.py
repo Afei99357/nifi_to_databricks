@@ -318,7 +318,7 @@ def display_script_results(scripts, uploaded_file):
             # Display mode selection
             display_mode = st.radio(
                 "Display mode:",
-                ["📋 Table View", "📄 Detailed View", "🎯 Selected Script Only"],
+                ["📋 Table View", "🎯 Selected Script Only"],
                 horizontal=True,
                 key="display_mode",
             )
@@ -406,75 +406,6 @@ def display_script_results(scripts, uploaded_file):
                     st.info(
                         "👆 Please select a processor and script from the dropdowns above"
                     )
-
-            else:  # Detailed View (improved version)
-                # Paginated expandable view
-                if filtered_inline_data:
-                    # Pagination
-                    items_per_page = st.selectbox(
-                        "Scripts per page:", [5, 10, 20, 50], index=1, key="pagination"
-                    )
-                    total_pages = (len(filtered_inline_data) - 1) // items_per_page + 1
-
-                    if total_pages > 1:
-                        page = st.selectbox(
-                            f"Page (1-{total_pages}):",
-                            range(1, total_pages + 1),
-                            key="page_selector",
-                        )
-                    else:
-                        page = 1
-
-                    start_idx = (page - 1) * items_per_page
-                    end_idx = min(start_idx + items_per_page, len(filtered_inline_data))
-                    page_data = filtered_inline_data[start_idx:end_idx]
-
-                    st.markdown(
-                        f"**Showing scripts {start_idx + 1}-{end_idx} of {len(filtered_inline_data)}**"
-                    )
-
-                    for script_data in page_data:
-                        with st.expander(
-                            f"🐍 {script_data['processor_name']} → {script_data['property_name']} ({script_data['script_type']}) - {script_data['line_count']} lines"
-                        ):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(
-                                    f"**Processor:** {script_data['processor_name']}"
-                                )
-                                st.markdown(
-                                    f"**Property:** {script_data['property_name']}"
-                                )
-                                st.markdown(
-                                    f"**Script Type:** {script_data['script_type']}"
-                                )
-                                st.markdown(
-                                    f"**Group:** {script_data['processor_group']}"
-                                )
-                            with col2:
-                                st.markdown(f"**Lines:** {script_data['line_count']}")
-                                st.markdown(
-                                    f"**Confidence:** {script_data['confidence']:.2f}"
-                                )
-                                st.markdown(
-                                    f"**Processor ID:** {script_data['processor_id']}"
-                                )
-                                if script_data["referenced_queries"]:
-                                    st.markdown(
-                                        f"**References:** {', '.join(script_data['referenced_queries'])}"
-                                    )
-
-                            st.markdown("**Script Content:**")
-                            content_to_show = (
-                                script_data["full_content"]
-                                if len(script_data["full_content"]) <= 1000
-                                else script_data["content_preview"]
-                            )
-                            st.code(
-                                content_to_show, language=script_data["script_type"]
-                            )
-                else:
-                    st.warning("No inline scripts match the current filters.")
 
         # External dependencies
         external_deps = set()
