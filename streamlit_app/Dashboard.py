@@ -124,6 +124,11 @@ def main():
                 # Convert to DataFrame for display
                 df = pd.DataFrame(processors)
 
+                # Shorten processor types for better display
+                df["type"] = df["type"].apply(
+                    lambda x: x.split(".")[-1] if "." in x else x
+                )
+
                 # Filter controls
                 col1, col2 = st.columns([1, 2])
                 with col1:
