@@ -25,7 +25,7 @@ processor_properties_schema = StructType([
 processor_connections_schema = StructType([
     StructField("source_processor_id", StringType(), False),
     StructField("destination_processor_id", StringType(), False),
-    StructField("relationship", ArrayType(StringType()), False),
+    StructField("relationships", ArrayType(StringType()), False),
     StructField("created_date", DateType(), False),
     StructField("last_updated_date", DateType(), False)
 ])

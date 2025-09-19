@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
+from databricks.sdk.runtime import *
 
 __all__ = [
     "parse_nifi_template",
@@ -53,7 +54,7 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
         proc_info = {
             "name": _trim(processor.findtext("name") or "Unknown"),
             "type": _trim(processor.findtext("type") or "Unknown"),
-            "id": processor.get("id"),
+            "id":  _trim(processor.findtext("id") or "Unknown"),
             "properties": {},
             "parentGroupId": parent_group_id,
             "parentGroupName": parent_group_name,
@@ -182,3 +183,25 @@ def extract_nifi_parameters_and_services_impl(xml_content: str) -> Dict[str, Any
             )
 
     return result
+
+
+def list_xml_files(xml_volumes_path):
+    """
+    Return a list of XML file paths from the 
+    specified catalog, schema, and volume.
+    """
+
+    xml_paths_df = (
+        spark.read.format("binaryFile")
+            .option("recursiveFileLookup", "true")
+            .option("pathGlobFilter", "*.xml")       # only *.xml files
+            .load(xml_volumes_path)
+            .select("path")                          # keep just the path
+            .distinct()
+    )
+
+    xml_paths_df.show(truncate=False)
+    # If you need them as a Python list:
+    xml_paths = [r.path for r in xml_paths_df.collect()]
+
+    return xml_paths
