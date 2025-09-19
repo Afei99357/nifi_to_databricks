@@ -285,7 +285,7 @@ def display_script_results(scripts, uploaded_file):
                 # Compact table view with clickable rows
                 if filtered_inline_data:
                     table_data = []
-                    for i, script in enumerate(filtered_inline_data):
+                    for script in filtered_inline_data:
                         table_data.append(
                             {
                                 "Processor": script["processor_name"],
@@ -367,7 +367,7 @@ def display_script_results(scripts, uploaded_file):
                         f"**Showing scripts {start_idx + 1}-{end_idx} of {len(filtered_inline_data)}**"
                     )
 
-                    for i, script_data in enumerate(page_data):
+                    for script_data in page_data:
                         with st.expander(
                             f"🐍 {script_data['processor_name']} → {script_data['property_name']} ({script_data['script_type']}) - {script_data['line_count']} lines"
                         ):
