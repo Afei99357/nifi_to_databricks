@@ -200,6 +200,8 @@ def display_script_results(scripts, uploaded_file):
                     {
                         "processor_name": result["processor_name"],
                         "processor_type": result["processor_type"],
+                        "processor_id": result["processor_id"],
+                        "processor_group": result["processor_group"],
                         "property_name": inline_script["property_name"],
                         "script_type": inline_script["script_type"],
                         "content_preview": inline_script.get(
@@ -220,21 +222,61 @@ def display_script_results(scripts, uploaded_file):
                 "These scripts are written directly in processor properties and will need to be migrated to external files or adapted for Databricks."
             )
 
-            # Create searchable interface
+            # Create processor-centric interface
             col1, col2, col3 = st.columns([2, 1, 1])
 
             with col1:
-                # Searchable selectbox for quick navigation
-                script_options = ["Select a script..."] + [
-                    f"{script['processor_name']} → {script['property_name']} ({script['script_type']})"
-                    for script in inline_script_data
-                ]
-                selected_script_idx = st.selectbox(
-                    "🔍 Jump to specific script:",
-                    range(len(script_options)),
-                    format_func=lambda i: script_options[i],
-                    key="script_selector",
+                # Group scripts by processor for easier navigation
+                processors_with_scripts: dict[str, list[dict]] = {}
+                for script in inline_script_data:
+                    proc_name = script["processor_name"]
+                    if proc_name not in processors_with_scripts:
+                        processors_with_scripts[proc_name] = []
+                    processors_with_scripts[proc_name].append(script)
+
+                # First select processor
+                processor_names = ["Select a processor..."] + sorted(
+                    processors_with_scripts.keys()
                 )
+                selected_processor = st.selectbox(
+                    "🔍 Select processor to view its scripts:",
+                    processor_names,
+                    key="processor_selector",
+                )
+
+                # Then select script from that processor
+                selected_script_idx = 0
+                if selected_processor != "Select a processor...":
+                    processor_scripts = processors_with_scripts[selected_processor]
+                    script_options = [
+                        f"{script['property_name']} ({script['script_type']}) - {script['line_count']} lines"
+                        for script in processor_scripts
+                    ]
+
+                    if len(script_options) == 1:
+                        st.info(f"📄 This processor has 1 script: {script_options[0]}")
+                        # Auto-select the only script
+                        selected_script_idx = next(
+                            i
+                            for i, script in enumerate(inline_script_data)
+                            if script["processor_name"] == selected_processor
+                        )
+                    else:
+                        selected_script_name = st.selectbox(
+                            f"📄 Scripts in {selected_processor}:",
+                            script_options,
+                            key="script_in_processor_selector",
+                        )
+
+                        # Find the index in the full inline_script_data
+                        for i, script in enumerate(inline_script_data):
+                            if (
+                                script["processor_name"] == selected_processor
+                                and f"{script['property_name']} ({script['script_type']}) - {script['line_count']} lines"
+                                == selected_script_name
+                            ):
+                                selected_script_idx = i
+                                break
 
             with col2:
                 # Filter by script type
@@ -289,13 +331,17 @@ def display_script_results(scripts, uploaded_file):
                         table_data.append(
                             {
                                 "Processor": script["processor_name"],
+                                "Group": script["processor_group"],
+                                "Processor ID": script["processor_id"][:8]
+                                + "...",  # Shortened for display
                                 "Property": script["property_name"],
                                 "Type": script["script_type"],
                                 "Lines": script["line_count"],
                                 "Confidence": f"{script['confidence']:.2f}",
                                 "Preview": (
-                                    script["content_preview"][:100] + "..."
-                                    if len(script["content_preview"]) > 100
+                                    script["content_preview"][:80]
+                                    + "..."  # Shortened for more columns
+                                    if len(script["content_preview"]) > 80
                                     else script["content_preview"]
                                 ),
                             }
@@ -306,19 +352,35 @@ def display_script_results(scripts, uploaded_file):
                         use_container_width=True,
                         height=400,
                         column_config={
+                            "Processor": st.column_config.TextColumn(
+                                "Processor", width="medium"
+                            ),
+                            "Group": st.column_config.TextColumn(
+                                "Group", width="small"
+                            ),
+                            "Processor ID": st.column_config.TextColumn(
+                                "Processor ID", width="small"
+                            ),
+                            "Property": st.column_config.TextColumn(
+                                "Property", width="medium"
+                            ),
+                            "Type": st.column_config.TextColumn("Type", width="small"),
                             "Preview": st.column_config.TextColumn(
                                 "Preview", width="large"
                             ),
                             "Confidence": st.column_config.NumberColumn(
-                                "Confidence", format="%.2f"
+                                "Confidence", format="%.2f", width="small"
                             ),
                         },
                     )
 
             elif display_mode == "🎯 Selected Script Only":
                 # Show only the selected script
-                if selected_script_idx > 0:  # Skip "Select a script..." option
-                    script_data = inline_script_data[selected_script_idx - 1]
+                if (
+                    selected_processor != "Select a processor..."
+                    and selected_script_idx < len(inline_script_data)
+                ):
+                    script_data = inline_script_data[selected_script_idx]
                     st.markdown(
                         f"#### {script_data['processor_name']} → {script_data['property_name']}"
                     )
@@ -327,8 +389,10 @@ def display_script_results(scripts, uploaded_file):
                     with col1:
                         st.markdown(f"**Script Type:** {script_data['script_type']}")
                         st.markdown(f"**Lines:** {script_data['line_count']}")
+                        st.markdown(f"**Group:** {script_data['processor_group']}")
                     with col2:
                         st.markdown(f"**Confidence:** {script_data['confidence']:.2f}")
+                        st.markdown(f"**Processor ID:** {script_data['processor_id']}")
                         if script_data["referenced_queries"]:
                             st.markdown(
                                 f"**References:** {', '.join(script_data['referenced_queries'])}"
@@ -339,7 +403,9 @@ def display_script_results(scripts, uploaded_file):
                         script_data["full_content"], language=script_data["script_type"]
                     )
                 else:
-                    st.info("👆 Please select a script from the dropdown above")
+                    st.info(
+                        "👆 Please select a processor and script from the dropdowns above"
+                    )
 
             else:  # Detailed View (improved version)
                 # Paginated expandable view
@@ -382,10 +448,16 @@ def display_script_results(scripts, uploaded_file):
                                 st.markdown(
                                     f"**Script Type:** {script_data['script_type']}"
                                 )
+                                st.markdown(
+                                    f"**Group:** {script_data['processor_group']}"
+                                )
                             with col2:
                                 st.markdown(f"**Lines:** {script_data['line_count']}")
                                 st.markdown(
                                     f"**Confidence:** {script_data['confidence']:.2f}"
+                                )
+                                st.markdown(
+                                    f"**Processor ID:** {script_data['processor_id']}"
                                 )
                                 if script_data["referenced_queries"]:
                                     st.markdown(
