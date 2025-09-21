@@ -1,0 +1,8 @@
+# Manual overrides keyed by processor ID.
+# Example:
+# proc-1234:
+#   migration_category: Business Logic
+#   databricks_target: Custom notebook
+#   confidence: 1.0
+#   notes: "Confirmed with SME"
+{}

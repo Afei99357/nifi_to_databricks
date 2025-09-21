@@ -1,0 +1,86 @@
+rules:
+  - name: ExecuteSQL DML
+    processor_types:
+      - org.apache.nifi.processors.standard.ExecuteSQL
+      - org.apache.nifi.processors.standard.PutSQL
+    conditions:
+      - field: sql.has_dml
+        equals: true
+    migration_category: Business Logic
+    databricks_target: Databricks SQL task (Delta write)
+    confidence: 0.9
+    notes: "Executes mutating SQL that must be reimplemented"
+
+  - name: ExecuteSQL Metadata Only
+    processor_types:
+      - org.apache.nifi.processors.standard.ExecuteSQL
+      - org.apache.nifi.processors.standard.ExecuteStreamCommand
+    conditions:
+      - field: sql.has_metadata_only
+        equals: true
+    migration_category: Orchestration / Monitoring
+    databricks_target: Databricks notebook (metadata refresh)
+    confidence: 0.6
+    notes: "Metadata or diagnostic SQL; treat as workflow step"
+
+  - name: Scripted Processor Inline
+    processor_types:
+      - org.apache.nifi.processors.standard.ExecuteScript
+      - org.apache.nifi.processors.standard.InvokeScriptedProcessor
+      - org.apache.nifi.processors.standard.ExecuteStreamCommand
+    conditions:
+      - field: scripts.inline_count
+        gt: 0
+    migration_category: Business Logic
+    databricks_target: Databricks Python notebook or task
+    confidence: 0.85
+    notes: "Inline script requires porting to Databricks"
+
+  - name: External Script Runner
+    processor_types:
+      - org.apache.nifi.processors.standard.ExecuteStreamCommand
+    conditions:
+      - field: scripts.external_count
+        gt: 0
+    migration_category: Source / Sink Adapter
+    databricks_target: Databricks workflow task calling external script or job
+    confidence: 0.7
+    notes: "Wrap external script invocation in Jobs or remove if obsolete"
+
+  - name: List/Fetch Sources
+    processor_types:
+      - org.apache.nifi.processors.standard.ListFile
+      - org.apache.nifi.processors.standard.ListSFTP
+      - org.apache.nifi.processors.standard.FetchFile
+      - org.apache.nifi.processors.standard.FetchSFTP
+    migration_category: Source Adapter
+    databricks_target: Autoloader / COPY INTO / Files API
+    confidence: 0.8
+    notes: "Replace with Databricks ingestion pattern"
+
+  - name: PutFile / PutHDFS
+    processor_types:
+      - org.apache.nifi.processors.standard.PutFile
+      - org.apache.nifi.processors.standard.PutHDFS
+    migration_category: Sink Adapter
+    databricks_target: Delta write or Files API
+    confidence: 0.75
+    notes: "Map to Databricks managed storage"
+
+  - name: RouteOnAttribute / UpdateAttribute orchestration
+    processor_types:
+      - org.apache.nifi.processors.standard.RouteOnAttribute
+      - org.apache.nifi.processors.standard.UpdateAttribute
+    conditions:
+      - field: scripts.inline_count
+        equals: 0
+    migration_category: Orchestration / Monitoring
+    databricks_target: Databricks Jobs task branching / parameters
+    confidence: 0.6
+    notes: "Captures routing logic or variable wiring"
+
+  - name: Default infrastructure
+    migration_category: Infrastructure Only
+    databricks_target: N/A
+    confidence: 0.2
+    notes: "No matching rule; treat as infrastructure"

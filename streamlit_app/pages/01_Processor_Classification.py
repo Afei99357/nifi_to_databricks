@@ -7,6 +7,7 @@ import tempfile
 # Add parent directory to Python path to find tools and config (MUST be before imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+import pandas as pd
 import streamlit as st
 
 from tools.migration_orchestrator import migrate_nifi_to_databricks_simplified
@@ -18,8 +19,7 @@ st.set_page_config(
 
 
 def display_migration_results(result):
-    """Display classification results from either fresh run or cache"""
-    # Handle both string results (error case) and dict results
+    """Render declarative classification results."""
     if isinstance(result, str):
         st.error(f"❌ Classification failed: {result}")
         return
@@ -28,42 +28,70 @@ def display_migration_results(result):
         st.error(f"❌ Classification failed: Invalid result format - {type(result)}")
         return
 
-    try:
-        # Display reports
-        if result.get("reports"):
-            reports = result["reports"]
+    migration_summary = result.get("migration_summary", {})
+    if migration_summary:
+        st.markdown("### 📊 Migration Categories")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Business Logic", migration_summary.get("essential_processors", 0))
+        col2.metric("Support", migration_summary.get("support_processors", 0))
+        col3.metric(
+            "Infrastructure", migration_summary.get("infrastructure_processors", 0)
+        )
+        col4.metric("Ambiguous", migration_summary.get("ambiguous_processors", 0))
 
-            # Essential Processors Report (now just main report, no dependencies)
-            if reports.get("essential_processors"):
-                essential_data = reports["essential_processors"]
-                with st.expander("📋 Essential Processors Report", expanded=True):
-                    st.markdown(str(essential_data))
+    summary_markdown = result.get("reports", {}).get("classification_markdown")
+    if summary_markdown:
+        with st.expander("📋 Classification Summary", expanded=False):
+            st.markdown(summary_markdown)
 
-            # Unknown Processors Report
-            unknown_data = reports.get("unknown_processors", {})
-            if unknown_data.get("count", 0) > 0:
-                with st.expander(
-                    f"❓ Unknown Processors ({unknown_data['count']})", expanded=True
-                ):
-                    for proc in unknown_data.get("unknown_processors", []):
-                        st.write(f"**{proc.get('name', 'Unknown')}**")
-                        st.write(f"- Type: `{proc.get('type', 'Unknown')}`")
-                        st.write(
-                            f"- Reason: {proc.get('reason', 'No reason provided')}"
-                        )
-                        st.write("---")
-            else:
-                st.info("✅ No unknown processors - all were successfully classified")
-        else:
-            st.warning("⚠️ No reports found in migration result")
+    classifications = result.get("classifications", [])
+    if classifications:
+        df = pd.DataFrame(classifications)
+        display_columns = [
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "confidence",
+            "rule",
+            "classification_source",
+        ]
+        existing_columns = [col for col in display_columns if col in df.columns]
+        st.markdown("### 🗂️ Classified Processors")
+        st.dataframe(
+            df[existing_columns],
+            use_container_width=True,
+            hide_index=True,
+        )
 
-    except Exception as e:
-        st.error(f"❌ Error displaying classification results: {e}")
-        st.write(f"**Debug - Exception type:** {type(e)}")
-        st.write(f"**Debug - Exception details:** {str(e)}")
-        import traceback
+        csv_export = df.to_csv(index=False)
+        st.download_button(
+            "📥 Download Classification CSV",
+            data=csv_export,
+            file_name="nifi_classification.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
-        st.code(traceback.format_exc())
+    ambiguous = result.get("ambiguous", [])
+    if ambiguous:
+        st.warning(
+            f"{len(ambiguous)} processor(s) need manual review due to low confidence."
+        )
+        amb_df = pd.DataFrame(ambiguous)
+        amb_columns = [
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "confidence",
+        ]
+        amb_existing = [col for col in amb_columns if col in amb_df.columns]
+        st.dataframe(
+            amb_df[amb_existing],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 def main():
