@@ -12,6 +12,7 @@ outputs/
 migrations/
 generated/
 derived_classification*/
+classification_rules.suggestions.yaml
 
 # Temporary and scratch files
 scratch.txt

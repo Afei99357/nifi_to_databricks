@@ -75,7 +75,9 @@ Implementation outline (within `tools.declarative_classifier` or a post-process 
    - Inspect `variables.defines` and `feature_evidence.connections`.
    - If any defined variable flows to a downstream processor categorised as `Business Logic` or `Sink Adapter`, reclassify current processor to `Business Logic` (or `Support`) and add `promotion_reason` note.
 3. Guard against overrides (overrides always win).
-4. Ensure promotions appear in Streamlit outputs and exported CSVs.
+4. Ensure promotions appear in Streamlit outputs and exported CSVs, capturing
+   a `promotion_reason` note and tagging the classification source as
+   "promotion" for audit.
 
 ## Phase 4 – Streamlit enhancements (Day 3–4)
 

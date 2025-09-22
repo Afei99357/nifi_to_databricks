@@ -15,6 +15,19 @@ import yaml
 
 from .processor_features import extract_processor_features
 
+PROMOTION_CANDIDATE_CATEGORIES = {
+    "Infrastructure Only",
+    "Orchestration / Monitoring",
+}
+PROMOTION_TARGET_CATEGORY = "Business Logic"
+PROMOTION_TARGET_LABEL = "Variable setup"
+PROMOTION_CONFIDENCE_FLOOR = 0.6
+PROMOTION_SOURCE = "promotion"
+ESSENTIAL_DOWNSTREAM_CATEGORIES = {
+    "Business Logic",
+    "Sink Adapter",
+}
+
 RULES_FILE = Path("classification_rules.yaml")
 OVERRIDES_FILE = Path("classification_overrides.yaml")
 
@@ -181,8 +194,9 @@ def classify_workflow(
     feature_payload = extract_processor_features(xml_path)
 
     classifications: List[Dict[str, Any]] = []
-    summary: Dict[str, int] = {}
-    ambiguous: List[Dict[str, Any]] = []
+    outgoing_map: Dict[str, List[str]] = {}
+    variables_by_proc: Dict[str, Dict[str, Any]] = {}
+    variable_consumers: Dict[str, set[str]] = {}
 
     for feature in feature_payload.get("processors", []):
         processor_id = feature.get("id")
@@ -192,6 +206,16 @@ def classify_workflow(
         final_classification = apply_overrides(
             processor_id, base_classification, overrides
         )
+
+        outgoing_connections = feature.get("connections", {}).get("outgoing", []) or []
+        outgoing_map[processor_id] = list(outgoing_connections)
+
+        variables_payload = feature.get("variables", {}) or {}
+        variables_by_proc[processor_id] = variables_payload
+        for usage in variables_payload.get("uses", []) or []:
+            var_name = usage.get("variable")
+            if var_name:
+                variable_consumers.setdefault(var_name, set()).add(processor_id)
 
         record = {
             "processor_id": processor_id,
@@ -222,6 +246,7 @@ def classify_workflow(
                 "connections": feature.get("connections", {}),
                 "controller_services": feature.get("controller_services", []),
                 "uses_variables": feature.get("uses_variables"),
+                "variables": variables_payload,
             },
             "properties": feature.get("properties"),
             "classification": final_classification.get("migration_category"),
@@ -230,10 +255,14 @@ def classify_workflow(
 
         classifications.append(record)
 
-        category = final_classification.get("migration_category", "Ambiguous")
-        summary[category] = summary.get(category, 0) + 1
-        if category == "Ambiguous" or final_classification.get("confidence", 0.0) < 0.5:
-            ambiguous.append(record)
+    _apply_metadata_promotions(
+        classifications,
+        outgoing_map,
+        variables_by_proc,
+        variable_consumers,
+    )
+
+    summary, ambiguous = _summarise_classifications(classifications)
 
     return {
         "workflow": feature_payload.get("workflow", {}),
@@ -248,6 +277,110 @@ def classify_workflow(
 def to_json(result: Dict[str, Any]) -> str:
     """Serialize classification results to JSON for debugging/export."""
     return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+def _summarise_classifications(
+    classifications: Iterable[Dict[str, Any]],
+) -> tuple[Dict[str, int], List[Dict[str, Any]]]:
+    summary: Dict[str, int] = {}
+    ambiguous: List[Dict[str, Any]] = []
+    for record in classifications:
+        category = record.get("migration_category") or "Ambiguous"
+        summary[category] = summary.get(category, 0) + 1
+        confidence = record.get("confidence") or 0.0
+        if category == "Ambiguous" or confidence < 0.5:
+            ambiguous.append(record)
+    return summary, ambiguous
+
+
+def _apply_metadata_promotions(
+    classifications: List[Dict[str, Any]],
+    outgoing_map: Dict[str, List[str]],
+    variables_by_proc: Dict[str, Dict[str, Any]],
+    variable_consumers: Dict[str, set[str]],
+) -> None:
+    record_by_id = {
+        record.get("processor_id"): record
+        for record in classifications
+        if record.get("processor_id")
+    }
+    reachable_cache: Dict[str, set[str]] = {}
+
+    def reachable_downstream(start: str) -> set[str]:
+        if start in reachable_cache:
+            return reachable_cache[start]
+        visited: set[str] = set()
+        queue: List[str] = list(outgoing_map.get(start, []))
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            queue.extend(outgoing_map.get(current, []))
+        reachable_cache[start] = visited
+        return visited
+
+    for record in classifications:
+        processor_id = record.get("processor_id")
+        if not processor_id:
+            continue
+        if record.get("classification_source") == "override":
+            continue
+        category = record.get("migration_category")
+        if category not in PROMOTION_CANDIDATE_CATEGORIES:
+            continue
+
+        variables_payload = variables_by_proc.get(processor_id, {}) or {}
+        defined_entries = variables_payload.get("defines", []) or []
+        defined_vars = [
+            entry.get("variable") for entry in defined_entries if entry.get("variable")
+        ]
+        if not defined_vars:
+            continue
+
+        downstream_ids = reachable_downstream(processor_id)
+        if not downstream_ids:
+            continue
+
+        promoted_variables: set[str] = set()
+        target_processors: set[str] = set()
+
+        for var_name in defined_vars:
+            consumers = variable_consumers.get(var_name, set())
+            for consumer_id in consumers:
+                if consumer_id == processor_id or consumer_id not in downstream_ids:
+                    continue
+                consumer_record = record_by_id.get(consumer_id)
+                if not consumer_record:
+                    continue
+                consumer_category = consumer_record.get("migration_category")
+                if consumer_category in ESSENTIAL_DOWNSTREAM_CATEGORIES:
+                    promoted_variables.add(var_name)
+                    target_processors.add(consumer_record.get("name") or consumer_id)
+
+        if not promoted_variables:
+            continue
+
+        previous_category = record.get("migration_category")
+        record["migration_category"] = PROMOTION_TARGET_CATEGORY
+        record["classification"] = PROMOTION_TARGET_CATEGORY
+        record["data_manipulation_type"] = PROMOTION_TARGET_CATEGORY
+        record["databricks_target"] = PROMOTION_TARGET_LABEL
+        record["classification_source"] = PROMOTION_SOURCE
+        record["confidence"] = max(
+            record.get("confidence") or 0.0, PROMOTION_CONFIDENCE_FLOOR
+        )
+
+        reason = (
+            f"Promoted from {previous_category} after detecting variables "
+            f"{', '.join(sorted(promoted_variables))} consumed by downstream processors "
+            f"{', '.join(sorted(target_processors))}."
+        )
+        record["promotion_reason"] = reason
+        if record.get("notes"):
+            record["notes"] = f"{record['notes']} | {reason}"
+        else:
+            record["notes"] = reason
 
 
 __all__ = [
