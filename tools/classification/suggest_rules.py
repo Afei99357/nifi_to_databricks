@@ -80,8 +80,9 @@ def _infer_category_and_target(group: pd.DataFrame) -> tuple[str, str]:
     return "Infrastructure Only", "Workflow plumbing"
 
 
-def _build_suggestion(group: pd.DataFrame, config: SuggestionConfig) -> dict:
-    processor_type = group.name
+def _build_suggestion(
+    processor_type: str, group: pd.DataFrame, config: SuggestionConfig
+) -> dict:
     category, target = _infer_category_and_target(group)
     suggestion: dict = {
         "name": f"Auto: {processor_type.split('.')[-1]}",
@@ -119,7 +120,7 @@ def generate_suggestions(config: SuggestionConfig) -> List[dict]:
             continue
         if config.only_new and processor_type in covered:
             continue
-        suggestions.append(_build_suggestion(group, config))
+        suggestions.append(_build_suggestion(processor_type, group, config))
     return suggestions
 
 
