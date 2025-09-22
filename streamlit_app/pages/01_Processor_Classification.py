@@ -88,7 +88,7 @@ def render_summary_metrics(summary: Dict[str, int]) -> None:
         columns[idx % len(columns)].metric(category, int(count))
 
 
-def render_processor_detail(record: Dict[str, Any]) -> None:
+def render_processor_detail(record: Dict[str, Any], *, key_prefix: str) -> None:
     st.markdown(
         f"#### Processor: {record.get('name') or record.get('processor_id') or 'Unknown'}"
     )
@@ -140,10 +140,11 @@ def render_processor_detail(record: Dict[str, Any]) -> None:
         if needs_review:
             st.markdown("**Quick actions**")
             button_cols = st.columns(len(QUICK_ACTIONS))
-            for (label, target_category), col in zip(QUICK_ACTIONS, button_cols):
+            for idx, (label, target_category) in enumerate(QUICK_ACTIONS):
+                col = button_cols[idx]
                 if col.button(
                     label,
-                    key=f"qa_{record.get('processor_id')}_{target_category}",
+                    key=f"{key_prefix}_qa_{record.get('processor_id')}_{target_category}",
                 ):
                     apply_quick_override(record, target_category)
 
@@ -235,7 +236,9 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
     )
 
     if selected_proc:
-        render_processor_detail(record_map[selected_proc])
+        render_processor_detail(
+            record_map[selected_proc], key_prefix=f"{key_prefix}_{selected_proc}"
+        )
 
 
 def handle_upload_flow() -> None:
