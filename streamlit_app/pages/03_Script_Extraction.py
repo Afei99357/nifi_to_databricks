@@ -72,6 +72,7 @@ def display_script_results(scripts, uploaded_file):
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
+                        "Lines": script.get("line_count"),
                         "Confidence": "N/A",
                     }
                 )
@@ -93,6 +94,7 @@ def display_script_results(scripts, uploaded_file):
                         "Processor Type": result["processor_type"],
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
+                        "Lines": inline_script.get("line_count"),
                         "Confidence": f"{inline_script.get('confidence', 0.0):.2f}",
                     }
                 )
