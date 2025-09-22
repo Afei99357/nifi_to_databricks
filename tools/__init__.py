@@ -9,10 +9,9 @@ from . import (
 # Conditionally import tools with external dependencies
 try:
     from . import (
-        declarative_classifier,
+        classification,
         improved_pruning,
         migration_orchestrator,
-        processor_features,
     )
 
     # Export main migration functions for easy access

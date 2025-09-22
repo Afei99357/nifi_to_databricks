@@ -792,7 +792,7 @@ The system uses intelligent batching for LLM calls to optimize performance:
 
 ### Declarative Classification
 
-Processor triage now comes from editable rules stored in `classification_rules.yaml`. The Streamlit dashboard reads these rules through `tools/declarative_classifier.py`, classifying each NiFi processor into migration-centric categories (Business Logic, Source Adapter, Sink Adapter, Orchestration / Monitoring, Infrastructure Only, Ambiguous). Add or tweak rules via YAML—no code change required—and commit manual decisions for specific processor IDs in `classification_overrides.yaml`. See `docs/classification_rules.md` for the rule schema and contributor tips.
+Processor triage now comes from editable rules stored in `classification_rules.yaml`. The Streamlit dashboard reads these rules through `tools/classification/rules_engine.py`, classifying each NiFi processor into migration-centric categories (Business Logic, Source Adapter, Sink Adapter, Orchestration / Monitoring, Infrastructure Only, Ambiguous). Add or tweak rules via YAML—no code change required—and commit manual decisions for specific processor IDs in `classification_overrides.yaml`. See `docs/classification_rules.md` for the rule schema and contributor tips.
 
 ## 📄 License
 

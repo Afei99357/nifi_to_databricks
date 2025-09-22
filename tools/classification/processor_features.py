@@ -12,10 +12,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from .script_extraction import extract_all_scripts_from_nifi_xml
-from .table_extraction import extract_all_tables_from_nifi_xml
-from .variable_extraction import extract_variable_dependencies
-from .xml_tools import parse_nifi_template_impl
+from ..script_extraction import extract_all_scripts_from_nifi_xml
+from ..table_extraction import extract_all_tables_from_nifi_xml
+from ..variable_extraction import extract_variable_dependencies
+from ..xml_tools import parse_nifi_template_impl
 
 SQL_DML_PATTERN = re.compile(r"\b(INSERT|UPDATE|DELETE|MERGE|UPSERT)\b", re.IGNORECASE)
 SQL_METADATA_PATTERN = re.compile(

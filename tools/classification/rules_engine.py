@@ -1,7 +1,7 @@
 """Declarative NiFi processor classifier.
 
 Loads rules from ``classification_rules.yaml`` and applies them to processor
-features produced by :mod:`tools.processor_features`.
+features produced by :mod:`tools.classification.processor_features`.
 """
 
 from __future__ import annotations
@@ -251,8 +251,12 @@ def to_json(result: Dict[str, Any]) -> str:
 
 
 __all__ = [
+    "Condition",
+    "Rule",
+    "apply_overrides",
+    "classify_processor",
     "classify_workflow",
-    "load_rules",
     "load_overrides",
+    "load_rules",
     "to_json",
 ]

@@ -10,7 +10,7 @@ The Streamlit dashboard now relies on a declarative rulebook to map NiFi process
 - `confidence`: optional numeric confidence (0.0–1.0). Until the automated scorer lands, leave this unset or pick a coarse value (e.g., `0.6` for tentative, `0.9` for certain); the UI mainly relies on the `classification_source` flag.
 - `notes`: short rationale or guidance for contributors.
 
-Processor features are created by `tools/processor_features.py`. They include counts of inline/external scripts, SQL behaviour flags, table references, variable usage, controller services, and graph connectivity.
+Processor features are created by `tools/classification/processor_features.py`. They include counts of inline/external scripts, SQL behaviour flags, table references, variable usage, controller services, and graph connectivity.
 
 Manual corrections belong in `classification_overrides.yaml`, where each processor ID can override the inferred category/target/confidence. Overrides win over rules and are recorded in the Streamlit interface as “override” sources.
 

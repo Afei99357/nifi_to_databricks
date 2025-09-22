@@ -6,7 +6,7 @@ import json
 import os
 from typing import Any, Dict, Iterable, Optional
 
-from tools.declarative_classifier import classify_workflow
+from tools.classification import classify_workflow
 from tools.improved_pruning import detect_data_flow_chains
 
 ESSENTIAL_CATEGORIES: set[str] = {
