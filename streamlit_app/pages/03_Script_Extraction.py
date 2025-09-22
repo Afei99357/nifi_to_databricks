@@ -223,7 +223,7 @@ def display_script_results(scripts, uploaded_file):
             )
 
             # Create processor-centric interface
-            col1, col2, col3 = st.columns([2, 1, 1])
+            col1, col2 = st.columns([2, 1])
 
             with col1:
                 # Group scripts by processor for easier navigation
@@ -279,21 +279,17 @@ def display_script_results(scripts, uploaded_file):
                                 break
 
             with col2:
-                # Filter by script type
+                # Filter by script type and optional search term
                 script_types = ["All"] + sorted(
                     set(script["script_type"] for script in inline_script_data)
                 )
                 selected_type = st.selectbox(
-                    "Filter by type:", script_types, key="inline_type_filter"
+                    "Filter by script type:", script_types, key="inline_type_filter"
                 )
-
-            with col3:
-                # Filter by processor type
-                processor_types = ["All"] + sorted(
-                    set(script["processor_type"] for script in inline_script_data)
-                )
-                selected_proc_type = st.selectbox(
-                    "Filter by processor:", processor_types, key="inline_proc_filter"
+                search_inline = st.text_input(
+                    "Search properties or preview:",
+                    placeholder="e.g. query, filename, etc.",
+                    key="inline_script_search",
                 )
 
             # Apply filters
@@ -302,11 +298,26 @@ def display_script_results(scripts, uploaded_file):
                 filtered_inline_data = [
                     s for s in filtered_inline_data if s["script_type"] == selected_type
                 ]
-            if selected_proc_type != "All":
+            if selected_processor != "Select a processor...":
                 filtered_inline_data = [
                     s
                     for s in filtered_inline_data
-                    if s["processor_type"] == selected_proc_type
+                    if s["processor_name"] == selected_processor
+                ]
+            if search_inline:
+                query = search_inline.lower()
+                filtered_inline_data = [
+                    s
+                    for s in filtered_inline_data
+                    if query in s["property_name"].lower()
+                    or query in (s["content_preview"] or "").lower()
+                    or query in (s["full_content"] or "").lower()
+                ]
+            if selected_processor != "Select a processor...":
+                filtered_inline_data = [
+                    s
+                    for s in filtered_inline_data
+                    if s["processor_name"] == selected_processor
                 ]
 
             # Show count
