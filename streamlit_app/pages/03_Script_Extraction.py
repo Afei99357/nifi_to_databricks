@@ -370,9 +370,6 @@ def display_script_results(scripts, uploaded_file):
                         Type=inline_df["script_type"],
                         Lines=inline_df["line_count"],
                         Confidence=inline_df["confidence"].map(lambda v: f"{v:.2f}"),
-                        Preview=inline_df["content_preview"].apply(
-                            lambda txt: (txt[:100] + "...") if len(txt) > 100 else txt
-                        ),
                     )
 
                     inline_table = inline_df[
@@ -382,7 +379,6 @@ def display_script_results(scripts, uploaded_file):
                             "Type",
                             "Lines",
                             "Confidence",
-                            "Preview",
                         ]
                     ]
 
@@ -405,20 +401,8 @@ def display_script_results(scripts, uploaded_file):
                             "Confidence": st.column_config.TextColumn(
                                 "Confidence", width="small"
                             ),
-                            "Preview": st.column_config.TextColumn(
-                                "Preview", width="large"
-                            ),
                         },
                     )
-
-                    if st.toggle(
-                        "Show inline script metadata", key="inline_table_details"
-                    ):
-                        st.dataframe(
-                            inline_df,
-                            use_container_width=True,
-                            hide_index=True,
-                        )
             detail_expanded = display_mode == "🎯 Selected Script Only"
             if (
                 selected_processor != "Select a processor..."
