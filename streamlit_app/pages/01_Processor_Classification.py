@@ -15,8 +15,67 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import pandas as pd
 import streamlit as st
+import yaml  # type: ignore
 
 from tools.classification import classify_workflow
+
+OVERRIDES_PATH = Path("classification_overrides.yaml")
+QUICK_ACTIONS = [
+    ("Mark Business Logic", "Business Logic"),
+    ("Mark Orchestration / Support", "Orchestration / Monitoring"),
+    ("Mark Infrastructure", "Infrastructure Only"),
+]
+DEFAULT_TARGETS = {
+    "Business Logic": "Manual business task",
+    "Orchestration / Monitoring": "Workflow support",
+    "Infrastructure Only": "Workflow plumbing",
+}
+
+
+def _load_overrides() -> Dict[str, Dict[str, Any]]:
+    if not OVERRIDES_PATH.exists():
+        return {}
+    with OVERRIDES_PATH.open("r", encoding="utf-8") as fh:
+        payload = yaml.safe_load(fh) or {}
+    if isinstance(payload, dict):
+        return payload
+    return {}
+
+
+def _save_overrides(overrides: Dict[str, Dict[str, Any]]) -> None:
+    OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with OVERRIDES_PATH.open("w", encoding="utf-8") as fh:
+        yaml.safe_dump(overrides, fh, sort_keys=True, allow_unicode=True)
+
+
+def _default_target(category: str, record: Dict[str, Any]) -> str:
+    current = record.get("databricks_target") or "Needs review"
+    if current and current != "Needs review":
+        return current
+    return DEFAULT_TARGETS.get(category, current)
+
+
+def apply_quick_override(record: Dict[str, Any], category: str) -> None:
+    processor_id = record.get("processor_id")
+    if not processor_id:
+        st.error("Processor ID missing; unable to create override.")
+        return
+
+    overrides = _load_overrides()
+    entry = overrides.get(processor_id, {})
+    entry.update(
+        {
+            "migration_category": category,
+            "databricks_target": _default_target(category, record),
+            "confidence": max(float(record.get("confidence") or 0.0), 0.95),
+            "notes": "Quick action override applied via Streamlit",
+        }
+    )
+    overrides[processor_id] = entry
+    _save_overrides(overrides)
+    st.success(
+        f"Override saved for {record.get('name') or processor_id}. Re-run classification to see the update."
+    )
 
 
 def render_summary_metrics(summary: Dict[str, int]) -> None:
@@ -73,6 +132,20 @@ def render_processor_detail(record: Dict[str, Any]) -> None:
     if properties:
         with st.expander("Processor properties", expanded=False):
             st.json(properties)
+
+    if record.get("classification_source") != "override":
+        confidence_value = float(record.get("confidence") or 0.0)
+        category_value = record.get("migration_category") or "Ambiguous"
+        needs_review = category_value == "Ambiguous" or confidence_value < 0.5
+        if needs_review:
+            st.markdown("**Quick actions**")
+            button_cols = st.columns(len(QUICK_ACTIONS))
+            for (label, target_category), col in zip(QUICK_ACTIONS, button_cols):
+                if col.button(
+                    label,
+                    key=f"qa_{record.get('processor_id')}_{target_category}",
+                ):
+                    apply_quick_override(record, target_category)
 
 
 def render_classification_result(result: Any, *, key_prefix: str) -> None:
