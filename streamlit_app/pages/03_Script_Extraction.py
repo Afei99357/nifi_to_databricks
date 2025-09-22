@@ -343,18 +343,12 @@ def display_script_results(scripts, uploaded_file):
                             {
                                 "Processor": script["processor_name"],
                                 "Group": script["processor_group"],
-                                "Processor ID": script["processor_id"][:8]
-                                + "...",  # Shortened for display
+                                "Processor ID": script["processor_id"],
                                 "Property": script["property_name"],
                                 "Type": script["script_type"],
                                 "Lines": script["line_count"],
                                 "Confidence": f"{script['confidence']:.2f}",
-                                "Preview": (
-                                    script["content_preview"][:80]
-                                    + "..."  # Shortened for more columns
-                                    if len(script["content_preview"]) > 80
-                                    else script["content_preview"]
-                                ),
+                                "Preview": script["content_preview"],
                             }
                         )
 
