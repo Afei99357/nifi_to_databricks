@@ -25,7 +25,7 @@
 3. Write JSON result to `derived_classification/{template_stem}.json`.
 4. Append rows (template, processor_id, short_type, migration_category, key feature hints) to `derived_classification/summary.csv`.
 5. Emit run stats (total processors, ambiguous count, duration) to stdout/log.
-6. Surface the batch artefacts inside Streamlit: allow uploading `summary.csv`, point to the derived JSON directory, and reuse the classification table/evidence view so reviewers can inspect saved runs without reprocessing XML.
+6. Surface the batch artefacts inside Streamlit: allow uploading `summary.csv` (or the ZIP bundle produced by the CLI), point to the derived JSON directory, and reuse the classification table/evidence view so reviewers can inspect saved runs without reprocessing XML.
 
 _Command prototype:_ `python tools/classify_all_workflows.py --input nifi_pipeline_file --output derived_classification`
 

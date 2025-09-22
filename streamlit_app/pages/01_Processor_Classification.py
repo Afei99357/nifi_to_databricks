@@ -2,8 +2,11 @@
 
 import json
 import os
+import shutil
 import sys
 import tempfile
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -277,33 +280,86 @@ def load_saved_json(
 def handle_saved_results_flow() -> None:
     st.markdown("### 📂 Review derived classification outputs")
     summary_file = st.file_uploader(
-        "Upload derived summary CSV",
-        type="csv",
+        "Upload derived summary CSV or ZIP bundle",
+        type=["csv", "zip"],
         key="saved_summary_uploader",
     )
 
     default_dir = st.session_state.get(
         "saved_results_dir", "derived_classification_results"
     )
-    json_dir = st.text_input(
-        "Directory containing per-template JSON files",
-        value=default_dir,
-        key="saved_results_dir_input",
-    )
-    st.session_state["saved_results_dir"] = json_dir
 
-    if not summary_file:
+    if summary_file is None:
+        json_dir = st.text_input(
+            "Directory containing per-template JSON files",
+            value=default_dir,
+            key="saved_results_dir_input",
+        )
+        st.session_state["saved_results_dir"] = json_dir
         st.info(
-            "Upload the `summary.csv` produced by `classify_all_workflows.py` "
-            "to explore batch results."
+            "Upload either the generated `summary.csv` or a ZIP archive that "
+            "contains the summary and JSON outputs from `classify_all_workflows.py`."
         )
         return
 
-    try:
-        summary_df = pd.read_csv(summary_file)
-    except Exception as exc:  # pragma: no cover - UI feedback
-        st.error(f"Unable to read CSV: {exc}")
-        return
+    filename = summary_file.name or ""
+    suffix = Path(filename).suffix.lower()
+
+    summary_df: Optional[pd.DataFrame] = None
+    summary_source_dir: Optional[Path] = None
+
+    if suffix == ".zip":
+        # Clean up any previous extraction directory.
+        extracted_dir = st.session_state.get("saved_results_extracted_dir")
+        if extracted_dir and Path(extracted_dir).exists():
+            shutil.rmtree(extracted_dir, ignore_errors=True)
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="derived_upload_"))
+        try:
+            with zipfile.ZipFile(BytesIO(summary_file.read())) as zf:
+                zf.extractall(temp_dir)
+        except zipfile.BadZipFile:
+            st.error("Uploaded file is not a valid ZIP archive.")
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return
+
+        summary_candidates = sorted(temp_dir.rglob("summary.csv"))
+        if not summary_candidates:
+            st.error("No `summary.csv` found inside the uploaded archive.")
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return
+
+        summary_path = summary_candidates[0]
+        try:
+            summary_df = pd.read_csv(summary_path)
+        except Exception as exc:  # pragma: no cover - UI feedback
+            st.error(f"Unable to read extracted summary CSV: {exc}")
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return
+
+        st.session_state["saved_results_extracted_dir"] = str(temp_dir)
+        summary_source_dir = summary_path.parent
+        st.session_state["last_summary_name"] = str(summary_path)
+    else:
+        try:
+            summary_df = pd.read_csv(BytesIO(summary_file.getvalue()))
+        except Exception as exc:  # pragma: no cover - UI feedback
+            st.error(f"Unable to read CSV: {exc}")
+            return
+        st.session_state["last_summary_name"] = filename
+
+    json_dir_default = (
+        str(summary_source_dir)
+        if summary_source_dir is not None
+        else st.session_state.get("saved_results_dir", default_dir)
+    )
+
+    json_dir = st.text_input(
+        "Directory containing per-template JSON files",
+        value=json_dir_default,
+        key="saved_results_dir_input",
+    )
+    st.session_state["saved_results_dir"] = json_dir
 
     if summary_df.empty:
         st.warning("Summary CSV is empty.")
