@@ -14,6 +14,8 @@ from .rules_engine import (
     load_rules,
     to_json,
 )
+from .suggest_rules import generate_suggestions
+from .suggest_rules import main as suggest_main
 
 __all__ = [
     "Condition",
@@ -25,7 +27,9 @@ __all__ = [
     "cli_main",
     "extract_processor_features",
     "features_to_json",
+    "generate_suggestions",
     "load_overrides",
     "load_rules",
     "to_json",
+    "suggest_main",
 ]

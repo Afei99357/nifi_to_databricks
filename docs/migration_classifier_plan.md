@@ -57,7 +57,7 @@ _Command prototype:_ `python tools/classify_all_workflows.py --input nifi_pipeli
      notes: "Auto-suggested from 84 instances; no scripts/SQL; downstream sink fraction 0.92"
    ```
    > **Confidence placeholder:** remove the hand-assigned confidence column for now; Phase 2 will replace it with a data-driven score derived from aggregate metrics or a simple model.
-6. Save suggestions to `classification_rules.suggestions.yaml`.
+6. Save suggestions to `classification_rules.suggestions.yaml` (CLI example: `uv run python tools/classification/suggest_rules.py --summary derived_classification/summary.csv`).
 7. CLI flags:
    - `--only-new`: ignore processor types already represented in `classification_rules.yaml`.
    - `--include-evidence`: attach sample processor IDs / downstream counts in the notes field for reviewer context.
