@@ -417,18 +417,16 @@ def display_script_results(scripts, uploaded_file):
                             use_container_width=True,
                             hide_index=True,
                         )
-
-            elif display_mode == "🎯 Selected Script Only":
-                # Show only the selected script
-                if (
-                    selected_processor != "Select a processor..."
-                    and selected_script_idx < len(inline_script_data)
+            detail_expanded = display_mode == "🎯 Selected Script Only"
+            if (
+                selected_processor != "Select a processor..."
+                and selected_script_idx < len(inline_script_data)
+            ):
+                script_data = inline_script_data[selected_script_idx]
+                with st.expander(
+                    f"📄 {script_data['processor_name']} → {script_data['property_name']}",
+                    expanded=detail_expanded,
                 ):
-                    script_data = inline_script_data[selected_script_idx]
-                    st.markdown(
-                        f"#### {script_data['processor_name']} → {script_data['property_name']}"
-                    )
-
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**Script Type:** {script_data['script_type']}")
@@ -446,10 +444,8 @@ def display_script_results(scripts, uploaded_file):
                     st.code(
                         script_data["full_content"], language=script_data["script_type"]
                     )
-                else:
-                    st.info(
-                        "👆 Please select a processor and script from the dropdowns above"
-                    )
+            elif display_mode == "🎯 Selected Script Only":
+                st.info("👆 Select a processor and script to view its content.")
 
         # External dependencies
         external_deps = set()
