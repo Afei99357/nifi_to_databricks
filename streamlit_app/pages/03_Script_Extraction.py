@@ -403,35 +403,42 @@ def display_script_results(scripts, uploaded_file):
                             ),
                         },
                     )
-            detail_expanded = display_mode == "🎯 Selected Script Only"
-            if (
-                selected_processor != "Select a processor..."
-                and selected_script_idx < len(inline_script_data)
-            ):
-                script_data = inline_script_data[selected_script_idx]
-                with st.expander(
-                    f"📄 {script_data['processor_name']} → {script_data['property_name']}",
-                    expanded=detail_expanded,
+            if display_mode == "🎯 Selected Script Only":
+                if (
+                    selected_processor != "Select a processor..."
+                    and selected_script_idx < len(inline_script_data)
                 ):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown(f"**Script Type:** {script_data['script_type']}")
-                        st.markdown(f"**Lines:** {script_data['line_count']}")
-                        st.markdown(f"**Group:** {script_data['processor_group']}")
-                    with col2:
-                        st.markdown(f"**Confidence:** {script_data['confidence']:.2f}")
-                        st.markdown(f"**Processor ID:** {script_data['processor_id']}")
-                        if script_data["referenced_queries"]:
+                    script_data = inline_script_data[selected_script_idx]
+                    with st.expander(
+                        f"📄 {script_data['processor_name']} → {script_data['property_name']}",
+                        expanded=True,
+                    ):
+                        col1, col2 = st.columns(2)
+                        with col1:
                             st.markdown(
-                                f"**References:** {', '.join(script_data['referenced_queries'])}"
+                                f"**Script Type:** {script_data['script_type']}"
                             )
+                            st.markdown(f"**Lines:** {script_data['line_count']}")
+                            st.markdown(f"**Group:** {script_data['processor_group']}")
+                        with col2:
+                            st.markdown(
+                                f"**Confidence:** {script_data['confidence']:.2f}"
+                            )
+                            st.markdown(
+                                f"**Processor ID:** {script_data['processor_id']}"
+                            )
+                            if script_data["referenced_queries"]:
+                                st.markdown(
+                                    f"**References:** {', '.join(script_data['referenced_queries'])}"
+                                )
 
-                    st.markdown("**Full Script Content:**")
-                    st.code(
-                        script_data["full_content"], language=script_data["script_type"]
-                    )
-            elif display_mode == "🎯 Selected Script Only":
-                st.info("👆 Select a processor and script to view its content.")
+                        st.markdown("**Full Script Content:**")
+                        st.code(
+                            script_data["full_content"],
+                            language=script_data["script_type"],
+                        )
+                else:
+                    st.info("👆 Select a processor and script to view its content.")
 
         # External dependencies
         external_deps = set()
