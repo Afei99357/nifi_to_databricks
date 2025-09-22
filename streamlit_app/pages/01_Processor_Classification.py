@@ -354,11 +354,7 @@ def handle_saved_results_flow() -> None:
         else st.session_state.get("saved_results_dir", default_dir)
     )
 
-    json_dir = st.text_input(
-        "Directory containing per-template JSON files",
-        value=json_dir_default,
-        key="saved_results_dir_input",
-    )
+    json_dir = json_dir_default
     st.session_state["saved_results_dir"] = json_dir
 
     if summary_df.empty:
@@ -398,13 +394,6 @@ def handle_saved_results_flow() -> None:
         use_container_width=True,
         hide_index=True,
     )
-
-    if not json_dir:
-        st.info(
-            "Enter the directory that holds the per-template JSON files to view "
-            "detailed evidence."
-        )
-        return
 
     json_result, json_path = load_saved_json(json_dir, selected_template)
     if json_result is None:

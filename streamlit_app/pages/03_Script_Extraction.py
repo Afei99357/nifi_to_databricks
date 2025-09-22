@@ -101,7 +101,6 @@ def display_script_results(scripts, uploaded_file):
             st.markdown("### 📋 Script Details")
             script_df = pd.DataFrame(script_details)
 
-            # Filter controls
             col1, col2, col3 = st.columns(3)
             with col1:
                 script_types = ["All"] + sorted(
@@ -112,7 +111,6 @@ def display_script_results(scripts, uploaded_file):
                 )
 
             with col2:
-                # Confidence filter (only for inline scripts)
                 min_confidence = st.slider(
                     "Min Confidence:",
                     min_value=0.0,
@@ -125,11 +123,10 @@ def display_script_results(scripts, uploaded_file):
             with col3:
                 search_script = st.text_input(
                     "Search Scripts:",
-                    placeholder="Enter script name",
+                    placeholder="Path, processor, or preview text",
                     key="script_search",
                 )
 
-            # Apply filters
             filtered_script_df = script_df.copy()
 
             if selected_script_type != "All":
@@ -137,7 +134,6 @@ def display_script_results(scripts, uploaded_file):
                     filtered_script_df["Script Type"] == selected_script_type
                 ]
 
-            # Apply confidence filter (only to scripts with numeric confidence)
             if min_confidence > 0:
                 mask = (filtered_script_df["Confidence"] == "N/A") | (
                     pd.to_numeric(filtered_script_df["Confidence"], errors="coerce")
@@ -146,49 +142,78 @@ def display_script_results(scripts, uploaded_file):
                 filtered_script_df = filtered_script_df[mask]
 
             if search_script:
-                filtered_script_df = filtered_script_df[
-                    filtered_script_df["Script Path"].str.contains(
-                        search_script, case=False, na=False
-                    )
-                ]
+                search_lower = search_script.lower()
+                mask = (
+                    filtered_script_df["Script Path"]
+                    .str.lower()
+                    .str.contains(search_lower, na=False)
+                    | filtered_script_df["Processor Name"]
+                    .str.lower()
+                    .str.contains(search_lower, na=False)
+                    | filtered_script_df["Source Type"]
+                    .str.lower()
+                    .str.contains(search_lower, na=False)
+                )
+                filtered_script_df = filtered_script_df[mask]
 
-            # Show filtered results count
             if len(filtered_script_df) != len(script_df):
                 st.info(
                     f"Showing {len(filtered_script_df)} of {len(script_df)} scripts"
                 )
 
-            # Display table
             if not filtered_script_df.empty:
+                compact_df = filtered_script_df.copy()
+                compact_df["Script"] = compact_df["Script Path"].str.slice(0, 90)
+                compact_df["Preview"] = compact_df["Script Path"].str.slice(0, 90)
+                compact_df["Preview"] = compact_df["Preview"].mask(
+                    compact_df["Preview"].str.len() >= 90,
+                    compact_df["Preview"].str.slice(0, 90) + "...",
+                )
+
+                table_df = compact_df.rename(
+                    columns={
+                        "Script Type": "Type",
+                        "Source Type": "Source",
+                        "Processor Name": "Processor",
+                        "Group Name": "Group",
+                    }
+                )[
+                    [
+                        "Script",
+                        "Type",
+                        "Source",
+                        "Processor",
+                        "Group",
+                        "Lines",
+                        "Confidence",
+                    ]
+                ]
+
                 st.dataframe(
-                    filtered_script_df,
+                    table_df,
                     use_container_width=True,
-                    hide_index=False,
-                    height=None,
+                    hide_index=True,
                     column_config={
-                        "Script Path": st.column_config.TextColumn(
-                            "Script Path", width="large"
+                        "Script": st.column_config.TextColumn("Script", width="large"),
+                        "Type": st.column_config.TextColumn("Type", width="small"),
+                        "Source": st.column_config.TextColumn("Source", width="small"),
+                        "Processor": st.column_config.TextColumn(
+                            "Processor", width="medium"
                         ),
-                        "Script Type": st.column_config.TextColumn(
-                            "Script Type", width="small"
-                        ),
-                        "Processor Name": st.column_config.TextColumn(
-                            "Processor Name", width="medium"
-                        ),
-                        "Processor Type": st.column_config.TextColumn(
-                            "Processor Type", width="medium"
-                        ),
-                        "Group Name": st.column_config.TextColumn(
-                            "Group Name", width="medium"
-                        ),
-                        "Processor ID": st.column_config.TextColumn(
-                            "Processor ID", width="small"
-                        ),
+                        "Group": st.column_config.TextColumn("Group", width="medium"),
+                        "Lines": st.column_config.NumberColumn("Lines", width="small"),
                         "Confidence": st.column_config.TextColumn(
                             "Confidence", width="small"
                         ),
                     },
                 )
+
+                if st.toggle("Show advanced columns", key="script_details_advanced"):
+                    st.dataframe(
+                        filtered_script_df,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
             else:
                 st.warning("No scripts match the current filters.")
 
@@ -335,49 +360,63 @@ def display_script_results(scripts, uploaded_file):
             )
 
             if display_mode == "📋 Table View":
-                # Compact table view with clickable rows
                 if filtered_inline_data:
-                    table_data = []
-                    for script in filtered_inline_data:
-                        table_data.append(
-                            {
-                                "Processor": script["processor_name"],
-                                "Group": script["processor_group"],
-                                "Processor ID": script["processor_id"],
-                                "Property": script["property_name"],
-                                "Type": script["script_type"],
-                                "Lines": script["line_count"],
-                                "Confidence": f"{script['confidence']:.2f}",
-                                "Preview": script["content_preview"],
-                            }
-                        )
+                    inline_df = pd.DataFrame(filtered_inline_data)
+                    inline_df = inline_df.assign(
+                        Processor=inline_df["processor_name"],
+                        Property=inline_df["property_name"],
+                        Type=inline_df["script_type"],
+                        Lines=inline_df["line_count"],
+                        Confidence=inline_df["confidence"].map(lambda v: f"{v:.2f}"),
+                        Preview=inline_df["content_preview"].apply(
+                            lambda txt: (txt[:100] + "...") if len(txt) > 100 else txt
+                        ),
+                    )
+
+                    inline_table = inline_df[
+                        [
+                            "Processor",
+                            "Property",
+                            "Type",
+                            "Lines",
+                            "Confidence",
+                            "Preview",
+                        ]
+                    ]
 
                     st.dataframe(
-                        pd.DataFrame(table_data),
+                        inline_table,
                         use_container_width=True,
+                        hide_index=True,
                         height=400,
                         column_config={
                             "Processor": st.column_config.TextColumn(
                                 "Processor", width="medium"
                             ),
-                            "Group": st.column_config.TextColumn(
-                                "Group", width="small"
-                            ),
-                            "Processor ID": st.column_config.TextColumn(
-                                "Processor ID", width="small"
-                            ),
                             "Property": st.column_config.TextColumn(
                                 "Property", width="medium"
                             ),
                             "Type": st.column_config.TextColumn("Type", width="small"),
+                            "Lines": st.column_config.NumberColumn(
+                                "Lines", width="small"
+                            ),
+                            "Confidence": st.column_config.TextColumn(
+                                "Confidence", width="small"
+                            ),
                             "Preview": st.column_config.TextColumn(
                                 "Preview", width="large"
                             ),
-                            "Confidence": st.column_config.NumberColumn(
-                                "Confidence", format="%.2f", width="small"
-                            ),
                         },
                     )
+
+                    if st.toggle(
+                        "Show inline script metadata", key="inline_table_details"
+                    ):
+                        st.dataframe(
+                            inline_df,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
 
             elif display_mode == "🎯 Selected Script Only":
                 # Show only the selected script
