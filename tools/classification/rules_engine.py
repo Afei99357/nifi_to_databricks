@@ -339,8 +339,6 @@ def _apply_metadata_promotions(
             continue
 
         downstream_ids = reachable_downstream(processor_id)
-        if not downstream_ids:
-            continue
 
         promoted_variables: set[str] = set()
         target_processors: set[str] = set()
@@ -348,7 +346,7 @@ def _apply_metadata_promotions(
         for var_name in defined_vars:
             consumers = variable_consumers.get(var_name, set())
             for consumer_id in consumers:
-                if consumer_id == processor_id or consumer_id not in downstream_ids:
+                if consumer_id == processor_id:
                     continue
                 consumer_record = record_by_id.get(consumer_id)
                 if not consumer_record:
