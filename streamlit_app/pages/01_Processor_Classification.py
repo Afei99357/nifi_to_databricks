@@ -465,8 +465,58 @@ def handle_saved_results_flow() -> None:
         f"#### Processors for template `{selected_template}` "
         f"({len(template_df)} rows)"
     )
+
+    filter_cols = st.columns(4)
+
+    def multiselect_or_all(column_name: str, label: str, key_suffix: str) -> List[str]:
+        values = (
+            template_df.get(column_name, pd.Series(dtype=str))
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        )
+        values = sorted(values)
+        return st.multiselect(
+            label,
+            options=values,
+            default=values,
+            key=f"saved_filter_{key_suffix}_{selected_template}",
+        )
+
+    with filter_cols[0]:
+        selected_short_types = multiselect_or_all("short_type", "Short type", "short_type")
+    with filter_cols[1]:
+        selected_parent_groups = multiselect_or_all(
+            "parent_group", "Parent group", "parent_group"
+        )
+    with filter_cols[2]:
+        selected_categories = multiselect_or_all(
+            "migration_category", "Category", "category"
+        )
+    with filter_cols[3]:
+        selected_rules = multiselect_or_all("rule", "Rule", "rule")
+
+    filtered_df = template_df.copy()
+    if selected_short_types:
+        filtered_df = filtered_df[
+            filtered_df.get("short_type").astype(str).isin(selected_short_types)
+        ]
+    if selected_parent_groups:
+        filtered_df = filtered_df[
+            filtered_df.get("parent_group").astype(str).isin(selected_parent_groups)
+        ]
+    if selected_categories:
+        filtered_df = filtered_df[
+            filtered_df.get("migration_category").astype(str).isin(selected_categories)
+        ]
+    if selected_rules:
+        filtered_df = filtered_df[
+            filtered_df.get("rule").fillna("(none)").astype(str).isin(selected_rules)
+        ]
+
     st.dataframe(
-        template_df,
+        filtered_df,
         use_container_width=True,
         hide_index=True,
     )
