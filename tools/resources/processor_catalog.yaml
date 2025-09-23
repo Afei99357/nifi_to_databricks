@@ -48,6 +48,7 @@ categories:
     - Notify
     - Funnel
     - TerminateFlowFile
+    - GenerateFlowFile
   security:
     - EncryptContent
     - DecryptContent
@@ -73,3 +74,6 @@ metadata:
   LogMessage:
     default_migration_category: Infrastructure Only
     notes: "Diagnostic logging"
+  GenerateFlowFile:
+    default_migration_category: Infrastructure Only
+    notes: "Synthetic FlowFile generator; used for plumbing or tests"

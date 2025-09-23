@@ -95,6 +95,102 @@ def render_summary_metrics(summary: Dict[str, int]) -> None:
         columns[idx % len(columns)].metric(category, int(count))
 
 
+def _series_with_default(
+    df: pd.DataFrame, column_name: str, *, default: str = "(none)"
+) -> pd.Series:
+    if column_name in df.columns:
+        series = df[column_name]
+        if series.empty:
+            return pd.Series(dtype="object")
+        return series.fillna(default).astype(str)
+    if df.empty:
+        return pd.Series(dtype="object")
+    return pd.Series(data=default, index=df.index, dtype="object")
+
+
+def apply_table_filters(df: pd.DataFrame, *, key_prefix: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    filter_cols = st.columns(6)
+
+    def select_with_all(column_name: str, label: str, key_suffix: str) -> str:
+        values = _series_with_default(df, column_name).unique().tolist()
+        cleaned_values = sorted({str(value) for value in values})
+        options = ["All"] + cleaned_values
+        return st.selectbox(
+            label,
+            options=options,
+            key=f"{key_prefix}_{key_suffix}",
+        )
+
+    with filter_cols[0]:
+        selected_processor_name = st.text_input(
+            "Processor name contains",
+            key=f"{key_prefix}_name_contains",
+        ).strip()
+    with filter_cols[1]:
+        selected_short_type = select_with_all("short_type", "Short type", "short_type")
+    with filter_cols[2]:
+        selected_parent_group = select_with_all(
+            "parent_group", "Parent group", "parent_group"
+        )
+    with filter_cols[3]:
+        selected_category = select_with_all(
+            "migration_category", "Category", "category"
+        )
+    with filter_cols[4]:
+        selected_catalog_category = select_with_all(
+            "catalog_category", "Catalog category", "catalog_category"
+        )
+    with filter_cols[5]:
+        selected_rule = select_with_all("rule", "Rule", "rule")
+
+    filtered_df = df.copy()
+
+    if selected_processor_name:
+        if "processor_name" in filtered_df.columns:
+            name_series = filtered_df["processor_name"]
+            if "name" in filtered_df.columns:
+                name_series = name_series.fillna(filtered_df["name"])
+        elif "name" in filtered_df.columns:
+            name_series = filtered_df["name"]
+        else:
+            name_series = pd.Series(
+                data="",
+                index=filtered_df.index,
+                dtype="object",
+            )
+        name_series = name_series.fillna("").astype(str)
+        filtered_df = filtered_df[
+            name_series.str.contains(selected_processor_name, case=False, na=False)
+        ]
+
+    if selected_short_type != "All":
+        type_series = _series_with_default(filtered_df, "short_type")
+        filtered_df = filtered_df[type_series == selected_short_type]
+
+    if selected_parent_group != "All":
+        parent_series = _series_with_default(filtered_df, "parent_group")
+        filtered_df = filtered_df[parent_series == selected_parent_group]
+
+    if selected_category != "All":
+        category_series = _series_with_default(filtered_df, "migration_category")
+        filtered_df = filtered_df[category_series == selected_category]
+
+    if selected_rule != "All":
+        rule_series = _series_with_default(filtered_df, "rule")
+        filtered_df = filtered_df[rule_series == selected_rule]
+
+    if selected_catalog_category != "All":
+        catalog_series = _series_with_default(filtered_df, "catalog_category")
+        filtered_df = filtered_df[catalog_series == selected_catalog_category]
+
+    filtered_df = filtered_df.reset_index(drop=True)
+    filtered_df.index = filtered_df.index + 1
+    return filtered_df
+
+
 def render_processor_detail(record: Dict[str, Any], *, key_prefix: str) -> None:
     st.markdown(
         f"#### Processor: {record.get('name') or record.get('processor_id') or 'Unknown'}"
@@ -130,10 +226,10 @@ def render_processor_detail(record: Dict[str, Any], *, key_prefix: str) -> None:
     cols[1].markdown(f"**Rule:** {rule or '—'}")
     cols = st.columns(2)
     cols[0].markdown(f"**Catalog category:** {catalog_category}")
-    default_migration = catalog_meta.get("default_migration_category") if catalog_meta else None
-    cols[1].markdown(
-        f"**Catalog default:** {default_migration or '—'}"
+    default_migration = (
+        catalog_meta.get("default_migration_category") if catalog_meta else None
     )
+    cols[1].markdown(f"**Catalog default:** {default_migration or '—'}")
 
     if notes:
         st.markdown(f"**Notes:** {notes}")
@@ -218,15 +314,16 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
     ]
     existing_columns = [col for col in display_columns if col in df.columns]
     st.markdown("### 🗂️ Classified processors")
-    st.dataframe(
-        df[existing_columns] if existing_columns else df,
-        use_container_width=True,
-        hide_index=True,
-    )
+    filtered_df = apply_table_filters(df, key_prefix=f"{key_prefix}_table_filters")
+    display_df = filtered_df[existing_columns] if existing_columns else filtered_df
+    st.dataframe(display_df, use_container_width=True)
 
-    if not df.empty:
+    if "catalog_category" in filtered_df.columns and not filtered_df.empty:
         catalog_summary = (
-            df["catalog_category"].replace({"": "(unknown)"}).value_counts().reset_index()
+            filtered_df["catalog_category"]
+            .replace({"": "(unknown)"})
+            .value_counts()
+            .reset_index()
         )
         catalog_summary.columns = ["Catalog category", "Count"]
         with st.expander("Catalog coverage", expanded=False):
@@ -253,10 +350,33 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         key=f"{key_prefix}_json_download",
     )
 
+    if filtered_df.empty:
+        st.info("No processors match the current filters.")
+        return
+
+    visible_ids: Optional[set[str]] = None
+    if "processor_id" in filtered_df.columns:
+        id_series = filtered_df["processor_id"].dropna().astype(str)
+        visible_ids = {value for value in id_series.tolist() if value}
+
+    if visible_ids is None:
+        candidate_records = [rec for rec in records if rec.get("processor_id")]
+    else:
+        candidate_records = []
+        for rec in records:
+            proc_id = rec.get("processor_id")
+            if not proc_id:
+                continue
+            if str(proc_id) in visible_ids:
+                candidate_records.append(rec)
+
     record_map = {
-        rec.get("processor_id"): rec for rec in records if rec.get("processor_id")
+        rec.get("processor_id"): rec
+        for rec in candidate_records
+        if rec.get("processor_id")
     }
     if not record_map:
+        st.info("No processors match the current filters.")
         return
 
     select_options = sorted(record_map.keys())
@@ -511,7 +631,9 @@ def handle_saved_results_flow() -> None:
             )
         )
 
-    missing_count = int((template_df.get("catalog_category", pd.Series([])) == "").sum())
+    missing_count = int(
+        (template_df.get("catalog_category", pd.Series([])) == "").sum()
+    )
     if missing_count:
         st.warning(
             f"{missing_count} processor type(s) in this template are not present in the catalog."
@@ -522,88 +644,9 @@ def handle_saved_results_flow() -> None:
         f"({len(template_df)} rows)"
     )
 
-    filter_cols = st.columns(6)
-
-    def select_with_all(column_name: str, label: str, key_suffix: str) -> str:
-        values = (
-            template_df.get(column_name, pd.Series(dtype=str))
-            .fillna("(none)")
-            .astype(str)
-            .unique()
-            .tolist()
-        )
-        values = ["All"] + sorted(values)
-        return st.selectbox(
-            label,
-            options=values,
-            key=f"saved_filter_{key_suffix}_{selected_template}",
-        )
-
-    with filter_cols[0]:
-        selected_processor_name = st.text_input(
-            "Processor name contains",
-            key=f"saved_filter_name_{selected_template}",
-        ).strip()
-    with filter_cols[1]:
-        selected_short_type = select_with_all("short_type", "Short type", "short_type")
-    with filter_cols[2]:
-        selected_parent_group = select_with_all(
-            "parent_group", "Parent group", "parent_group"
-        )
-    with filter_cols[3]:
-        selected_category = select_with_all(
-            "migration_category", "Category", "category"
-        )
-    with filter_cols[4]:
-        selected_catalog_category = select_with_all(
-            "catalog_category", "Catalog category", "catalog_category"
-        )
-    with filter_cols[5]:
-        selected_rule = select_with_all("rule", "Rule", "rule")
-
-    filtered_df = template_df.copy()
-    if selected_processor_name:
-        if "processor_name" in filtered_df.columns:
-            name_series = filtered_df["processor_name"]
-            if "name" in filtered_df.columns:
-                name_series = name_series.fillna(filtered_df["name"])
-        elif "name" in filtered_df.columns:
-            name_series = filtered_df["name"]
-        else:
-            name_series = pd.Series("", index=filtered_df.index)
-        name_series = name_series.fillna("")
-        filtered_df = filtered_df[
-            name_series.astype(str).str.contains(
-                selected_processor_name, case=False, na=False
-            )
-        ]
-    if selected_short_type != "All":
-        filtered_df = filtered_df[
-            filtered_df.get("short_type").fillna("(none)").astype(str)
-            == selected_short_type
-        ]
-    if selected_parent_group != "All":
-        filtered_df = filtered_df[
-            filtered_df.get("parent_group").fillna("(none)").astype(str)
-            == selected_parent_group
-        ]
-    if selected_category != "All":
-        filtered_df = filtered_df[
-            filtered_df.get("migration_category").fillna("(none)").astype(str)
-            == selected_category
-        ]
-    if selected_rule != "All":
-        filtered_df = filtered_df[
-            filtered_df.get("rule").fillna("(none)").astype(str) == selected_rule
-        ]
-    if selected_catalog_category != "All":
-        filtered_df = filtered_df[
-            filtered_df.get("catalog_category").fillna("(none)").astype(str)
-            == selected_catalog_category
-        ]
-
-    filtered_df = filtered_df.reset_index(drop=True)
-    filtered_df.index = filtered_df.index + 1
+    filtered_df = apply_table_filters(
+        template_df, key_prefix=f"saved_{selected_template}_table_filters"
+    )
     st.dataframe(
         filtered_df,
         use_container_width=True,
