@@ -8,6 +8,7 @@ from typing import Sequence
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib as mpl
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
@@ -115,6 +116,16 @@ def plot_embedding(
 ) -> None:
     fig, ax = plt.subplots(figsize=(10, 8))
     categories = sorted(labels.unique())
+
+    if color_by == "migration_category":
+        palette = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7"]
+        color_map = {
+            cat: palette[idx % len(palette)] for idx, cat in enumerate(categories)
+        }
+    else:
+        cmap = mpl.colormaps.get_cmap("tab20")
+        color_map = {cat: cmap(idx / max(1, len(categories) - 1)) for idx, cat in enumerate(categories)}
+
     for category in categories:
         mask = labels == category
         ax.scatter(
@@ -123,6 +134,7 @@ def plot_embedding(
             label=category,
             s=12,
             alpha=0.7,
+            color=color_map[category],
         )
     ax.set_title(f"t-SNE embedding colored by {color_by}")
     ax.set_xlabel("t-SNE 1")
