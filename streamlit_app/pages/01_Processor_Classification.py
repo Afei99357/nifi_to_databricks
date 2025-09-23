@@ -22,11 +22,15 @@ from tools.classification import classify_workflow
 OVERRIDES_PATH = Path("classification_overrides.yaml")
 QUICK_ACTIONS = [
     ("Mark Business Logic", "Business Logic"),
-    ("Mark Orchestration / Support", "Orchestration / Monitoring"),
+    ("Mark Source Adapter", "Source Adapter"),
+    ("Mark Sink Adapter", "Sink Adapter"),
+    ("Mark Orchestration / Monitoring", "Orchestration / Monitoring"),
     ("Mark Infrastructure", "Infrastructure Only"),
 ]
 DEFAULT_TARGETS = {
     "Business Logic": "Manual business task",
+    "Source Adapter": "Databricks ingestion task",
+    "Sink Adapter": "Delta or external sink task",
     "Orchestration / Monitoring": "Workflow support",
     "Infrastructure Only": "Workflow plumbing",
 }
