@@ -530,10 +530,11 @@ def handle_saved_results_flow() -> None:
             filtered_df.get("rule").fillna("(none)").astype(str) == selected_rule
         ]
 
+    filtered_df = filtered_df.reset_index(drop=True)
+    filtered_df.index = filtered_df.index + 1
     st.dataframe(
         filtered_df,
         use_container_width=True,
-        hide_index=True,
     )
 
     json_result, json_path = load_saved_json(json_dir, selected_template)
