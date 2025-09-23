@@ -127,7 +127,16 @@ def plot_embedding(
     ax.set_title(f"t-SNE embedding colored by {color_by}")
     ax.set_xlabel("t-SNE 1")
     ax.set_ylabel("t-SNE 2")
-    ax.legend(loc="best")
+    if color_by == "short_type" and len(categories) > 10:
+        legend = ax.legend(
+            loc="upper right",
+            bbox_to_anchor=(1.25, 1.0),
+            fontsize="x-small",
+            ncol=2,
+            frameon=False,
+        )
+    else:
+        legend = ax.legend(loc="best")
     ax.grid(True, alpha=0.2)
     fig.tight_layout()
     fig.savefig(output_path, dpi=180)
