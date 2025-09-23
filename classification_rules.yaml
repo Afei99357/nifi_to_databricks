@@ -71,9 +71,6 @@ rules:
     processor_types:
       - org.apache.nifi.processors.standard.RouteOnAttribute
       - org.apache.nifi.processors.standard.UpdateAttribute
-    conditions:
-      - field: scripts.inline_count
-        equals: 0
     migration_category: Orchestration / Monitoring
     databricks_target: Databricks Jobs task branching / parameters
     confidence: 0.6
