@@ -468,51 +468,53 @@ def handle_saved_results_flow() -> None:
 
     filter_cols = st.columns(4)
 
-    def multiselect_or_all(column_name: str, label: str, key_suffix: str) -> List[str]:
+    def select_with_all(column_name: str, label: str, key_suffix: str) -> str:
         values = (
             template_df.get(column_name, pd.Series(dtype=str))
-            .dropna()
+            .fillna("(none)")
             .astype(str)
             .unique()
             .tolist()
         )
-        values = sorted(values)
-        return st.multiselect(
+        values = ["All"] + sorted(values)
+        return st.selectbox(
             label,
             options=values,
-            default=values,
             key=f"saved_filter_{key_suffix}_{selected_template}",
         )
 
     with filter_cols[0]:
-        selected_short_types = multiselect_or_all("short_type", "Short type", "short_type")
+        selected_short_type = select_with_all("short_type", "Short type", "short_type")
     with filter_cols[1]:
-        selected_parent_groups = multiselect_or_all(
+        selected_parent_group = select_with_all(
             "parent_group", "Parent group", "parent_group"
         )
     with filter_cols[2]:
-        selected_categories = multiselect_or_all(
+        selected_category = select_with_all(
             "migration_category", "Category", "category"
         )
     with filter_cols[3]:
-        selected_rules = multiselect_or_all("rule", "Rule", "rule")
+        selected_rule = select_with_all("rule", "Rule", "rule")
 
     filtered_df = template_df.copy()
-    if selected_short_types:
+    if selected_short_type != "All":
         filtered_df = filtered_df[
-            filtered_df.get("short_type").astype(str).isin(selected_short_types)
+            filtered_df.get("short_type").fillna("(none)").astype(str)
+            == selected_short_type
         ]
-    if selected_parent_groups:
+    if selected_parent_group != "All":
         filtered_df = filtered_df[
-            filtered_df.get("parent_group").astype(str).isin(selected_parent_groups)
+            filtered_df.get("parent_group").fillna("(none)").astype(str)
+            == selected_parent_group
         ]
-    if selected_categories:
+    if selected_category != "All":
         filtered_df = filtered_df[
-            filtered_df.get("migration_category").astype(str).isin(selected_categories)
+            filtered_df.get("migration_category").fillna("(none)").astype(str)
+            == selected_category
         ]
-    if selected_rules:
+    if selected_rule != "All":
         filtered_df = filtered_df[
-            filtered_df.get("rule").fillna("(none)").astype(str).isin(selected_rules)
+            filtered_df.get("rule").fillna("(none)").astype(str) == selected_rule
         ]
 
     st.dataframe(
