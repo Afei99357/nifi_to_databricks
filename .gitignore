@@ -12,6 +12,7 @@ outputs/
 migrations/
 generated/
 derived_classification*/
+derived_classification_tsne*.png
 classification_rules.suggestions.yaml
 
 # Temporary and scratch files
