@@ -28,6 +28,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Path to save the t-SNE scatter plot (PNG)",
     )
     parser.add_argument(
+        "--color-by",
+        choices=["migration_category", "short_type"],
+        default="migration_category",
+        help="Column used to color the scatter plot",
+    )
+    parser.add_argument(
         "--perplexity",
         type=float,
         default=30.0,
@@ -64,12 +70,14 @@ EXCLUDE_COLUMNS = {
 }
 
 
-def load_feature_matrix(path: Path) -> tuple[pd.DataFrame, pd.Series]:
+def load_feature_matrix(
+    path: Path, *, label_column: str
+) -> tuple[pd.DataFrame, pd.Series]:
     df = pd.read_csv(path)
-    if "migration_category" not in df.columns:
-        raise ValueError("Input CSV must contain a 'migration_category' column")
+    if label_column not in df.columns:
+        raise ValueError(f"Input CSV must contain a '{label_column}' column")
 
-    labels = df["migration_category"].astype(str)
+    labels = df[label_column].fillna("(none)").astype(str)
     feature_columns = [
         col
         for col in df.columns
@@ -102,6 +110,7 @@ def compute_tsne(
 def plot_embedding(
     embedding: pd.DataFrame,
     labels: pd.Series,
+    color_by: str,
     output_path: Path,
 ) -> None:
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -115,7 +124,7 @@ def plot_embedding(
             s=12,
             alpha=0.7,
         )
-    ax.set_title("t-SNE embedding of NiFi processors")
+    ax.set_title(f"t-SNE embedding colored by {color_by}")
     ax.set_xlabel("t-SNE 1")
     ax.set_ylabel("t-SNE 2")
     ax.legend(loc="best")
@@ -131,7 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not input_path.exists():
         raise SystemExit(f"Input CSV not found: {input_path}")
 
-    features, labels = load_feature_matrix(input_path)
+    features, labels = load_feature_matrix(input_path, label_column=args.color_by)
     embedding = compute_tsne(
         features,
         perplexity=args.perplexity,
@@ -140,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plot_embedding(embedding, labels, output_path)
+    plot_embedding(embedding, labels, args.color_by, output_path)
     print(
         f"t-SNE computed for {len(features)} processors. Plot saved to {output_path}."
     )
