@@ -507,12 +507,19 @@ def handle_saved_results_flow() -> None:
 
     filtered_df = template_df.copy()
     if selected_processor_name:
+        if "processor_name" in filtered_df.columns:
+            name_series = filtered_df["processor_name"]
+            if "name" in filtered_df.columns:
+                name_series = name_series.fillna(filtered_df["name"])
+        elif "name" in filtered_df.columns:
+            name_series = filtered_df["name"]
+        else:
+            name_series = pd.Series("", index=filtered_df.index)
+        name_series = name_series.fillna("")
         filtered_df = filtered_df[
-            filtered_df.get("processor_name")
-            .fillna(filtered_df.get("name"))
-            .fillna("")
-            .astype(str)
-            .str.contains(selected_processor_name, case=False, na=False)
+            name_series.astype(str).str.contains(
+                selected_processor_name, case=False, na=False
+            )
         ]
     if selected_short_type != "All":
         filtered_df = filtered_df[
