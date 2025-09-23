@@ -1,0 +1,75 @@
+version: 2025-09-23
+categories:
+  ingestion:
+    - GetFile
+    - GetFTP
+    - GetSFTP
+    - GetHTTP
+    - ListenHTTP
+    - ListenTCP
+    - ListenUDP
+    - ConsumeKafka
+    - ConsumeKafkaRecord_2_0
+    - ListFile
+    - ListSFTP
+    - FetchFile
+    - FetchSFTP
+    - QueryDatabaseTable
+    - QueryDatabaseTableRecord
+  egress:
+    - PutFile
+    - PutFTP
+    - PutSFTP
+    - PutHDFS
+    - PutKafka
+    - PublishKafka
+    - PutDatabaseRecord
+    - PutSQL
+    - PutHiveStreaming
+    - PutKudu
+  transform:
+    - ExecuteScript
+    - InvokeScriptedProcessor
+    - ExecuteStreamCommand
+    - UpdateAttribute
+    - ReplaceText
+    - EvaluateJsonPath
+    - ExecuteSQL
+    - MergeRecord
+    - QueryRecord
+  routing:
+    - RouteOnAttribute
+    - RouteOnContent
+    - RouteOnText
+    - ControlRate
+  utility:
+    - LogMessage
+    - Wait
+    - Notify
+    - Funnel
+    - TerminateFlowFile
+  security:
+    - EncryptContent
+    - DecryptContent
+    - ValidateRecord
+aliases:
+  PublishKafka_2_0: PutKafka
+  PublishKafkaRecord_2_0: PutKafka
+  PutHive3Streaming: PutHiveStreaming
+  ConsumeKafka_2_0: ConsumeKafka
+metadata:
+  GetFile:
+    default_migration_category: Source Adapter
+    notes: "File system ingress; replace with Autoloader or COPY INTO"
+  PutFile:
+    default_migration_category: Sink Adapter
+    notes: "Writes to filesystem; map to Delta or Files API"
+  ExecuteScript:
+    default_migration_category: Business Logic
+    notes: "Inline scripting carries transformation logic"
+  RouteOnAttribute:
+    default_migration_category: Orchestration / Monitoring
+    notes: "Routing/branching control flow"
+  LogMessage:
+    default_migration_category: Infrastructure Only
+    notes: "Diagnostic logging"

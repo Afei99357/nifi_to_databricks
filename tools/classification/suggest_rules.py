@@ -11,6 +11,24 @@ import pandas as pd
 import yaml
 
 from .rules_engine import load_rules
+from ..catalog import load_catalog
+
+CATALOG_CATEGORY_TO_MIGRATION = {
+    "ingestion": "Source Adapter",
+    "egress": "Sink Adapter",
+    "transform": "Business Logic",
+    "routing": "Orchestration / Monitoring",
+    "utility": "Infrastructure Only",
+    "security": "Infrastructure Only",
+}
+
+DEFAULT_TARGETS = {
+    "Business Logic": "SQL transformation",
+    "Source Adapter": "Databricks ingestion task",
+    "Sink Adapter": "Delta write",
+    "Orchestration / Monitoring": "Workflow control",
+    "Infrastructure Only": "Workflow plumbing",
+}
 
 
 @dataclass
@@ -20,6 +38,7 @@ class SuggestionConfig:
     only_new: bool
     include_evidence: bool
     top_n_evidence: int
+    catalog_path: Optional[Path] = None
 
 
 def _load_summary(summary_path: Path) -> pd.DataFrame:
@@ -93,6 +112,22 @@ def _build_suggestion(
         "notes": _format_notes(group),
     }
 
+    catalog = load_catalog(config.catalog_path) if config.catalog_path else load_catalog()
+    short_type = processor_type.split(".")[-1]
+    catalog_category = catalog.category_for(short_type)
+    metadata = catalog.metadata_for(short_type)
+    if catalog_category:
+        mapped_category = CATALOG_CATEGORY_TO_MIGRATION.get(catalog_category, category)
+        suggestion["migration_category"] = mapped_category
+        default_target = metadata.get("default_databricks_target") or DEFAULT_TARGETS.get(
+            mapped_category, target
+        )
+        suggestion["databricks_target"] = default_target
+        extra_note = metadata.get("notes")
+        if extra_note:
+            suggestion["notes"] = f"{suggestion['notes']} | {extra_note}"
+        suggestion.setdefault("tags", []).append(f"catalog:{catalog_category}")
+
     if config.include_evidence:
         evidence_rows = group.head(config.top_n_evidence)
         suggestion["evidence"] = [
@@ -161,6 +196,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=3,
         help="Number of processor examples to include when --include-evidence is set",
     )
+    parser.add_argument(
+        "--catalog",
+        type=str,
+        default=None,
+        help="Path to processor catalog YAML (defaults to bundled catalog)",
+    )
     return parser.parse_args(argv)
 
 
@@ -172,6 +213,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         only_new=args.only_new,
         include_evidence=args.include_evidence,
         top_n_evidence=max(1, args.top_n_evidence),
+        catalog_path=Path(args.catalog) if args.catalog else None,
     )
 
     suggestions = generate_suggestions(config)

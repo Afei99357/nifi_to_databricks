@@ -10,6 +10,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
+from tools.catalog import load_catalog
+
 CURATED_NEIGHBOR_TYPES = [
     "ExecuteSQL",
     "PutSQL",
@@ -56,6 +58,8 @@ CONTROLLER_KEYWORDS = {
     "uses_impala": ["impala"],
     "uses_kudu": ["kudu"],
 }
+
+CATALOG = load_catalog()
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -230,6 +234,18 @@ def flatten_record(
     parent_group = record.get("parent_group") or ""
     for feature_name, keywords in GROUP_KEYWORDS.items():
         row[feature_name] = 1 if contains_keyword(parent_group, keywords) else 0
+
+    short_type = row.get("short_type") or ""
+    catalog_category = CATALOG.category_for(short_type) if short_type else None
+    row["catalog_category"] = catalog_category or ""
+    for category_name in CATALOG.categories.keys():
+        row[f"catalog_is_{category_name}"] = (
+            1 if catalog_category == category_name else 0
+        )
+    metadata = CATALOG.metadata_for(short_type)
+    row["catalog_default_migration_category"] = metadata.get(
+        "default_migration_category", ""
+    )
 
     neighbor_flags_in = neighbor_type_flags(incoming, id_to_short_type, "incoming")
     neighbor_flags_out = neighbor_type_flags(outgoing, id_to_short_type, "outgoing")
