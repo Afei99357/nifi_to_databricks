@@ -466,7 +466,7 @@ def handle_saved_results_flow() -> None:
         f"({len(template_df)} rows)"
     )
 
-    filter_cols = st.columns(4)
+    filter_cols = st.columns(5)
 
     def select_with_all(column_name: str, label: str, key_suffix: str) -> str:
         values = (
@@ -484,19 +484,32 @@ def handle_saved_results_flow() -> None:
         )
 
     with filter_cols[0]:
-        selected_short_type = select_with_all("short_type", "Short type", "short_type")
+        selected_processor_name = st.text_input(
+            "Processor name contains",
+            key=f"saved_filter_name_{selected_template}",
+        ).strip()
     with filter_cols[1]:
+        selected_short_type = select_with_all("short_type", "Short type", "short_type")
+    with filter_cols[2]:
         selected_parent_group = select_with_all(
             "parent_group", "Parent group", "parent_group"
         )
-    with filter_cols[2]:
+    with filter_cols[3]:
         selected_category = select_with_all(
             "migration_category", "Category", "category"
         )
-    with filter_cols[3]:
+    with filter_cols[4]:
         selected_rule = select_with_all("rule", "Rule", "rule")
 
     filtered_df = template_df.copy()
+    if selected_processor_name:
+        filtered_df = filtered_df[
+            filtered_df.get("processor_name")
+            .fillna(filtered_df.get("name"))
+            .fillna("")
+            .astype(str)
+            .str.contains(selected_processor_name, case=False, na=False)
+        ]
     if selected_short_type != "All":
         filtered_df = filtered_df[
             filtered_df.get("short_type").fillna("(none)").astype(str)
