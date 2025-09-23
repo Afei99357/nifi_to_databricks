@@ -42,7 +42,7 @@ rules:
     conditions:
       - field: scripts.external_count
         gt: 0
-    migration_category: Source / Sink Adapter
+    migration_category: Source Adapter
     databricks_target: Databricks workflow task calling external script or job
     confidence: 0.7
     notes: "Wrap external script invocation in Jobs or remove if obsolete"
