@@ -289,11 +289,6 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         df["catalog_category"] = df["short_type"].apply(
             lambda value: CATALOG.category_for(str(value)) or ""
         )
-        df["catalog_default"] = df["short_type"].apply(
-            lambda value: CATALOG.metadata_for(str(value)).get(
-                "default_migration_category", ""
-            )
-        )
         missing_count = int((df["catalog_category"] == "").sum())
         if missing_count:
             st.warning(
@@ -305,7 +300,6 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         "name",
         "short_type",
         "catalog_category",
-        "catalog_default",
         "migration_category",
         "databricks_target",
         "confidence",
@@ -624,11 +618,6 @@ def handle_saved_results_flow() -> None:
     if "short_type" in template_df.columns:
         template_df["catalog_category"] = template_df["short_type"].apply(
             lambda value: CATALOG.category_for(str(value)) or ""
-        )
-        template_df["catalog_default"] = template_df["short_type"].apply(
-            lambda value: CATALOG.metadata_for(str(value)).get(
-                "default_migration_category", ""
-            )
         )
 
     missing_count = int(
