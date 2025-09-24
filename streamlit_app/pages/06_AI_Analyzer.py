@@ -35,6 +35,8 @@ DEFAULT_SYSTEM_PROMPT = (
     '  - "reimplement_minimal" → small custom transform to rewrite in Spark or SQL.\n'
     '  - "preserve_as_is" → complex binary/JAR, external dependency, or too risky to rewrite now.\n'
     "- Return only factual analysis. No prose outside of JSON.\n\n"
+    '- At the end, fill the field "migration_decision_summary" with ONE short sentence (max 25 words) that clearly states whether this script should be migrated to Databricks based on the information you extract here and why.\n'
+    "- Keep it factual and action-oriented, not speculative.\n\n"
     "JSON_SCHEMA:\n"
     "{\n"
     '  "language": "bash|python|java|scala|sql|unknown",\n'
@@ -64,7 +66,8 @@ DEFAULT_SYSTEM_PROMPT = (
     '  "blocking_dependencies": ["..."],\n'
     '  "security_requirements": ["kerberos","keytab","kms","service_principal","unknown"],\n'
     '  "effort_estimate": "low|medium|high|unknown",\n'
-    '  "test_strategy": "golden_sample_files|delta_table_diff|row_count_check|checksum|unknown"\n'
+    '  "test_strategy": "golden_sample_files|delta_table_diff|row_count_check|checksum|unknown",\n'
+    '  "migration_decision_summary": "string"\n'
     "}"
 )
 DEFAULT_USER_PROMPT = "Paste code or instructions here..."
