@@ -3,6 +3,7 @@
 import os
 import sys
 import tempfile
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -58,8 +59,9 @@ def display_script_results(scripts, uploaded_file):
             st.info("No scripts found in the workflow.")
             return
 
-        # Create detailed table
-        script_details = []
+        # Create detailed table and inline lookup
+        script_details: List[Dict[str, object]] = []
+        inline_script_data: List[Dict[str, object]] = []
         for result in scripts:
             # External script files
             for script in result.get("external_scripts", []):
@@ -94,6 +96,24 @@ def display_script_results(scripts, uploaded_file):
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
                         "Lines": inline_script.get("line_count"),
+                    }
+                )
+                inline_script_data.append(
+                    {
+                        "processor_name": result["processor_name"],
+                        "processor_type": result["processor_type"],
+                        "processor_id": result["processor_id"],
+                        "processor_group": result["processor_group"],
+                        "property_name": inline_script["property_name"],
+                        "script_type": inline_script["script_type"],
+                        "content_preview": inline_script.get(
+                            "content_preview", inline_script.get("content", "")[:800]
+                        ),
+                        "line_count": inline_script["line_count"],
+                        "referenced_queries": inline_script.get(
+                            "referenced_queries", []
+                        ),
+                        "full_content": inline_script.get("content", ""),
                     }
                 )
 
@@ -158,75 +178,75 @@ def display_script_results(scripts, uploaded_file):
                 )
 
             if not filtered_script_df.empty:
-                compact_df = filtered_script_df.copy()
-                compact_df["Script"] = compact_df["Script Path"].str.slice(0, 90)
-                compact_df["Preview"] = compact_df["Script Path"].str.slice(0, 90)
-                compact_df["Preview"] = compact_df["Preview"].mask(
-                    compact_df["Preview"].str.len() >= 90,
-                    compact_df["Preview"].str.slice(0, 90) + "...",
-                )
-
-                table_df = compact_df.rename(
-                    columns={
-                        "Script Type": "Type",
-                        "Source Type": "Source",
-                        "Processor Name": "Processor",
-                        "Group Name": "Group",
-                    }
-                )[
-                    [
-                        "Script",
-                        "Type",
-                        "Source",
-                        "Processor",
-                        "Group",
-                        "Lines",
-                    ]
-                ]
-
-                display_df = table_df.copy()
+                display_df = filtered_script_df.copy().reset_index(drop=True)
                 display_df.index = range(1, len(display_df) + 1)
 
                 st.dataframe(
                     display_df,
                     use_container_width=True,
                     column_config={
-                        "Script": st.column_config.TextColumn("Script", width="large"),
-                        "Type": st.column_config.TextColumn("Type", width="small"),
-                        "Source": st.column_config.TextColumn("Source", width="small"),
-                        "Processor": st.column_config.TextColumn(
+                        "Script Path": st.column_config.TextColumn(
+                            "Script", width="large"
+                        ),
+                        "Script Type": st.column_config.TextColumn(
+                            "Type", width="small"
+                        ),
+                        "Source Type": st.column_config.TextColumn(
+                            "Source", width="small"
+                        ),
+                        "Processor Name": st.column_config.TextColumn(
                             "Processor", width="medium"
                         ),
-                        "Group": st.column_config.TextColumn("Group", width="medium"),
+                        "Group Name": st.column_config.TextColumn(
+                            "Group", width="medium"
+                        ),
                         "Lines": st.column_config.NumberColumn("Lines", width="small"),
                     },
                 )
 
+                inline_rows = display_df[
+                    display_df["Source Type"] == "Inline Script"
+                ].index.tolist()
+
+                if inline_rows:
+                    row_options = [
+                        f"Row {idx}: {str(display_df.loc[idx, 'Processor Name'])} → "
+                        f"{str(display_df.loc[idx, 'Script Path'])}"
+                        for idx in inline_rows
+                    ]
+                    selected_row_label = st.selectbox(
+                        "📄 View inline script from table:",
+                        ["None"] + row_options,
+                        key="inline_script_table_select",
+                    )
+
+                    if selected_row_label != "None":
+                        selected_idx = inline_rows[
+                            row_options.index(selected_row_label)
+                        ]
+                        target_proc = str(
+                            display_df.loc[selected_idx, "Processor Name"]
+                        )
+                        target_script_display = str(
+                            display_df.loc[selected_idx, "Script Path"]
+                        )
+
+                        for idx, script in enumerate(inline_script_data):
+                            script_display = f"{script['property_name']} ({script['line_count']} lines)"
+                            if (
+                                str(script["processor_name"]) == target_proc
+                                and script_display == target_script_display
+                            ):
+                                st.session_state["processor_selector"] = target_proc
+                                st.session_state["script_in_processor_selector"] = (
+                                    script_display
+                                )
+                                selected_processor = target_proc
+                                selected_script_idx = idx
+                                break
+
             else:
                 st.warning("No scripts match the current filters.")
-
-        # Inline script details with preview
-        inline_script_data = []
-        for result in scripts:
-            for inline_script in result.get("inline_scripts", []):
-                inline_script_data.append(
-                    {
-                        "processor_name": result["processor_name"],
-                        "processor_type": result["processor_type"],
-                        "processor_id": result["processor_id"],
-                        "processor_group": result["processor_group"],
-                        "property_name": inline_script["property_name"],
-                        "script_type": inline_script["script_type"],
-                        "content_preview": inline_script.get(
-                            "content_preview", inline_script.get("content", "")[:800]
-                        ),
-                        "line_count": inline_script["line_count"],
-                        "referenced_queries": inline_script.get(
-                            "referenced_queries", []
-                        ),
-                        "full_content": inline_script.get("content", ""),
-                    }
-                )
 
         if inline_script_data:
             st.markdown("### 📝 Inline Script Content")
@@ -239,9 +259,9 @@ def display_script_results(scripts, uploaded_file):
 
             with col1:
                 # Group scripts by processor for easier navigation
-                processors_with_scripts: dict[str, list[dict]] = {}
+                processors_with_scripts: Dict[str, List[Dict[str, Any]]] = {}
                 for script in inline_script_data:
-                    proc_name = script["processor_name"]
+                    proc_name = str(script["processor_name"])
                     if proc_name not in processors_with_scripts:
                         processors_with_scripts[proc_name] = []
                     processors_with_scripts[proc_name].append(script)
@@ -261,7 +281,7 @@ def display_script_results(scripts, uploaded_file):
                 if selected_processor != "Select a processor...":
                     processor_scripts = processors_with_scripts[selected_processor]
                     script_options = [
-                        f"{script['property_name']} ({script['script_type']}) - {script['line_count']} lines"
+                        f"{script['property_name']} ({script['line_count']} lines)"
                         for script in processor_scripts
                     ]
 
@@ -284,7 +304,7 @@ def display_script_results(scripts, uploaded_file):
                         for i, script in enumerate(inline_script_data):
                             if (
                                 script["processor_name"] == selected_processor
-                                and f"{script['property_name']} ({script['script_type']}) - {script['line_count']} lines"
+                                and f"{script['property_name']} ({script['line_count']} lines)"
                                 == selected_script_name
                             ):
                                 selected_script_idx = i
@@ -293,7 +313,7 @@ def display_script_results(scripts, uploaded_file):
             with col2:
                 # Filter by script type and optional search term
                 script_types = ["All"] + sorted(
-                    set(script["script_type"] for script in inline_script_data)
+                    {str(script["script_type"]) for script in inline_script_data}
                 )
                 selected_type = st.selectbox(
                     "Filter by script type:", script_types, key="inline_type_filter"
@@ -321,9 +341,9 @@ def display_script_results(scripts, uploaded_file):
                 filtered_inline_data = [
                     s
                     for s in filtered_inline_data
-                    if query in s["property_name"].lower()
-                    or query in (s["content_preview"] or "").lower()
-                    or query in (s["full_content"] or "").lower()
+                    if query in str(s["property_name"]).lower()
+                    or query in str(s.get("content_preview") or "").lower()
+                    or query in str(s.get("full_content") or "").lower()
                 ]
             if selected_processor != "Select a processor...":
                 filtered_inline_data = [
@@ -355,10 +375,14 @@ def display_script_results(scripts, uploaded_file):
                         st.markdown(f"**Group:** {script_data['processor_group']}")
                     with col2:
                         st.markdown(f"**Processor ID:** {script_data['processor_id']}")
-                        if script_data["referenced_queries"]:
-                            st.markdown(
-                                f"**References:** {', '.join(script_data['referenced_queries'])}"
-                            )
+                        raw_refs = script_data.get("referenced_queries")
+                        ref_list = (
+                            [str(ref) for ref in raw_refs]
+                            if isinstance(raw_refs, list)
+                            else []
+                        )
+                        if ref_list:
+                            st.markdown(f"**References:** {', '.join(ref_list)}")
 
                     st.markdown("**Full Script Content:**")
                     st.code(
