@@ -93,35 +93,71 @@ def find_variable_definitions(processors: List[Dict[str, Any]]) -> Dict[str, Lis
     """
     variable_definitions = defaultdict(list)
 
+    extract_text_static_props: Set[str] = {
+        "Character Set",
+        "Maximum Buffer Size",
+        "Maximum Capture Group Length",
+        "Enable Canonical Equivalence",
+        "Enable Case-insensitive Matching",
+        "Permit Whitespace and Comments in Pattern",
+        "Enable DOTALL Mode",
+        "Enable Literal Parsing of the Pattern",
+        "Enable Multiline Mode",
+        "Enable Unicode-aware Case Folding",
+        "Enable Unicode Predefined Character Classes",
+        "Enable Unix Lines Mode",
+        "Include Capture Group 0",
+        "extract-text-enable-repeating-capture-group",
+        "extract-text-enable-named-groups",
+    }
+
     for proc in processors:
         proc_id = proc.get("id", "unknown")
         proc_name = proc.get("name", "unknown")
         proc_type = proc.get("type", "unknown")
         properties = proc.get("properties", {})
 
-        # Focus on processors that typically define variables
-        if "UpdateAttribute" in proc_type or "EvaluateJsonPath" in proc_type:
-            for prop_name, prop_value in properties.items():
-                if isinstance(prop_value, str) and prop_value:
-                    # Property names without ${} are variable assignments
-                    if not re.search(r"\$\{[^}]+\}", prop_name):
-                        # This property defines/sets a variable
-                        definition_type = (
-                            "static" if "${" not in prop_value else "dynamic"
-                        )
-                        variable_definitions[prop_name].append(
-                            {
-                                "processor_id": proc_id,
-                                "processor_name": proc_name,
-                                "processor_type": proc_type,
-                                "parent_group_name": proc.get(
-                                    "parentGroupName", "Root"
-                                ),
-                                "property_name": prop_name,
-                                "property_value": prop_value,
-                                "definition_type": definition_type,
-                            }
-                        )
+        # Focus on processors that typically define attributes/variables
+        defines_via_properties = (
+            "UpdateAttribute" in proc_type
+            or "EvaluateJsonPath" in proc_type
+            or "ExtractText" in proc_type
+        )
+
+        if not defines_via_properties:
+            continue
+
+        for prop_name, prop_value in properties.items():
+            if not isinstance(prop_value, str) or not prop_value:
+                continue
+
+            # Skip known static ExtractText properties
+            if "ExtractText" in proc_type and prop_name in extract_text_static_props:
+                continue
+
+            # Property names containing ${} are usages, not definitions
+            if re.search(r"\$\{[^}]+\}", prop_name or ""):
+                continue
+
+            # Heuristic: attribute-style names typically avoid spaces; skip obvious
+            # configuration keys when they contain whitespace or start with lowercase
+            # descriptors like "Enable".
+            if "ExtractText" in proc_type:
+                if any(ch.isspace() for ch in prop_name):
+                    continue
+
+            definition_type = "static" if "${" not in prop_value else "dynamic"
+            variable_definitions[prop_name].append(
+                {
+                    "processor_id": proc_id,
+                    "processor_name": proc_name,
+                    "processor_type": proc_type,
+                    "parent_group_name": proc.get("parentGroupName", "Root"),
+                    "property_name": prop_name,
+                    "property_value": prop_value,
+                    "definition_type": definition_type,
+                }
+            )
 
     return dict(variable_definitions)
 
