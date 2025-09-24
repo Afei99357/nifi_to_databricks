@@ -77,6 +77,9 @@ def main() -> None:
         "Set the `SERVING_ENDPOINT` environment variable or enter the endpoint name below."
     )
 
+    with st.expander("View system prompt", expanded=False):
+        st.code(DEFAULT_SYSTEM_PROMPT)
+
     default_endpoint = os.getenv("SERVING_ENDPOINT", "")
     endpoint_choices = [
         "databricks-meta-llama-3-3-70b-instruct",
