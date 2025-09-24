@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 
+import json_repair
 import pandas as pd
 import streamlit as st
 
@@ -135,13 +136,23 @@ def main() -> None:
 
         raw_content = reply.get("content", "")
 
+        def _clean_response(text: str) -> str:
+            stripped = text.strip()
+            if stripped.startswith("```") and stripped.endswith("```"):
+                stripped = stripped[3:-3].strip()
+            if stripped.startswith("json"):
+                stripped = stripped[4:].lstrip()
+            return stripped
+
+        cleaned_content = _clean_response(raw_content)
+
         st.subheader("Assistant response")
         st.code(raw_content or "(no content)")
 
-        if raw_content:
+        if cleaned_content:
             try:
-                parsed = json.loads(raw_content)
-            except json.JSONDecodeError:
+                parsed = json_repair.loads(cleaned_content)
+            except Exception:
                 st.warning("Response was not valid JSON; unable to tabulate.")
             else:
                 if isinstance(parsed, dict):
