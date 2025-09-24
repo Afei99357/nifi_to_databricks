@@ -10,7 +10,18 @@ import streamlit as st
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
 
-DEFAULT_SYSTEM_PROMPT = "You are a static code analyst. Return STRICT JSON only."
+DEFAULT_SYSTEM_PROMPT = (
+    "You are a static code analyst. You must produce STRICT JSON exactly matching the provided schema.\n"
+    "Rules:\n"
+    '- Be conservative; if not sure, use "unknown".\n'
+    "- Never invent file paths, schemas, or endpoints.\n"
+    "- Prefer classifications: movement (file/topic/db moves), transformation (content changes), orchestration (calling other tools), logging, permissions, security, db_io, network_io, compression.\n"
+    "- Identify side effects (chmod, delete, network calls, db writes).\n"
+    "- Rate PII risk only if you see likely personal data fields or explicit handling.\n"
+    "- Idempotency: changes state repeatedly? file renames/moves/append/db writes often non-idempotent.\n"
+    "- confidence ∈ [0,1].\n"
+    "Output ONLY the JSON object. No extra text."
+)
 DEFAULT_USER_PROMPT = "Paste code or instructions here..."
 
 
