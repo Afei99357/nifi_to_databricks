@@ -48,7 +48,7 @@ def main() -> None:
         preset_value = default_endpoint
 
     chosen_option = st.selectbox(
-        "Serving endpoint",
+        "AI models",
         options=endpoint_choices,
         index=default_index,
         help="Select a Databricks serving endpoint or choose Custom to type another name.",
