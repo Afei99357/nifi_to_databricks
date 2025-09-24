@@ -73,7 +73,6 @@ def display_script_results(scripts, uploaded_file):
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
                         "Lines": script.get("line_count"),
-                        "Confidence": "N/A",
                     }
                 )
 
@@ -95,7 +94,6 @@ def display_script_results(scripts, uploaded_file):
                         "Group Name": result["processor_group"],
                         "Processor ID": result["processor_id"],
                         "Lines": inline_script.get("line_count"),
-                        "Confidence": f"{inline_script.get('confidence', 0.0):.2f}",
                     }
                 )
 
@@ -113,19 +111,17 @@ def display_script_results(scripts, uploaded_file):
                 )
 
             with col2:
-                min_confidence = st.slider(
-                    "Min Confidence:",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=0.3,
-                    step=0.05,
-                    key="confidence_filter",
+                source_types = ["All"] + sorted(
+                    script_df["Source Type"].unique().tolist()
+                )
+                selected_source_type = st.selectbox(
+                    "Filter by Source:", source_types, key="source_filter"
                 )
 
             with col3:
                 search_script = st.text_input(
                     "Search Scripts:",
-                    placeholder="Path, processor, or preview text",
+                    placeholder="Enter script path, processor name, or source label",
                     key="script_search",
                 )
 
@@ -136,12 +132,10 @@ def display_script_results(scripts, uploaded_file):
                     filtered_script_df["Script Type"] == selected_script_type
                 ]
 
-            if min_confidence > 0:
-                mask = (filtered_script_df["Confidence"] == "N/A") | (
-                    pd.to_numeric(filtered_script_df["Confidence"], errors="coerce")
-                    >= min_confidence
-                )
-                filtered_script_df = filtered_script_df[mask]
+            if selected_source_type != "All":
+                filtered_script_df = filtered_script_df[
+                    filtered_script_df["Source Type"] == selected_source_type
+                ]
 
             if search_script:
                 search_lower = search_script.lower()
@@ -187,7 +181,6 @@ def display_script_results(scripts, uploaded_file):
                         "Processor",
                         "Group",
                         "Lines",
-                        "Confidence",
                     ]
                 ]
 
@@ -204,9 +197,6 @@ def display_script_results(scripts, uploaded_file):
                         ),
                         "Group": st.column_config.TextColumn("Group", width="medium"),
                         "Lines": st.column_config.NumberColumn("Lines", width="small"),
-                        "Confidence": st.column_config.TextColumn(
-                            "Confidence", width="small"
-                        ),
                     },
                 )
 
@@ -235,7 +225,6 @@ def display_script_results(scripts, uploaded_file):
                             "content_preview", inline_script.get("content", "")[:800]
                         ),
                         "line_count": inline_script["line_count"],
-                        "confidence": inline_script.get("confidence", 0.0),
                         "referenced_queries": inline_script.get(
                             "referenced_queries", []
                         ),
@@ -369,7 +358,6 @@ def display_script_results(scripts, uploaded_file):
                         Property=inline_df["property_name"],
                         Type=inline_df["script_type"],
                         Lines=inline_df["line_count"],
-                        Confidence=inline_df["confidence"].map(lambda v: f"{v:.2f}"),
                     )
 
                     inline_table = inline_df[
@@ -378,7 +366,6 @@ def display_script_results(scripts, uploaded_file):
                             "Property",
                             "Type",
                             "Lines",
-                            "Confidence",
                         ]
                     ]
 
@@ -397,9 +384,6 @@ def display_script_results(scripts, uploaded_file):
                             "Type": st.column_config.TextColumn("Type", width="small"),
                             "Lines": st.column_config.NumberColumn(
                                 "Lines", width="small"
-                            ),
-                            "Confidence": st.column_config.TextColumn(
-                                "Confidence", width="small"
                             ),
                         },
                     )
@@ -421,9 +405,6 @@ def display_script_results(scripts, uploaded_file):
                             st.markdown(f"**Lines:** {script_data['line_count']}")
                             st.markdown(f"**Group:** {script_data['processor_group']}")
                         with col2:
-                            st.markdown(
-                                f"**Confidence:** {script_data['confidence']:.2f}"
-                            )
                             st.markdown(
                                 f"**Processor ID:** {script_data['processor_id']}"
                             )

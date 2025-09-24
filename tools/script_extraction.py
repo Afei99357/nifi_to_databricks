@@ -661,7 +661,6 @@ def extract_scripts_from_processor(
                 {
                     "property_name": "Command+Args",
                     "script_type": lang,
-                    "confidence": conf,
                     "content": combined,  # Original with variables
                     "content_preview": redact_secrets(combined[:800]),
                     "line_count": combined.count("\n") + 1,
@@ -679,7 +678,6 @@ def extract_scripts_from_processor(
                     {
                         "property_name": prop_name,
                         "script_type": "sql",
-                        "confidence": 0.3,
                         "content": prop_value or "(empty)",
                         "content_preview": "(empty)",
                         "line_count": 0,
@@ -692,7 +690,6 @@ def extract_scripts_from_processor(
                     {
                         "property_name": prop_name,
                         "script_type": "sql",  # Force SQL for query properties
-                        "confidence": max(0.7, conf),
                         "content": prop_value,
                         "content_preview": redact_secrets(prop_value[:800]),
                         "line_count": prop_value.count("\n") + 1,
@@ -711,7 +708,6 @@ def extract_scripts_from_processor(
                 {
                     "property_name": prop_name,
                     "script_type": lang,
-                    "confidence": conf,
                     "content": prop_value,
                     "content_preview": redact_secrets(prop_value[:800]),
                     "line_count": prop_value.count("\n") + 1,
@@ -726,7 +722,6 @@ def extract_scripts_from_processor(
                 {
                     "property_name": f"{prop_name} (decoded)",
                     "script_type": lang,
-                    "confidence": max(0.6, conf),
                     "content": decoded,
                     "content_preview": redact_secrets(decoded[:800]),
                     "line_count": decoded.count("\n") + 1,
