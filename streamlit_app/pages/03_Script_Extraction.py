@@ -184,10 +184,12 @@ def display_script_results(scripts, uploaded_file):
                     ]
                 ]
 
+                display_df = table_df.copy()
+                display_df.index = range(1, len(display_df) + 1)
+
                 st.dataframe(
-                    table_df,
+                    display_df,
                     use_container_width=True,
-                    hide_index=True,
                     column_config={
                         "Script": st.column_config.TextColumn("Script", width="large"),
                         "Type": st.column_config.TextColumn("Type", width="small"),
@@ -200,12 +202,6 @@ def display_script_results(scripts, uploaded_file):
                     },
                 )
 
-                if st.toggle("Show advanced columns", key="script_details_advanced"):
-                    st.dataframe(
-                        filtered_script_df,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
             else:
                 st.warning("No scripts match the current filters.")
 
@@ -342,84 +338,35 @@ def display_script_results(scripts, uploaded_file):
                     f"Showing {len(filtered_inline_data)} of {len(inline_script_data)} inline scripts"
                 )
 
-            # Display mode selection
-            display_mode = st.radio(
-                "Display mode:",
-                ["📋 Table View", "🎯 Selected Script Only"],
-                horizontal=True,
-                key="display_mode",
-            )
-
-            if display_mode == "📋 Table View":
-                if filtered_inline_data:
-                    inline_df = pd.DataFrame(filtered_inline_data)
-                    inline_df = inline_df.assign(
-                        Processor=inline_df["processor_name"],
-                        Property=inline_df["property_name"],
-                        Type=inline_df["script_type"],
-                        Lines=inline_df["line_count"],
-                    )
-
-                    inline_table = inline_df[
-                        [
-                            "Processor",
-                            "Property",
-                            "Type",
-                            "Lines",
-                        ]
-                    ]
-
-                    st.dataframe(
-                        inline_table,
-                        use_container_width=True,
-                        hide_index=True,
-                        height=400,
-                        column_config={
-                            "Processor": st.column_config.TextColumn(
-                                "Processor", width="medium"
-                            ),
-                            "Property": st.column_config.TextColumn(
-                                "Property", width="medium"
-                            ),
-                            "Type": st.column_config.TextColumn("Type", width="small"),
-                            "Lines": st.column_config.NumberColumn(
-                                "Lines", width="small"
-                            ),
-                        },
-                    )
-            if display_mode == "🎯 Selected Script Only":
-                if (
-                    selected_processor != "Select a processor..."
-                    and selected_script_idx < len(inline_script_data)
+            # Detailed script view
+            if (
+                selected_processor != "Select a processor..."
+                and selected_script_idx < len(inline_script_data)
+            ):
+                script_data = inline_script_data[selected_script_idx]
+                with st.expander(
+                    f"📄 {script_data['processor_name']} → {script_data['property_name']}",
+                    expanded=True,
                 ):
-                    script_data = inline_script_data[selected_script_idx]
-                    with st.expander(
-                        f"📄 {script_data['processor_name']} → {script_data['property_name']}",
-                        expanded=True,
-                    ):
-                        col1, col2 = st.columns(2)
-                        with col1:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Script Type:** {script_data['script_type']}")
+                        st.markdown(f"**Lines:** {script_data['line_count']}")
+                        st.markdown(f"**Group:** {script_data['processor_group']}")
+                    with col2:
+                        st.markdown(f"**Processor ID:** {script_data['processor_id']}")
+                        if script_data["referenced_queries"]:
                             st.markdown(
-                                f"**Script Type:** {script_data['script_type']}"
+                                f"**References:** {', '.join(script_data['referenced_queries'])}"
                             )
-                            st.markdown(f"**Lines:** {script_data['line_count']}")
-                            st.markdown(f"**Group:** {script_data['processor_group']}")
-                        with col2:
-                            st.markdown(
-                                f"**Processor ID:** {script_data['processor_id']}"
-                            )
-                            if script_data["referenced_queries"]:
-                                st.markdown(
-                                    f"**References:** {', '.join(script_data['referenced_queries'])}"
-                                )
 
-                        st.markdown("**Full Script Content:**")
-                        st.code(
-                            script_data["full_content"],
-                            language=script_data["script_type"],
-                        )
-                else:
-                    st.info("👆 Select a processor and script to view its content.")
+                    st.markdown("**Full Script Content:**")
+                    st.code(
+                        script_data["full_content"],
+                        language=script_data["script_type"],
+                    )
+            else:
+                st.info("👆 Select a processor and script to view its content.")
 
         # External dependencies
         external_deps = set()
