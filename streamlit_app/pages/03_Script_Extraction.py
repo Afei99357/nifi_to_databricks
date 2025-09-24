@@ -394,9 +394,13 @@ def display_script_results(scripts, uploaded_file):
 
         # Download button
         if script_details:
-            script_csv = pd.DataFrame(script_details).to_csv(index=False)
+            export_df = (
+                filtered_script_df if not filtered_script_df.empty else script_df
+            )
+            script_csv = export_df.to_csv(index=False)
+            export_count = len(export_df)
             st.download_button(
-                label=f"📥 Download Scripts ({len(script_details)} items)",
+                label=f"📥 Download Scripts ({export_count} items)",
                 data=script_csv,
                 file_name=f"nifi_scripts_{uploaded_file.name.replace('.xml', '')}.csv",
                 mime="text/csv",
