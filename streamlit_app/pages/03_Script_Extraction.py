@@ -368,15 +368,6 @@ def display_script_results(scripts, uploaded_file):
             else:
                 st.info("👆 Select a processor and script to view its content.")
 
-        # External dependencies
-        external_deps = set()
-        for result in scripts:
-            external_deps.update(result["external_hosts"])
-        if external_deps:
-            st.markdown("### 🌐 External Dependencies")
-            deps_df = pd.DataFrame(list(external_deps), columns=["External Host"])
-            st.dataframe(deps_df, use_container_width=True, hide_index=False)
-
         # Download button
         if script_details:
             script_csv = pd.DataFrame(script_details).to_csv(index=False)

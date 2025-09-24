@@ -652,11 +652,6 @@ def extract_scripts_from_processor(
                 lang = "sql"
                 conf = 0.85
 
-            # Extract external hosts for impala-shell
-            if "impala-shell" in cmd:
-                hosts = extract_hosts_from_impala(tokens)
-                external_hosts.extend(hosts)
-
             inline_scripts.append(
                 {
                     "property_name": "Command+Args",
@@ -756,16 +751,12 @@ def extract_scripts_from_processor(
                         }
                     )
 
-            # External host dependencies
-            script_hosts = _extract_external_hosts_from_scripts(prop_value)
-            external_hosts.extend(script_hosts)
-
     # Deduplicate inline scripts
     result["inline_scripts"] = _dedupe_inline(inline_scripts)
     result["external_scripts"] = external_scripts
-    result["external_hosts"] = list(set(external_hosts))
+    result["external_hosts"] = []
     result["script_count"] = len(result["inline_scripts"]) + len(external_scripts)
-    result["has_external_dependencies"] = bool(external_hosts)
+    result["has_external_dependencies"] = False
 
     return result
 
