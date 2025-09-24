@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Simple page to validate Databricks serving endpoint connectivity."""
+"""AI Analyzer page for Databricks serving endpoint testing."""
 
 from __future__ import annotations
 
