@@ -26,10 +26,8 @@ DEFAULT_USER_PROMPT = "Paste code or instructions here..."
 
 
 def main() -> None:
-    st.set_page_config(
-        page_title="LLM Endpoint Test", page_icon="🧪", layout="centered"
-    )
-    st.title("🧪 Databricks LLM Endpoint Test")
+    st.set_page_config(page_title="AI Analyzer", page_icon="🧪", layout="centered")
+    st.title("🧪 AI Analyzer")
     st.write(
         "Use this page to send ad-hoc prompts to the Databricks serving endpoint. "
         "Set the `SERVING_ENDPOINT` environment variable or enter the endpoint name below."
