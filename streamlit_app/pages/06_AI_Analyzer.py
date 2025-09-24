@@ -110,7 +110,7 @@ def main() -> None:
     )
 
     system_prompt = st.text_area("System prompt", DEFAULT_SYSTEM_PROMPT, height=160)
-    user_prompt = st.text_area("User prompt", DEFAULT_USER_PROMPT, height=240)
+    user_prompt = st.text_area("Code snippet / prompt", DEFAULT_USER_PROMPT, height=240)
 
     if st.button("Send request", use_container_width=True):
         if not endpoint_name:
