@@ -107,7 +107,7 @@ def main() -> None:
         "Max tokens", min_value=64, max_value=4096, value=512, step=64
     )
 
-    system_prompt = st.text_area("System prompt", DEFAULT_SYSTEM_PROMPT, height=160)
+    system_prompt = DEFAULT_SYSTEM_PROMPT
     user_prompt = st.text_area("Code snippet / prompt", DEFAULT_USER_PROMPT, height=240)
 
     if st.button("Send request", use_container_width=True):
