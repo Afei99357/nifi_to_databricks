@@ -135,34 +135,35 @@ def main() -> None:
                 st.error(f"LLM call failed: {exc}")
                 return
 
-    raw_content = reply.get("content", "")
+        raw_content = reply.get("content", "")
 
-    st.subheader("Assistant response")
-    st.code(raw_content or "(no content)")
+        st.subheader("Assistant response")
+        st.code(raw_content or "(no content)")
 
-    if raw_content:
-        try:
-            parsed = json.loads(raw_content)
-        except json.JSONDecodeError:
-            st.warning("Response was not valid JSON; unable to tabulate.")
-        else:
-            if isinstance(parsed, dict):
-                st.subheader("Structured view")
-                rows = [
-                    {
-                        "Field": key,
-                        "Value": (
-                            json.dumps(value, ensure_ascii=False)
-                            if isinstance(value, (dict, list))
-                            else value
-                        ),
-                    }
-                    for key, value in parsed.items()
-                ]
-                df = pd.DataFrame(rows)
-                st.dataframe(df, hide_index=True, use_container_width=True)
+        if raw_content:
+            try:
+                parsed = json.loads(raw_content)
+            except json.JSONDecodeError:
+                st.warning("Response was not valid JSON; unable to tabulate.")
             else:
-                st.info("Parsed JSON was not an object; showing raw output only.")
+                if isinstance(parsed, dict):
+                    st.subheader("Structured view")
+                    rows = [
+                        {
+                            "Field": key,
+                            "Value": (
+                                json.dumps(value, ensure_ascii=False)
+                                if isinstance(value, (dict, list))
+                                else value
+                            ),
+                        }
+                        for key, value in parsed.items()
+                        if key != "confidence"
+                    ]
+                    df = pd.DataFrame(rows)
+                    st.dataframe(df, hide_index=True, use_container_width=True)
+                else:
+                    st.info("Parsed JSON was not an object; showing raw output only.")
 
 
 if __name__ == "__main__":
