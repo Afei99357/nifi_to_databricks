@@ -36,7 +36,30 @@ def main() -> None:
     )
 
     default_endpoint = os.getenv("SERVING_ENDPOINT", "")
-    endpoint_name = st.text_input("Serving endpoint", value=default_endpoint)
+    endpoint_choices = [
+        "databricks-meta-llama-3-3-70b-instruct",
+        "databricks-claude-sonnet-4",
+        "Custom…",
+    ]
+
+    if default_endpoint in endpoint_choices[:-1]:
+        default_index = endpoint_choices.index(default_endpoint)
+        preset_value = ""
+    else:
+        default_index = len(endpoint_choices) - 1
+        preset_value = default_endpoint
+
+    chosen_option = st.selectbox(
+        "Serving endpoint",
+        options=endpoint_choices,
+        index=default_index,
+        help="Select a Databricks serving endpoint or choose Custom to type another name.",
+    )
+
+    if chosen_option == "Custom…":
+        endpoint_name = st.text_input("Custom endpoint name", value=preset_value)
+    else:
+        endpoint_name = chosen_option
     max_tokens = st.slider(
         "Max tokens", min_value=64, max_value=4096, value=512, step=64
     )
