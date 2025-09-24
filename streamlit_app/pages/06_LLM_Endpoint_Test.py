@@ -33,7 +33,6 @@ DEFAULT_SYSTEM_PROMPT = (
     '  - "replace_with_native" → can be expressed with Databricks native features (Auto Loader, COPY INTO, Spark, DBSQL).\n'
     '  - "reimplement_minimal" → small custom transform to rewrite in Spark or SQL.\n'
     '  - "preserve_as_is" → complex binary/JAR, external dependency, or too risky to rewrite now.\n'
-    "- confidence ∈ [0,1].\n"
     "- Return only factual analysis. No prose outside of JSON.\n\n"
     "JSON_SCHEMA:\n"
     "{\n"
@@ -55,7 +54,6 @@ DEFAULT_SYSTEM_PROMPT = (
     '  "danger_flags": ["world_writable","shell_injection_risk","hardcoded_credentials","deletes_recursively","downloads_and_executes","unknown"],\n'
     '  "extracted_signals": { "shebang":"...", "imports":["..."], "binaries_called":["..."], "regex_hits":["..."] },\n'
     '  "summary": "1-2 sentences, factual only.",\n'
-    '  "confidence": 0.0,\n'
     '  "databricks_replacement": "auto_loader|copy_into|spark_batch|spark_structured_streaming|dbsql|workflow_task_shell|uc_table_ddl|unknown",\n'
     '  "replacement_notes": "string",\n'
     '  "migration_action": "retire|replace_with_native|reimplement_minimal|preserve_as_is",\n'
