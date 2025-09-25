@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from typing import Any
 
 import json_repair
 import pandas as pd
@@ -34,43 +36,84 @@ DEFAULT_SYSTEM_PROMPT = (
     '  - "replace_with_native" → can be expressed with Databricks native features (Auto Loader, COPY INTO, Spark, DBSQL).\n'
     '  - "reimplement_minimal" → small custom transform to rewrite in Spark or SQL.\n'
     '  - "preserve_as_is" → complex binary/JAR, external dependency, or too risky to rewrite now.\n'
-    "- Return only factual analysis. No prose outside of JSON.\n\n"
+    "- Return only factual analysis. No prose outside of JSON.\n"
+    "- Produce one JSON object PER FILE provided. Wrap all objects in a JSON array.\n"
+    "- For each element, include the exact filename supplied in metadata using the `filename` field.\n\n"
     '- At the end, fill the field "migration_decision_summary" with ONE short sentence (max 25 words) that clearly states whether this script should be migrated to Databricks based on the information you extract here and why.\n'
     "- Keep it factual and action-oriented, not speculative.\n\n"
-    "JSON_SCHEMA:\n"
-    "{\n"
-    '  "language": "bash|python|java|scala|sql|unknown",\n'
-    '  "purpose_primary": "movement|transformation|orchestration|logging|permissions|security|db_io|network_io|compression|unknown",\n'
-    '  "purpose_secondary": ["..."],\n'
-    '  "inputs": [\n'
-    '    {"type":"file|dir|db|topic|http|stdin","pattern_or_path":"...","format":"csv|json|parquet|binary|unknown"}\n'
-    "  ],\n"
-    '  "outputs": [\n'
-    '    {"type":"file|dir|db|topic|http|stdout","pattern_or_path":"...","format":"csv|json|parquet|table|unknown"}\n'
-    "  ],\n"
-    '  "side_effects": ["chmod","delete_files","network_calls","db_writes","temp_files","exec_other_programs","unknown"],\n'
-    '  "data_transformations": ["filter","map","schema_change:add|drop|rename","merge","encrypt|decrypt","compress|decompress","none","unknown"],\n'
-    '  "external_dependencies": ["impala-shell","hdfs","aws","gsutil","sed","awk","spark-submit","jar:...","pip:...","unknown"],\n'
-    '  "pii_risk": "low|medium|high|unknown",\n'
-    '  "idempotency": "idempotent|non_idempotent|unknown",\n'
-    '  "scheduling_trigger": "nifi_called|cron|manual|unknown",\n'
-    '  "danger_flags": ["world_writable","shell_injection_risk","hardcoded_credentials","deletes_recursively","downloads_and_executes","unknown"],\n'
-    '  "extracted_signals": { "shebang":"...", "imports":["..."], "binaries_called":["..."], "regex_hits":["..."] },\n'
-    '  "summary": "1-2 sentences, factual only.",\n'
-    '  "databricks_replacement": "auto_loader|copy_into|spark_batch|spark_structured_streaming|dbsql|workflow_task_shell|uc_table_ddl|unknown",\n'
-    '  "replacement_notes": "string",\n'
-    '  "migration_action": "retire|replace_with_native|reimplement_minimal|preserve_as_is",\n'
-    '  "action_rationale": "string",\n'
-    '  "uc_assets_touched": ["..."],\n'
-    '  "runtime_environment": ["bash","python","java","hdfs","impala-shell","openssl","unknown"],\n'
-    '  "blocking_dependencies": ["..."],\n'
-    '  "security_requirements": ["kerberos","keytab","kms","service_principal","unknown"],\n'
-    '  "effort_estimate": "low|medium|high|unknown",\n'
-    '  "test_strategy": "golden_sample_files|delta_table_diff|row_count_check|checksum|unknown",\n'
-    '  "migration_decision_summary": "string"\n'
-    "}"
+    "JSON_SCHEMA (array of objects):\n"
+    "[\n"
+    "  {\n"
+    '    "filename": "string",\n'
+    '    "language": "bash|python|java|scala|sql|unknown",\n'
+    '    "purpose_primary": "movement|transformation|orchestration|logging|permissions|security|db_io|network_io|compression|unknown",\n'
+    '    "purpose_secondary": ["..."],\n'
+    '    "inputs": [\n'
+    '      {"type":"file|dir|db|topic|http|stdin","pattern_or_path":"...","format":"csv|json|parquet|binary|unknown"}\n'
+    "    ],\n"
+    '    "outputs": [\n'
+    '      {"type":"file|dir|db|topic|http|stdout","pattern_or_path":"...","format":"csv|json|parquet|table|unknown"}\n'
+    "    ],\n"
+    '    "side_effects": ["chmod","delete_files","network_calls","db_writes","temp_files","exec_other_programs","unknown"],\n'
+    '    "data_transformations": ["filter","map","schema_change:add|drop|rename","merge","encrypt|decrypt","compress|decompress","none","unknown"],\n'
+    '    "external_dependencies": ["impala-shell","hdfs","aws","gsutil","sed","awk","spark-submit","jar:...","pip:...","unknown"],\n'
+    '    "pii_risk": "low|medium|high|unknown",\n'
+    '    "idempotency": "idempotent|non_idempotent|unknown",\n'
+    '    "scheduling_trigger": "nifi_called|cron|manual|unknown",\n'
+    '    "danger_flags": ["world_writable","shell_injection_risk","hardcoded_credentials","deletes_recursively","downloads_and_executes","unknown"],\n'
+    '    "extracted_signals": { "shebang":"...", "imports":["..."], "binaries_called":["..."], "regex_hits":["..."] },\n'
+    '    "summary": "1-2 sentences, factual only.",\n'
+    '    "databricks_replacement": "auto_loader|copy_into|spark_batch|spark_structured_streaming|dbsql|workflow_task_shell|uc_table_ddl|unknown",\n'
+    '    "replacement_notes": "string",\n'
+    '    "migration_action": "retire|replace_with_native|reimplement_minimal|preserve_as_is",\n'
+    '    "action_rationale": "string",\n'
+    '    "uc_assets_touched": ["..."],\n'
+    '    "runtime_environment": ["bash","python","java","hdfs","impala-shell","openssl","unknown"],\n'
+    '    "blocking_dependencies": ["..."],\n'
+    '    "security_requirements": ["kerberos","keytab","kms","service_principal","unknown"],\n'
+    '    "effort_estimate": "low|medium|high|unknown",\n'
+    '    "test_strategy": "golden_sample_files|delta_table_diff|row_count_check|checksum|unknown",\n'
+    '    "migration_decision_summary": "string"\n'
+    "  }\n"
+    "]"
 )
-DEFAULT_USER_PROMPT = "Paste code or instructions here..."
+DEFAULT_USER_PROMPT = ""
+
+MAX_PREVIEW_CHARS = 4000
+
+
+def _decode_uploaded_file(upload) -> tuple[str, bytes]:
+    """Decode an uploaded file into text, replacing invalid bytes."""
+
+    raw_bytes = upload.getvalue()
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw_bytes.decode("latin-1", errors="replace")
+    return text, raw_bytes
+
+
+def _summarise_content(content: str, max_chars: int = MAX_PREVIEW_CHARS) -> str:
+    """Trim long content while keeping the start and end for context."""
+
+    if len(content) <= max_chars:
+        return content
+
+    head = max_chars // 2
+    tail = max_chars - head
+    return (
+        content[:head]
+        + "\n... [TRUNCATED FOR LENGTH] ...\n"
+        + content[-tail:]
+    )
+
+
+def _normalise_cell_value(value: Any) -> Any:
+    """Render nested structures as JSON strings for display."""
+
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
 
 def main() -> None:
@@ -110,8 +153,22 @@ def main() -> None:
         "Max tokens", min_value=64, max_value=4096, value=512, step=64
     )
 
-    system_prompt = DEFAULT_SYSTEM_PROMPT
-    user_prompt = st.text_area("Code snippet / prompt", DEFAULT_USER_PROMPT, height=240)
+    st.caption(
+        "Upload one or more code files to analyze, or paste a snippet below when you do not have files handy."
+    )
+    uploaded_files = st.file_uploader(
+        "Code files",
+        type=["py", "sh", "sql", "scala", "java", "bash", "txt", "ps1", "jar"],
+        accept_multiple_files=True,
+        help="Files are read as text; binary formats will be truncated and decoded best-effort.",
+    )
+
+    additional_context = st.text_area(
+        "Optional additional context or manual code snippet",
+        DEFAULT_USER_PROMPT,
+        placeholder="Paste code or guidance when no files are uploaded, or provide extra instructions.",
+        height=220,
+    )
 
     if st.button("Send request", use_container_width=True):
         if not endpoint_name:
@@ -125,8 +182,61 @@ def main() -> None:
             )
             return
 
+        file_entries = []
+
+        if uploaded_files:
+            for file_obj in uploaded_files:
+                text, raw_bytes = _decode_uploaded_file(file_obj)
+                preview = _summarise_content(text)
+                sha = hashlib.sha256(raw_bytes).hexdigest()
+                entry = {
+                    "filename": file_obj.name,
+                    "size": len(raw_bytes),
+                    "sha256": sha,
+                    "preview": preview,
+                }
+                file_entries.append(entry)
+
+        if not file_entries:
+            manual_content = additional_context.strip()
+            if not manual_content:
+                st.error(
+                    "Upload at least one file or provide a code snippet / instructions to analyze."
+                )
+                return
+            file_entries.append(
+                {
+                    "filename": "manual_input",
+                    "size": len(manual_content.encode("utf-8")),
+                    "sha256": hashlib.sha256(manual_content.encode("utf-8")).hexdigest(),
+                    "preview": _summarise_content(manual_content),
+                }
+            )
+
+        prompt_sections = []
+        for index, entry in enumerate(file_entries, start=1):
+            prompt_sections.append(
+                (
+                    f"FILE {index}\n"
+                    f"FILENAME: {entry['filename']}\n"
+                    f"SIZE_BYTES: {entry['size']}\n"
+                    f"SHA256: {entry['sha256']}\n"
+                    "CONTENT_START\n"
+                    f"{entry['preview']}\n"
+                    "CONTENT_END"
+                )
+            )
+
+        supplementary = additional_context.strip()
+        if supplementary and uploaded_files:
+            prompt_sections.append(
+                "GLOBAL_NOTES\n" + supplementary
+            )
+
+        user_prompt = "\n\n".join(prompt_sections)
+
         messages = [
-            {"role": "system", "content": system_prompt.strip()},
+            {"role": "system", "content": DEFAULT_SYSTEM_PROMPT.strip()},
             {"role": "user", "content": user_prompt.strip()},
         ]
 
@@ -158,24 +268,39 @@ def main() -> None:
             except Exception:
                 st.warning("Response was not valid JSON; unable to tabulate.")
             else:
+                data_rows = []
                 if isinstance(parsed, dict):
-                    st.subheader("Structured view")
-                    rows = [
-                        {
-                            "Field": key,
-                            "Value": (
-                                json.dumps(value, ensure_ascii=False)
-                                if isinstance(value, (dict, list))
-                                else value
-                            ),
-                        }
-                        for key, value in parsed.items()
-                        if key != "confidence"
-                    ]
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df, hide_index=True, use_container_width=True)
+                    data_rows = [parsed]
+                elif isinstance(parsed, list):
+                    data_rows = [item for item in parsed if isinstance(item, dict)]
+
+                if not data_rows:
+                    st.info("Parsed JSON did not contain objects; showing raw output only.")
                 else:
-                    st.info("Parsed JSON was not an object; showing raw output only.")
+                    st.subheader("Structured view")
+                    df = pd.DataFrame(
+                        [
+                            {
+                                "filename": row.get("filename", ""),
+                                **{
+                                    key: _normalise_cell_value(row[key])
+                                    for key in row
+                                    if key not in {"filename", "confidence"}
+                                },
+                            }
+                            for row in data_rows
+                        ]
+                    )
+                    st.dataframe(df, use_container_width=True)
+
+                    download_payload = json.dumps(data_rows, ensure_ascii=False, indent=2)
+                    st.download_button(
+                        "Download JSON",
+                        data=download_payload,
+                        file_name="ai_analyzer_results.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
 
 
 if __name__ == "__main__":
