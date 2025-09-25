@@ -17,7 +17,9 @@ import pandas as pd
 import streamlit as st
 
 # Ensure repository root on path for shared utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+CURRENT_DIR = Path(__file__).resolve()
+REPO_ROOT = CURRENT_DIR.parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
 from tools.classification.dossiers import (
@@ -26,7 +28,7 @@ from tools.classification.dossiers import (
     load_classification_records,
 )
 
-DEFAULT_RESULTS_DIR = Path("derived_classification_results")
+DEFAULT_RESULTS_DIR = REPO_ROOT / "derived_classification_results"
 TRIAGE_SYSTEM_PROMPT = (
     "You are a NiFi to Databricks migration strategist.\n"
     "You will receive JSON describing a batch of processors, with evidence synthesized from the NiFi flow.\n"
