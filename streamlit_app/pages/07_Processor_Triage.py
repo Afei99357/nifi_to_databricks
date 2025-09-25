@@ -209,7 +209,8 @@ def main() -> None:
                 "Classification complete. "
                 f"Processed {stats['processors']} processors across {stats['templates']} template(s)."
             )
-            st.experimental_rerun()
+            st.session_state["triage_classification_complete"] = True
+            st.rerun()
 
         st.markdown("**Preview of templates in scope:**")
         glob_like = any(ch in template_dir for ch in "*?[]")
