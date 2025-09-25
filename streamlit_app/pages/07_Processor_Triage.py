@@ -22,6 +22,7 @@ REPO_ROOT = CURRENT_DIR.parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
+from tools.classification import classify_all
 from tools.classification.dossiers import (
     build_dossiers,
     format_dossiers_for_prompt,
@@ -61,6 +62,12 @@ def _list_classification_files(base_dir: Path) -> List[Path]:
     if not base_dir.exists():
         return []
     return sorted(p for p in base_dir.glob("*.json"))
+
+
+def _list_xml_templates(base_dir: Path) -> List[Path]:
+    if not base_dir.exists():
+        return []
+    return sorted(base_dir.rglob("*.xml"))
 
 
 def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
@@ -167,9 +174,68 @@ def main() -> None:
     st.subheader("1. Choose classification outputs")
     available_files = _list_classification_files(DEFAULT_RESULTS_DIR)
     if not available_files:
-        st.error(
-            f"No classification JSON files found under `{DEFAULT_RESULTS_DIR}`. Run the batch classification pipeline first."
+        st.warning(
+            "No classification outputs detected. Generate them from your NiFi templates below."
         )
+
+        default_input_dir = REPO_ROOT / "nifi_pipeline_file"
+        template_dir = st.text_input(
+            "Input directory or glob",
+            value=str(default_input_dir),
+            help=(
+                "Directory or glob for NiFi XML files to classify (e.g., nifi_pipeline_file or "
+                "nifi_pipeline_file/**/ICN8*.xml)."
+            ),
+        )
+        append_summary = st.checkbox(
+            "Append to existing summary.csv",
+            value=False,
+            help="Keep existing summary rows when re-running classification.",
+        )
+
+        if st.button("Run batch classification", use_container_width=True):
+            with st.spinner("Running classification... this may take a few minutes"):
+                try:
+                    stats = classify_all(
+                        template_dir,
+                        DEFAULT_RESULTS_DIR,
+                        append_summary=append_summary,
+                        verbose=False,
+                    )
+                except Exception as exc:  # pragma: no cover - UI feedback
+                    st.error(f"Classification failed: {exc}")
+                    return
+            st.success(
+                "Classification complete. "
+                f"Processed {stats['processors']} processors across {stats['templates']} template(s)."
+            )
+            st.experimental_rerun()
+
+        st.markdown("**Preview of templates in scope:**")
+        glob_like = any(ch in template_dir for ch in "*?[]")
+        if glob_like:
+            xml_templates = sorted(Path().glob(template_dir))
+        else:
+            try:
+                template_base = Path(template_dir)
+            except Exception:
+                template_base = default_input_dir
+            xml_templates = _list_xml_templates(template_base)
+        if xml_templates:
+            preview_count = min(20, len(xml_templates))
+            preview_lines = []
+            for path in xml_templates[:preview_count]:
+                try:
+                    preview_lines.append(str(path.relative_to(REPO_ROOT)))
+                except ValueError:
+                    preview_lines.append(str(path))
+            st.code("\n".join(preview_lines))
+            if len(xml_templates) > preview_count:
+                st.caption(
+                    f"… and {len(xml_templates) - preview_count} more template(s)."
+                )
+        else:
+            st.caption("No XML templates found for the specified input path yet.")
         return
 
     file_labels = [path.name for path in available_files]
