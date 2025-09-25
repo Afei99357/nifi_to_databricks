@@ -33,7 +33,7 @@ DEFAULT_RESULTS_DIR = REPO_ROOT / "derived_classification_results"
 TRIAGE_SYSTEM_PROMPT = (
     "You are a NiFi to Databricks migration strategist.\n"
     "You will receive JSON describing a batch of processors, with evidence synthesized from the NiFi flow.\n"
-    "Decide which processors require Databricks implementation, choose an appropriate target pattern, and highlight blockers.\n\n"
+    "Decide which processors require Databricks implementation, choose an appropriate target pattern, highlight blockers, and draft runnable Databricks code for the recommended solution.\n\n"
     "Rules:\n"
     "- Base decisions only on supplied evidence; if information is missing, state the gap explicitly.\n"
     "- Treat `Infrastructure Only` processors as retirement candidates unless evidence shows required orchestration.\n"
@@ -41,6 +41,9 @@ TRIAGE_SYSTEM_PROMPT = (
     "- Limit blockers to concrete, actionable items (e.g., external script, controller service, missing schema).\n"
     "- Keep rationales factual, <= 30 words.\n"
     "- Preferred targets: auto_loader, copy_into, spark_batch, spark_structured_streaming, dbsql, workflow_task_shell, uc_table_ddl. Use retire for decommission and manual_investigation when unclear.\n"
+    "- When migration is required, populate `databricks_code` with <= 200 lines of runnable code tailored to the recommended target (PySpark for Spark jobs, SQL for dbsql/copy_into/uc_table_ddl, shell/bash for workflow_task_shell).\n"
+    "- Include essential imports, configuration, and comments so the code can run inside a Databricks notebook or Jobs task.\n"
+    "- Return an empty string for `databricks_code` when migration is not needed.\n"
     "- Output ONLY JSON following the schema below.\n\n"
     "Output schema (JSON array):\n"
     "[\n"
@@ -52,7 +55,9 @@ TRIAGE_SYSTEM_PROMPT = (
     '    "blockers": ["..."],\n'
     '    "rationale": "string",\n'
     '    "next_step": "generate_notebook|manual_review|confirm_native|retire",\n'
-    '    "confidence": "high|medium|low"\n'
+    '    "confidence": "high|medium|low",\n'
+    '    "code_language": "pyspark|sql|shell|python|unknown",\n'
+    '    "databricks_code": "string"\n'
     "  }\n"
     "]\n"
 )
@@ -423,10 +428,56 @@ def main() -> None:
             result_df["blockers"] = result_df["blockers"].apply(_normalise_blockers)
         else:
             result_df["blockers"] = ""
+
+        if "databricks_code" not in result_df.columns:
+            result_df["databricks_code"] = ""
+        result_df["databricks_code"] = result_df["databricks_code"].fillna("")
+
+        if "code_language" not in result_df.columns:
+            result_df["code_language"] = "unknown"
+        result_df["code_language"] = result_df["code_language"].fillna("unknown")
+
         merged_df = selected_df.merge(result_df, on="processor_id", how="left")
 
         st.subheader("Triage results")
-        st.dataframe(merged_df, use_container_width=True)
+        summary_df = merged_df.copy()
+        summary_df["has_code"] = summary_df["databricks_code"].apply(
+            lambda value: bool(str(value).strip())
+        )
+        summary_df["code_lines"] = summary_df["databricks_code"].apply(
+            lambda value: len(str(value).splitlines()) if str(value).strip() else 0
+        )
+
+        display_columns = [
+            "processor_id",
+            "name",
+            "short_type",
+            "migration_category",
+            "recommended_target",
+            "migration_needed",
+            "implementation_hint",
+            "blockers",
+            "next_step",
+            "confidence",
+            "code_language",
+            "has_code",
+            "code_lines",
+        ]
+        available_columns = [
+            column for column in display_columns if column in summary_df.columns
+        ]
+        st.dataframe(summary_df[available_columns], use_container_width=True)
+
+        for _, row in merged_df.iterrows():
+            code = str(row.get("databricks_code", "") or "")
+            if not code.strip():
+                continue
+            processor_label = (
+                f"{row.get('processor_id')} · {row.get('name', '')}".strip()
+            )
+            language = str(row.get("code_language", "text") or "text")
+            with st.expander(f"Code · {processor_label}"):
+                st.code(code, language=language)
 
         download_payload = json.dumps(parsed, ensure_ascii=False, indent=2)
         st.download_button(
