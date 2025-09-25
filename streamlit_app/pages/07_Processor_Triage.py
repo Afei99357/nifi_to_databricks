@@ -23,6 +23,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
 from tools.classification import classify_all
+from tools.classification.classify_all_workflows import SUMMARY_FILENAME
 from tools.classification.dossiers import (
     build_dossiers,
     format_dossiers_for_prompt,
@@ -178,15 +179,16 @@ def main() -> None:
 
     st.subheader("1. Choose classification outputs")
     available_files = _list_classification_files(DEFAULT_RESULTS_DIR)
-    if not available_files:
-        st.warning(
-            "No classification outputs detected. Generate them from your NiFi templates below."
-        )
 
-        default_input_dir = REPO_ROOT / "nifi_pipeline_file"
+    default_input_dir = REPO_ROOT / "nifi_pipeline_file"
+    with st.expander(
+        "Generate or refresh classification outputs",
+        expanded=not available_files,
+    ):
         template_dir = st.text_input(
             "Input directory or glob",
-            value=str(default_input_dir),
+            value=st.session_state.get("triage_input_path", str(default_input_dir)),
+            key="triage_input_path",
             help=(
                 "Directory or glob for NiFi XML files to classify (e.g., nifi_pipeline_file or "
                 "nifi_pipeline_file/**/ICN8*.xml)."
@@ -194,28 +196,51 @@ def main() -> None:
         )
         append_summary = st.checkbox(
             "Append to existing summary.csv",
-            value=False,
+            value=st.session_state.get("triage_append_summary", False),
+            key="triage_append_summary",
             help="Keep existing summary rows when re-running classification.",
         )
 
-        if st.button("Run batch classification", use_container_width=True):
-            with st.spinner("Running classification... this may take a few minutes"):
-                try:
-                    stats = classify_all(
-                        template_dir,
-                        DEFAULT_RESULTS_DIR,
-                        append_summary=append_summary,
-                        verbose=False,
-                    )
-                except Exception as exc:  # pragma: no cover - UI feedback
-                    st.error(f"Classification failed: {exc}")
-                    return
-            st.success(
-                "Classification complete. "
-                f"Processed {stats['processors']} processors across {stats['templates']} template(s)."
-            )
-            st.session_state["triage_classification_complete"] = True
-            st.rerun()
+        col_run, col_clear = st.columns([3, 1])
+        with col_run:
+            if st.button(
+                "Run batch classification",
+                key="triage_run_classification",
+                use_container_width=True,
+            ):
+                with st.spinner("Running classification… this may take a few minutes"):
+                    try:
+                        stats = classify_all(
+                            template_dir,
+                            DEFAULT_RESULTS_DIR,
+                            append_summary=append_summary,
+                            verbose=False,
+                        )
+                    except Exception as exc:  # pragma: no cover - UI feedback
+                        st.error(f"Classification failed: {exc}")
+                        st.stop()
+                st.success(
+                    "Classification complete. "
+                    f"Processed {stats['processors']} processors across {stats['templates']} template(s)."
+                )
+                st.session_state["triage_classification_complete"] = True
+                st.rerun()
+
+        with col_clear:
+            if available_files and st.button(
+                "Clear outputs",
+                key="triage_clear_outputs",
+                use_container_width=True,
+            ):
+                removed = 0
+                for json_file in available_files:
+                    json_file.unlink(missing_ok=True)
+                    removed += 1
+                summary_path = DEFAULT_RESULTS_DIR / SUMMARY_FILENAME
+                summary_path.unlink(missing_ok=True)
+                st.session_state["triage_classification_cleared"] = True
+                st.success(f"Removed {removed} classification artefact(s).")
+                st.rerun()
 
         st.markdown("**Preview of templates in scope:**")
         glob_like = any(ch in template_dir for ch in "*?[]")
@@ -242,14 +267,25 @@ def main() -> None:
                 )
         else:
             st.caption("No XML templates found for the specified input path yet.")
+
+    available_files = _list_classification_files(DEFAULT_RESULTS_DIR)
+    if not available_files:
+        st.info(
+            "No classification JSON files present. Run the batch classification above to continue."
+        )
         return
 
     file_labels = [path.name for path in available_files]
     selected_labels = st.multiselect(
         "Workflows",
         options=file_labels,
+        default=st.session_state.get("triage_selected_files", []),
+        key="triage_selected_files",
         help="Pick one or more classification JSON files to include in this triage batch.",
     )
+    if st.button("Reset selection", key="triage_reset_selection"):
+        st.session_state["triage_selected_files"] = []
+        st.rerun()
     if not selected_labels:
         st.info("Select at least one workflow to continue.")
         return
