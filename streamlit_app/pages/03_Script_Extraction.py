@@ -204,6 +204,26 @@ def display_script_results(scripts, uploaded_file):
                     },
                 )
 
+                external_filtered_df = filtered_script_df[
+                    filtered_script_df["Source Type"] == "External File"
+                ]
+                if not external_filtered_df.empty:
+                    unique_external_paths = sorted(
+                        {
+                            str(path).strip()
+                            for path in external_filtered_df["Script Path"].dropna()
+                        }
+                    )
+                    if unique_external_paths:
+                        payload = "\n".join(unique_external_paths)
+                        st.download_button(
+                            "📄 Download unique external filenames",
+                            data=payload,
+                            file_name="external_script_filenames.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                        )
+
                 inline_rows = display_df[
                     display_df["Source Type"] == "Inline Script"
                 ].index.tolist()
