@@ -15,6 +15,7 @@ class ProcessorPayload:
     name: str
     short_type: str
     group: str
+    group_path: str
     migration_category: str
     databricks_target: str
     classification_source: str
@@ -33,6 +34,7 @@ class ProcessorPayload:
             "name": self.name,
             "short_type": self.short_type,
             "group": self.group,
+            "group_path": self.group_path,
             "current_category": self.migration_category,
             "databricks_target": self.databricks_target,
             "classification_source": self.classification_source,
@@ -146,12 +148,29 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
             feature_evidence.get("controller_services", [])
         )
 
+        group_name = (
+            str(
+                rec.get("parent_group")
+                or rec.get("parentGroupName")
+                or rec.get("parentGroupId")
+                or "Root"
+            )
+            or "Root"
+        )
+        group_path = (
+            str(
+                rec.get("parent_group_path") or rec.get("parentGroupPath") or group_name
+            )
+            or group_name
+        )
+
         payload = ProcessorPayload(
             processor_id=processor_id,
             template=str(rec.get("template") or ""),
             name=str(rec.get("name") or ""),
             short_type=str(rec.get("short_type") or rec.get("processor_type") or ""),
-            group=str(rec.get("parent_group") or rec.get("parentGroupId") or ""),
+            group=group_name,
+            group_path=group_path,
             migration_category=str(rec.get("migration_category") or "Ambiguous"),
             databricks_target=str(rec.get("databricks_target") or ""),
             classification_source=str(rec.get("classification_source") or ""),

@@ -225,6 +225,7 @@ def classify_workflow(
             "type": feature.get("processor_type"),
             "short_type": feature.get("short_type"),
             "parent_group": feature.get("parent_group"),
+            "parent_group_path": feature.get("parent_group_path"),
             "migration_category": final_classification.get("migration_category"),
             "databricks_target": final_classification.get("databricks_target"),
             "confidence": final_classification.get("confidence"),

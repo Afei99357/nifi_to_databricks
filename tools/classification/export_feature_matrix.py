@@ -57,6 +57,7 @@ CONTROLLER_KEYWORDS = {
     "uses_kudu": ["kudu"],
 }
 
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -184,12 +185,15 @@ def flatten_record(
         "processor_type": record.get("processor_type"),
         "short_type": record.get("short_type"),
         "parent_group": record.get("parent_group"),
+        "parent_group_path": record.get("parent_group_path"),
         "migration_category": category,
         "confidence": confidence,
         "classification_source": record.get("classification_source"),
         "databricks_target": record.get("databricks_target"),
         "rule": record.get("rule"),
-        "promotion_applied": 1 if record.get("classification_source") == "promotion" else 0,
+        "promotion_applied": (
+            1 if record.get("classification_source") == "promotion" else 0
+        ),
         "uses_expression_language": int(uses_expression_language(properties)),
         "uses_variables": 1 if evidence.get("uses_variables") else 0,
         "sql_has_sql": 1 if sql.get("has_sql") else 0,
@@ -199,7 +203,9 @@ def flatten_record(
         "scripts_external_count": int(scripts.get("external_count", 0) or 0),
         "scripts_has_inline": 1 if (scripts.get("inline_count", 0) or 0) > 0 else 0,
         "scripts_has_external": 1 if (scripts.get("external_count", 0) or 0) > 0 else 0,
-        "scripts_external_hosts_count": len(set(scripts.get("external_hosts", []) or [])),
+        "scripts_external_hosts_count": len(
+            set(scripts.get("external_hosts", []) or [])
+        ),
         "table_count": len(tables.get("tables", []) or []),
         "table_property_reference_count": len(tables.get("properties", []) or []),
         "variables_define_count": len(variables.get("defines", []) or []),
@@ -215,7 +221,10 @@ def flatten_record(
     controller_text = " ".join(
         filter(
             None,
-            [extract_controller_text(controller_services), extract_property_text(properties)],
+            [
+                extract_controller_text(controller_services),
+                extract_property_text(properties),
+            ],
         )
     )
 
@@ -240,7 +249,9 @@ def flatten_record(
 
 def write_csv(output_path: Path, rows: List[Dict[str, object]]) -> None:
     if not rows:
-        raise ValueError("No rows were generated; ensure the input contains classification JSON.")
+        raise ValueError(
+            "No rows were generated; ensure the input contains classification JSON."
+        )
     fieldnames = list(rows[0].keys())
     with output_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)

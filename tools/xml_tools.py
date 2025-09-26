@@ -33,19 +33,49 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
     processors: List[Dict[str, Any]] = []
     connections: List[Dict[str, Any]] = []
 
-    # Build process group mapping for enhanced task naming
-    process_groups = {}
+    # Build process group mapping (name + parent) for hierarchy resolution
+    process_groups: Dict[str, Dict[str, Any]] = {}
     for group in root.findall(".//processGroups"):
-        group_id = group.findtext("id")
-        group_name = group.findtext("name") or "UnnamedGroup"
-        if group_id:
-            process_groups[group_id] = group_name
+        group_id = _trim(group.findtext("id"))
+        if not group_id:
+            continue
+        parent_id = _trim(group.findtext("parentGroupId")) or None
+        raw_name = (
+            group.findtext("name")
+            or group.findtext("component/name")
+            or group.findtext("component/component/name")
+            or "UnnamedGroup"
+        )
+        group_name = _trim(raw_name) or "UnnamedGroup"
+        process_groups[group_id] = {"name": group_name, "parent_id": parent_id}
+
+    group_paths: Dict[str, str] = {}
+
+    def _resolve_group_path(group_id: str | None, depth: int = 0) -> str:
+        if not group_id:
+            return ""
+        if group_id in group_paths:
+            return group_paths[group_id]
+        info = process_groups.get(group_id)
+        if info is None or depth > 100:
+            return ""
+        parent_path = _resolve_group_path(info.get("parent_id"), depth + 1)
+        path = f"{parent_path}/{info['name']}" if parent_path else info["name"]
+        group_paths[group_id] = path
+        return path
+
+    for gid in list(process_groups.keys()):
+        _resolve_group_path(gid)
 
     # Extract processors with process group context
     for processor in root.findall(".//processors"):
         parent_group_id = processor.findtext("parentGroupId")
+        parent_group_info = process_groups.get(parent_group_id or "")
         parent_group_name = (
-            process_groups.get(parent_group_id, "Root") if parent_group_id else "Root"
+            parent_group_info.get("name") if parent_group_info else "Root"
+        )
+        parent_group_path = (
+            group_paths.get(parent_group_id or "", "") or parent_group_name
         )
 
         proc_info = {
@@ -56,6 +86,7 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
             "properties": {},
             "parentGroupId": parent_group_id,
             "parentGroupName": parent_group_name,
+            "parentGroupPath": parent_group_path,
         }
 
         props_node = processor.find(".//properties")
@@ -91,6 +122,7 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
         "processor_count": len(processors),
         "connection_count": len(connections),
         "process_groups": process_groups,
+        "process_group_paths": group_paths,
     }
 
 

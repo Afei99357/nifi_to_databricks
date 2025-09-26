@@ -224,6 +224,9 @@ def extract_processor_features(xml_path: str) -> Dict[str, Any]:
             "processor_type": proc_type,
             "short_type": proc_type.split(".")[-1] if proc_type else "Unknown",
             "parent_group": proc.get("parentGroupName", "Root"),
+            "parent_group_path": proc.get("parentGroupPath")
+            or proc.get("parentGroupName")
+            or "Root",
             "properties": properties,
             "controller_services": _collect_controller_services(properties),
             "connections": {
