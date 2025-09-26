@@ -33,6 +33,7 @@ DEFAULT_TARGETS = {
     "Infrastructure Only": "Workflow plumbing",
 }
 
+
 def _load_overrides() -> Dict[str, Dict[str, Any]]:
     if not OVERRIDES_PATH.exists():
         return {}
@@ -200,7 +201,9 @@ def render_processor_detail(record: Dict[str, Any], *, key_prefix: str) -> None:
     cols[0].markdown(f"**Category:** {category}")
     cols[1].markdown(f"**Target:** {target}")
     cols[2].markdown(
-        f"**Confidence:** {confidence:.2f}" if isinstance(confidence, (int, float)) else f"**Confidence:** {confidence or '—'}"
+        f"**Confidence:** {confidence:.2f}"
+        if isinstance(confidence, (int, float))
+        else f"**Confidence:** {confidence or '—'}"
     )
 
     cols = st.columns(2)
@@ -266,6 +269,7 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         "processor_id",
         "name",
         "short_type",
+        "parent_group",
         "migration_category",
         "databricks_target",
         "confidence",
@@ -371,7 +375,9 @@ def handle_upload_flow() -> None:
     elif isinstance(cached_result, str):
         st.error(f"❌ Previous classification failed: {cached_result}")
         if st.button(
-            "🔙 Back to Dashboard", use_container_width=True, key="classification_error_back"
+            "🔙 Back to Dashboard",
+            use_container_width=True,
+            key="classification_error_back",
         ):
             st.switch_page("Dashboard.py")
     else:
@@ -379,7 +385,9 @@ def handle_upload_flow() -> None:
             "Run the full analysis from the Dashboard to generate processor classifications."
         )
         if st.button(
-            "🔙 Back to Dashboard", use_container_width=True, key="classification_no_data"
+            "🔙 Back to Dashboard",
+            use_container_width=True,
+            key="classification_no_data",
         ):
             st.switch_page("Dashboard.py")
 

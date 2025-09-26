@@ -14,6 +14,7 @@ class ProcessorPayload:
     template: str
     name: str
     short_type: str
+    group: str
     migration_category: str
     databricks_target: str
     classification_source: str
@@ -31,6 +32,7 @@ class ProcessorPayload:
             "template": self.template,
             "name": self.name,
             "short_type": self.short_type,
+            "group": self.group,
             "current_category": self.migration_category,
             "databricks_target": self.databricks_target,
             "classification_source": self.classification_source,
@@ -149,6 +151,7 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
             template=str(rec.get("template") or ""),
             name=str(rec.get("name") or ""),
             short_type=str(rec.get("short_type") or rec.get("processor_type") or ""),
+            group=str(rec.get("parent_group") or rec.get("parentGroupId") or ""),
             migration_category=str(rec.get("migration_category") or "Ambiguous"),
             databricks_target=str(rec.get("databricks_target") or ""),
             classification_source=str(rec.get("classification_source") or ""),

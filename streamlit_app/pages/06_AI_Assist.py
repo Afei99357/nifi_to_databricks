@@ -422,6 +422,7 @@ def main() -> None:
             "template",
             "name",
             "short_type",
+            "parent_group",
             "migration_category",
             "recommended_target",
             "migration_needed",
