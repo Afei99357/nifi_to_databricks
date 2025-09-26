@@ -10,7 +10,7 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 import json_repair
 import pandas as pd
@@ -22,58 +22,43 @@ REPO_ROOT = CURRENT_DIR.parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
-from tools.classification import classify_all
-from tools.classification.classify_all_workflows import SUMMARY_FILENAME
 from tools.classification.dossiers import (
     build_dossiers,
     format_dossiers_for_prompt,
-    load_classification_records,
 )
 
-DEFAULT_RESULTS_DIR = REPO_ROOT / "derived_classification_results"
-TRIAGE_SYSTEM_PROMPT = (
-    "You are a NiFi to Databricks migration strategist.\n"
-    "You will receive JSON describing a batch of processors, with evidence synthesized from the NiFi flow.\n"
-    "Decide which processors require Databricks implementation, choose an appropriate target pattern, highlight blockers, and draft runnable Databricks code for the recommended solution.\n\n"
-    "Rules:\n"
-    "- Base decisions only on supplied evidence; if information is missing, state the gap explicitly.\n"
-    "- Treat `Infrastructure Only` processors as retirement candidates unless evidence shows required orchestration.\n"
-    "- For shared scripts or controller services, call out cross-cutting dependencies instead of repeating identical guidance.\n"
-    "- Limit blockers to concrete, actionable items (e.g., external script, controller service, missing schema).\n"
-    "- Keep rationales factual, <= 30 words.\n"
-    "- Preferred targets: auto_loader, copy_into, spark_batch, spark_structured_streaming, dbsql, workflow_task_shell, uc_table_ddl. Use retire for decommission and manual_investigation when unclear.\n"
-    "- When migration is required, populate `databricks_code` with <= 200 lines of runnable code tailored to the recommended target (PySpark for Spark jobs, SQL for dbsql/copy_into/uc_table_ddl, shell/bash for workflow_task_shell).\n"
-    "- Include essential imports, configuration, and comments so the code can run inside a Databricks notebook or Jobs task.\n"
-    "- Return an empty string for `databricks_code` when migration is not needed.\n"
-    "- Output ONLY JSON following the schema below.\n\n"
-    "Output schema (JSON array):\n"
-    "[\n"
-    "  {\n"
-    '    "processor_id": "string",\n'
-    '    "migration_needed": true,\n'
-    '    "recommended_target": "auto_loader|copy_into|spark_batch|spark_structured_streaming|dbsql|workflow_task_shell|uc_table_ddl|retire|manual_investigation",\n'
-    '    "implementation_hint": "string",\n'
-    '    "blockers": ["..."],\n'
-    '    "rationale": "string",\n'
-    '    "next_step": "generate_notebook|manual_review|confirm_native|retire",\n'
-    '    "confidence": "high|medium|low",\n'
-    '    "code_language": "pyspark|sql|shell|python|unknown",\n'
-    '    "databricks_code": "string"\n'
-    "  }\n"
-    "]\n"
-)
+TRIAGE_SYSTEM_PROMPT = """You are a NiFi to Databricks migration strategist.
+You will receive JSON describing a batch of processors, with evidence synthesized from the NiFi flow.
+Decide which processors require Databricks implementation, choose an appropriate target pattern, highlight blockers, and draft runnable Databricks code for the recommended solution.
 
+Rules:
+- Base decisions only on supplied evidence; if information is missing, state the gap explicitly.
+- Treat `Infrastructure Only` processors as retirement candidates unless evidence shows required orchestration.
+- For shared scripts or controller services, call out cross-cutting dependencies instead of repeating identical guidance.
+- Limit blockers to concrete, actionable items (e.g., external script, controller service, missing schema).
+- Keep rationales factual, <= 30 words.
+- Preferred targets: auto_loader, copy_into, spark_batch, spark_structured_streaming, dbsql, workflow_task_shell, uc_table_ddl. Use retire for decommission and manual_investigation when unclear.
+- When migration is required, populate `databricks_code` with <= 200 lines of runnable code tailored to the recommended target (PySpark for Spark jobs, SQL for dbsql/copy_into/uc_table_ddl, shell/bash for workflow_task_shell).
+- Include essential imports, configuration, and comments so the code can run inside a Databricks notebook or Jobs task.
+- Return an empty string for `databricks_code` when migration is not needed.
+- Output ONLY JSON following the schema below.
 
-def _list_classification_files(base_dir: Path) -> List[Path]:
-    if not base_dir.exists():
-        return []
-    return sorted(p for p in base_dir.glob("*.json"))
-
-
-def _list_xml_templates(base_dir: Path) -> List[Path]:
-    if not base_dir.exists():
-        return []
-    return sorted(base_dir.rglob("*.xml"))
+Output schema (JSON array):
+[
+  {
+    "processor_id": "string",
+    "migration_needed": true,
+    "recommended_target": "auto_loader|copy_into|spark_batch|spark_structured_streaming|dbsql|workflow_task_shell|uc_table_ddl|retire|manual_investigation",
+    "implementation_hint": "string",
+    "blockers": ["..."],
+    "rationale": "string",
+    "next_step": "generate_notebook|manual_review|confirm_native|retire",
+    "confidence": "high|medium|low",
+    "code_language": "pyspark|sql|shell|python|unknown",
+    "databricks_code": "string"
+  }
+]
+"""
 
 
 def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
@@ -140,6 +125,30 @@ def _normalise_blockers(value):
     return value
 
 
+def _collect_session_classifications() -> (
+    tuple[List[Dict[str, object]], Dict[str, Dict[str, object]]]
+):
+    records: List[Dict[str, object]] = []
+    templates: Dict[str, Dict[str, object]] = {}
+
+    prefix = "classification_results_"
+    for key, payload in st.session_state.items():
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        template_name = (
+            payload.get("workflow", {}).get("filename") or key[len(prefix) :]
+        )
+        templates[template_name] = payload
+        for record in payload.get("classifications", []) or []:
+            cloned = dict(record)
+            cloned["template"] = template_name
+            records.append(cloned)
+
+    return records, templates
+
+
 def main() -> None:
     st.set_page_config(page_title="Processor Triage", page_icon="🧭", layout="wide")
     st.title("🧭 Processor Triage")
@@ -177,128 +186,36 @@ def main() -> None:
 
     st.divider()
 
-    st.subheader("1. Choose classification outputs")
-    available_files = _list_classification_files(DEFAULT_RESULTS_DIR)
-
-    default_input_dir = REPO_ROOT / "nifi_pipeline_file"
-    with st.expander(
-        "Generate or refresh classification outputs",
-        expanded=not available_files,
-    ):
-        template_dir = st.text_input(
-            "Input directory or glob",
-            value=st.session_state.get("triage_input_path", str(default_input_dir)),
-            key="triage_input_path",
-            help=(
-                "Directory or glob for NiFi XML files to classify (e.g., nifi_pipeline_file or "
-                "nifi_pipeline_file/**/ICN8*.xml)."
-            ),
-        )
-        append_summary = st.checkbox(
-            "Append to existing summary.csv",
-            value=st.session_state.get("triage_append_summary", False),
-            key="triage_append_summary",
-            help="Keep existing summary rows when re-running classification.",
-        )
-
-        col_run, col_clear = st.columns([3, 1])
-        with col_run:
-            if st.button(
-                "Run batch classification",
-                key="triage_run_classification",
-                use_container_width=True,
-            ):
-                with st.spinner("Running classification… this may take a few minutes"):
-                    try:
-                        stats = classify_all(
-                            template_dir,
-                            DEFAULT_RESULTS_DIR,
-                            append_summary=append_summary,
-                            verbose=False,
-                        )
-                    except Exception as exc:  # pragma: no cover - UI feedback
-                        st.error(f"Classification failed: {exc}")
-                        st.stop()
-                st.success(
-                    "Classification complete. "
-                    f"Processed {stats['processors']} processors across {stats['templates']} template(s)."
-                )
-                st.session_state["triage_classification_complete"] = True
-                st.rerun()
-
-        with col_clear:
-            if available_files and st.button(
-                "Clear outputs",
-                key="triage_clear_outputs",
-                use_container_width=True,
-            ):
-                removed = 0
-                for json_file in available_files:
-                    json_file.unlink(missing_ok=True)
-                    removed += 1
-                summary_path = DEFAULT_RESULTS_DIR / SUMMARY_FILENAME
-                summary_path.unlink(missing_ok=True)
-                st.session_state["triage_classification_cleared"] = True
-                st.success(f"Removed {removed} classification artefact(s).")
-                st.rerun()
-
-        st.markdown("**Preview of templates in scope:**")
-        glob_like = any(ch in template_dir for ch in "*?[]")
-        if glob_like:
-            xml_templates = sorted(Path().glob(template_dir))
-        else:
-            try:
-                template_base = Path(template_dir)
-            except Exception:
-                template_base = default_input_dir
-            xml_templates = _list_xml_templates(template_base)
-        if xml_templates:
-            preview_count = min(20, len(xml_templates))
-            preview_lines = []
-            for path in xml_templates[:preview_count]:
-                try:
-                    preview_lines.append(str(path.relative_to(REPO_ROOT)))
-                except ValueError:
-                    preview_lines.append(str(path))
-            st.code("\n".join(preview_lines))
-            if len(xml_templates) > preview_count:
-                st.caption(
-                    f"… and {len(xml_templates) - preview_count} more template(s)."
-                )
-        else:
-            st.caption("No XML templates found for the specified input path yet.")
-
-    available_files = _list_classification_files(DEFAULT_RESULTS_DIR)
-    if not available_files:
-        st.info(
-            "No classification JSON files present. Run the batch classification above to continue."
-        )
-        return
-
-    file_labels = [path.name for path in available_files]
-    selected_labels = st.multiselect(
-        "Workflows",
-        options=file_labels,
-        default=st.session_state.get("triage_selected_files", []),
-        key="triage_selected_files",
-        help="Pick one or more classification JSON files to include in this triage batch.",
-    )
-    if st.button("Reset selection", key="triage_reset_selection"):
-        st.session_state["triage_selected_files"] = []
-        st.rerun()
-    if not selected_labels:
-        st.info("Select at least one workflow to continue.")
-        return
-
-    selected_paths = [path for path in available_files if path.name in selected_labels]
-    records = load_classification_records(selected_paths)
+    records, template_payloads = _collect_session_classifications()
     if not records:
-        st.warning("No processor records found in the selected files.")
+        st.warning(
+            "No processor classifications available. Run Start Analysis on the Dashboard first."
+        )
+        if st.button("🔙 Back to Dashboard", use_container_width=True):
+            st.switch_page("Dashboard.py")
         return
+
+    template_names = sorted(template_payloads.keys())
+    st.subheader("Analysis scope")
+    st.caption(
+        "Templates: " + ", ".join(template_names)
+        if template_names
+        else "(template names unavailable)"
+    )
 
     df = _records_to_dataframe(records)
+    if df.empty:
+        st.warning("Classification results are empty.")
+        return
 
-    st.subheader("2. Filter processors")
+    st.caption(f"{len(df)} processors across {len(template_names)} template(s)")
+
+    record_lookup = {
+        str(rec.get("processor_id")): rec for rec in records if rec.get("processor_id")
+    }
+
+    st.subheader("1. Filter processors")
+
     col1, col2, col3 = st.columns(3)
     with col1:
         categories = sorted(cat for cat in df["migration_category"].dropna().unique())
@@ -353,11 +270,7 @@ def main() -> None:
         return
 
     filtered_df = filtered_df.sort_values(
-        [
-            "migration_category",
-            "template",
-            "name",
-        ]
+        ["migration_category", "template", "name"]
     ).reset_index(drop=True)
 
     st.caption(f"Showing {len(filtered_df)} processors after filtering.")
@@ -368,13 +281,13 @@ def main() -> None:
         use_container_width=True,
     )
 
-    st.subheader("3. Provide additional context (optional)")
+    st.subheader("2. Provide additional context (optional)")
     additional_notes = st.text_area(
         "Notes for the model",
         placeholder="Add migration constraints, priority groups, or architectural decisions to apply across this batch.",
     )
 
-    st.subheader("4. Run triage")
+    st.subheader("3. Run triage")
     if st.button("Run triage on selection", use_container_width=True):
         if not endpoint_name:
             st.error("Specify a serving endpoint name to continue.")
@@ -384,21 +297,41 @@ def main() -> None:
             return
 
         selected_df = filtered_df.head(int(max_processors))
-        selected_ids = selected_df["processor_id"].tolist()
+        if selected_df.empty:
+            st.warning("No processors selected for triage after filtering.")
+            return
+        if "processor_id" not in selected_df.columns:
+            st.error("Processor identifiers are required for triage.")
+            return
 
-        id_to_record = {
-            str(rec.get("processor_id") or rec.get("id")): rec for rec in records
-        }
+        selected_ids = selected_df["processor_id"].astype(str).tolist()
         selected_records = [
-            id_to_record[pid] for pid in selected_ids if pid in id_to_record
+            record_lookup.get(pid) for pid in selected_ids if pid in record_lookup
         ]
+        selected_records = [rec for rec in selected_records if rec]
+        if not selected_records:
+            st.error("Unable to locate processor records for the current selection.")
+            return
+
         dossiers = build_dossiers(selected_records)
         dossier_json = format_dossiers_for_prompt(dossiers)
-        user_payload = _prepare_user_payload(dossier_json, selected_labels, selected_df)
+
+        selected_templates = (
+            sorted(selected_df["template"].dropna().unique().tolist())
+            if "template" in selected_df.columns
+            else []
+        )
+        if not selected_templates:
+            selected_templates = template_names
+
+        user_payload = _prepare_user_payload(
+            dossier_json,
+            selected_templates,
+            selected_df,
+        )
 
         user_message = (
-            "INPUT_DOSSIERS:\n"
-            f"{user_payload}\n"
+            f"INPUT_DOSSIERS:\n{user_payload}\n"
             "If additional notes are provided, apply them across all processors."
         )
         if additional_notes.strip():
@@ -486,6 +419,7 @@ def main() -> None:
 
         display_columns = [
             "processor_id",
+            "template",
             "name",
             "short_type",
             "migration_category",
