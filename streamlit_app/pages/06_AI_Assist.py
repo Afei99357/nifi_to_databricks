@@ -10,7 +10,7 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import json_repair
 import pandas as pd
@@ -25,6 +25,11 @@ from model_serving_utils import is_endpoint_supported, query_endpoint  # type: i
 from tools.classification.processor_payloads import (
     build_payloads,
     format_payloads_for_prompt,
+)
+from tools.conversion.processor_batches import (
+    DEFAULT_MAX_CHARS,
+    DEFAULT_MAX_PROCESSORS,
+    build_batches_from_records,
 )
 
 TRIAGE_SYSTEM_PROMPT = """You are a NiFi to Databricks migration strategist.
@@ -234,13 +239,22 @@ def main() -> None:
             default=source_options,
         )
     with col3:
-        max_processors = st.number_input(
-            "Batch size",
+        processors_per_call = st.number_input(
+            "Processors per LLM call",
             min_value=1,
             max_value=40,
-            value=min(20, len(df)),
-            help="Limit processors per LLM call to stay within context window.",
+            value=min(DEFAULT_MAX_PROCESSORS, len(df)) or 1,
+            help="Upper bound on processors included in a single model request.",
         )
+
+    char_budget = st.number_input(
+        "Approximate prompt character budget",
+        min_value=500,
+        max_value=20000,
+        value=DEFAULT_MAX_CHARS,
+        step=500,
+        help="Safety limit to avoid oversize prompts; batches exceeding this will be split automatically.",
+    )
 
     search_name = st.text_input("Search by processor name or short type", "")
     exclude_infra = st.checkbox("Ignore Infrastructure Only", value=False)
@@ -296,7 +310,7 @@ def main() -> None:
             st.error(f"Endpoint `{endpoint_name}` is not chat-completions compatible.")
             return
 
-        selected_df = filtered_df.head(int(max_processors))
+        selected_df = filtered_df.copy()
         if selected_df.empty:
             st.warning("No processors selected for triage after filtering.")
             return
@@ -313,111 +327,141 @@ def main() -> None:
             st.error("Unable to locate processor records for the current selection.")
             return
 
-        payloads = build_payloads(selected_records)
-        payload_json = format_payloads_for_prompt(payloads)
+        batches = build_batches_from_records(
+            selected_records,
+            max_processors=int(processors_per_call),
+            max_chars=int(char_budget),
+        )
+        if not batches:
+            st.warning("No processors available for batching.")
+            return
 
         selected_templates = (
             sorted(selected_df["template"].dropna().unique().tolist())
             if "template" in selected_df.columns
-            else []
-        )
-        if not selected_templates:
-            selected_templates = template_names
-
-        user_payload = _prepare_user_payload(
-            payload_json,
-            selected_templates,
-            selected_df,
+            else template_names
         )
 
-        user_message = (
-            f"INPUT_PROCESSORS:\n{user_payload}\n"
-            "If additional notes are provided, apply them across all processors."
-        )
-        if additional_notes.strip():
-            user_message += f"\nADDITIONAL_NOTES:\n{additional_notes.strip()}"
+        all_results: List[pd.DataFrame] = []
+        raw_responses: List[Dict[str, Any]] = []
 
-        messages = [
-            {"role": "system", "content": TRIAGE_SYSTEM_PROMPT.strip()},
-            {"role": "user", "content": user_message},
-        ]
+        for batch_index, batch_payload in enumerate(batches, start=1):
+            batch_ids = batch_payload["processor_ids"]
+            batch_records = [
+                record_lookup.get(pid) for pid in batch_ids if pid in record_lookup
+            ]
+            batch_records = [rec for rec in batch_records if rec]
+            if not batch_records:
+                continue
 
-        with st.spinner("Calling serving endpoint..."):
+            batch_df = selected_df[selected_df["processor_id"].isin(batch_ids)]
+            payloads = build_payloads(batch_records)
+            payload_json = format_payloads_for_prompt(payloads)
+            user_payload = _prepare_user_payload(
+                payload_json,
+                selected_templates,
+                batch_df,
+            )
+
+            user_message = (
+                f"INPUT_PROCESSORS:\n{user_payload}\n"
+                "If additional notes are provided, apply them across all processors."
+            )
+            if additional_notes.strip():
+                user_message += f"\nADDITIONAL_NOTES:\n{additional_notes.strip()}"
+
+            messages = [
+                {"role": "system", "content": TRIAGE_SYSTEM_PROMPT.strip()},
+                {"role": "user", "content": user_message},
+            ]
+
+            with st.spinner(
+                f"Calling serving endpoint (batch {batch_index}/{len(batches)})..."
+            ):
+                try:
+                    reply = query_endpoint(endpoint_name, messages, int(max_tokens))
+                except Exception as exc:  # pragma: no cover
+                    st.error(f"LLM call failed on batch {batch_index}: {exc}")
+                    return
+
+            raw_content = reply.get("content", "")
+
+            def _clean_response(text: str) -> str:
+                cleaned = text.strip()
+                if cleaned.startswith("```") and cleaned.endswith("```"):
+                    cleaned = cleaned[3:-3].strip()
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:].lstrip()
+                return cleaned
+
+            cleaned_content = _clean_response(raw_content)
+            st.subheader(f"Assistant response · Batch {batch_index}")
+            st.code(raw_content or "(no content)")
+
+            if not cleaned_content:
+                st.warning(f"Response was empty for batch {batch_index}.")
+                continue
+
             try:
-                reply = query_endpoint(endpoint_name, messages, int(max_tokens))
-            except Exception as exc:  # pragma: no cover
-                st.error(f"LLM call failed: {exc}")
+                parsed = json_repair.loads(cleaned_content)
+            except Exception:
+                st.error(
+                    "Response was not valid JSON; adjust the prompt or reduce batch size."
+                )
                 return
 
-        raw_content = reply.get("content", "")
+            if isinstance(parsed, dict):
+                results = parsed.get("triage_result")
+                if isinstance(results, list):
+                    parsed = results
+                else:
+                    parsed = [parsed]
 
-        def _clean_response(text: str) -> str:
-            cleaned = text.strip()
-            if cleaned.startswith("```") and cleaned.endswith("```"):
-                cleaned = cleaned[3:-3].strip()
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:].lstrip()
-            return cleaned
+            if not isinstance(parsed, list):
+                st.error(
+                    "Model response was not a JSON array; review the output above."
+                )
+                return
 
-        cleaned_content = _clean_response(raw_content)
+            parsed = [item for item in parsed if isinstance(item, dict)]
+            if not parsed:
+                st.warning(f"Batch {batch_index} returned no result objects.")
+                continue
 
-        st.subheader("Assistant response")
-        st.code(raw_content or "(no content)")
-
-        if not cleaned_content:
-            st.warning("Response was empty.")
-            return
-
-        try:
-            parsed = json_repair.loads(cleaned_content)
-        except Exception:
-            st.error(
-                "Response was not valid JSON; adjust the prompt or reduce batch size."
-            )
-            return
-
-        if isinstance(parsed, dict):
-            results = parsed.get("triage_result")
-            if isinstance(results, list):
-                parsed = results
+            result_df = pd.DataFrame(parsed)
+            raw_responses.extend(parsed)
+            if "blockers" in result_df.columns:
+                result_df["blockers"] = result_df["blockers"].apply(_normalise_blockers)
             else:
-                parsed = [parsed]
+                result_df["blockers"] = ""
 
-        if not isinstance(parsed, list):
-            st.error("Model response was not a JSON array; review the output above.")
+            if "databricks_code" not in result_df.columns:
+                result_df["databricks_code"] = ""
+            result_df["databricks_code"] = result_df["databricks_code"].fillna("")
+
+            if "code_language" not in result_df.columns:
+                result_df["code_language"] = "unknown"
+            result_df["code_language"] = result_df["code_language"].fillna("unknown")
+
+            merged_df = batch_df.merge(result_df, on="processor_id", how="left")
+            merged_df["batch_index"] = batch_index
+            all_results.append(merged_df)
+
+        if not all_results:
+            st.info("No results were produced.")
             return
 
-        parsed = [item for item in parsed if isinstance(item, dict)]
-        if not parsed:
-            st.error("JSON array did not contain objects.")
-            return
-
-        result_df = pd.DataFrame(parsed)
-        if "blockers" in result_df.columns:
-            result_df["blockers"] = result_df["blockers"].apply(_normalise_blockers)
-        else:
-            result_df["blockers"] = ""
-
-        if "databricks_code" not in result_df.columns:
-            result_df["databricks_code"] = ""
-        result_df["databricks_code"] = result_df["databricks_code"].fillna("")
-
-        if "code_language" not in result_df.columns:
-            result_df["code_language"] = "unknown"
-        result_df["code_language"] = result_df["code_language"].fillna("unknown")
-
-        merged_df = selected_df.merge(result_df, on="processor_id", how="left")
-
+        combined_df = pd.concat(all_results, ignore_index=True)
         st.subheader("Triage results")
-        summary_df = merged_df.copy()
-        summary_df["has_code"] = summary_df["databricks_code"].apply(
+        combined_df["has_code"] = combined_df["databricks_code"].apply(
             lambda value: bool(str(value).strip())
         )
-        summary_df["code_lines"] = summary_df["databricks_code"].apply(
+        combined_df["code_lines"] = combined_df["databricks_code"].apply(
             lambda value: len(str(value).splitlines()) if str(value).strip() else 0
         )
 
         display_columns = [
+            "batch_index",
             "processor_id",
             "template",
             "name",
@@ -435,11 +479,11 @@ def main() -> None:
             "code_lines",
         ]
         available_columns = [
-            column for column in display_columns if column in summary_df.columns
+            column for column in display_columns if column in combined_df.columns
         ]
-        st.dataframe(summary_df[available_columns], use_container_width=True)
+        st.dataframe(combined_df[available_columns], use_container_width=True)
 
-        for _, row in merged_df.iterrows():
+        for _, row in combined_df.iterrows():
             code = str(row.get("databricks_code", "") or "")
             if not code.strip():
                 continue
@@ -447,10 +491,12 @@ def main() -> None:
                 f"{row.get('processor_id')} · {row.get('name', '')}".strip()
             )
             language = str(row.get("code_language", "text") or "text")
-            with st.expander(f"Code · {processor_label}"):
+            with st.expander(
+                f"Code · {processor_label} (batch {row.get('batch_index')})"
+            ):
                 st.code(code, language=language)
 
-        download_payload = json.dumps(parsed, ensure_ascii=False, indent=2)
+        download_payload = json.dumps(raw_responses, ensure_ascii=False, indent=2)
         st.download_button(
             "Download triage JSON",
             data=download_payload,
