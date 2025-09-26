@@ -22,9 +22,9 @@ REPO_ROOT = CURRENT_DIR.parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
-from tools.classification.dossiers import (
-    build_dossiers,
-    format_dossiers_for_prompt,
+from tools.classification.processor_payloads import (
+    build_payloads,
+    format_payloads_for_prompt,
 )
 
 TRIAGE_SYSTEM_PROMPT = """You are a NiFi to Databricks migration strategist.
@@ -104,9 +104,9 @@ def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
 
 
 def _prepare_user_payload(
-    dossiers_json: str, workflows: List[str], filtered_df: pd.DataFrame
+    payload_json: str, workflows: List[str], filtered_df: pd.DataFrame
 ) -> str:
-    payload = json.loads(dossiers_json)
+    payload = json.loads(payload_json)
     category_counts = Counter(filtered_df["migration_category"].tolist())
     payload["selection_summary"] = {
         "workflow_files": workflows,
@@ -313,8 +313,8 @@ def main() -> None:
             st.error("Unable to locate processor records for the current selection.")
             return
 
-        dossiers = build_dossiers(selected_records)
-        dossier_json = format_dossiers_for_prompt(dossiers)
+        payloads = build_payloads(selected_records)
+        payload_json = format_payloads_for_prompt(payloads)
 
         selected_templates = (
             sorted(selected_df["template"].dropna().unique().tolist())
@@ -325,13 +325,13 @@ def main() -> None:
             selected_templates = template_names
 
         user_payload = _prepare_user_payload(
-            dossier_json,
+            payload_json,
             selected_templates,
             selected_df,
         )
 
         user_message = (
-            f"INPUT_DOSSIERS:\n{user_payload}\n"
+            f"INPUT_PROCESSORS:\n{user_payload}\n"
             "If additional notes are provided, apply them across all processors."
         )
         if additional_notes.strip():

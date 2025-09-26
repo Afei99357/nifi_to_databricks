@@ -1,4 +1,4 @@
-"""Helpers to build processor dossiers for LLM triage."""
+"""Helpers to build processor payloads for LLM triage."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Dict, Iterable, List, Sequence
 
 
 @dataclass(frozen=True)
-class ProcessorDossier:
+class ProcessorPayload:
     processor_id: str
     template: str
     name: str
@@ -99,7 +99,7 @@ def _summarise_connections(
     return sorted(set(labels))
 
 
-def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossier]:
+def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayload]:
     id_to_short_type = {
         str(rec.get("processor_id")): str(
             rec.get("short_type") or rec.get("processor_type") or ""
@@ -108,7 +108,7 @@ def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossie
         if rec.get("processor_id")
     }
 
-    dossiers: List[ProcessorDossier] = []
+    payloads: List[ProcessorPayload] = []
     for rec in records:
         processor_id = str(rec.get("processor_id") or rec.get("id") or "")
         if not processor_id:
@@ -144,7 +144,7 @@ def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossie
             feature_evidence.get("controller_services", [])
         )
 
-        dossier = ProcessorDossier(
+        payload = ProcessorPayload(
             processor_id=processor_id,
             template=str(rec.get("template") or ""),
             name=str(rec.get("name") or ""),
@@ -160,21 +160,21 @@ def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossie
             controller_services=controller_services,
             notes=str(rec.get("notes") or ""),
         )
-        dossiers.append(dossier)
-    return dossiers
+        payloads.append(payload)
+    return payloads
 
 
-def format_dossiers_for_prompt(dossiers: Sequence[ProcessorDossier]) -> str:
+def format_payloads_for_prompt(payloads: Sequence[ProcessorPayload]) -> str:
     payload = {
-        "processor_count": len(dossiers),
-        "processors": [dossier.to_payload() for dossier in dossiers],
+        "processor_count": len(payloads),
+        "processors": [payload.to_payload() for payload in payloads],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 __all__ = [
-    "ProcessorDossier",
+    "ProcessorPayload",
     "load_classification_records",
-    "build_dossiers",
-    "format_dossiers_for_prompt",
+    "build_payloads",
+    "format_payloads_for_prompt",
 ]
