@@ -83,7 +83,6 @@ Rules:
 
 ENDPOINT_OUTPUT_LIMITS = {
     "databricks-meta-llama-3-3-70b-instruct": 8192,
-    "databricks-claude-sonnet-4": 8192,
 }
 
 
@@ -444,8 +443,6 @@ def main() -> None:
                 return cleaned
 
             cleaned_content = _clean_response(raw_content)
-            with st.expander(f"LLM response · Batch {batch_index}", expanded=False):
-                st.code(raw_content or "(no content)")
 
             if not cleaned_content:
                 st.warning(f"Response was empty for batch {batch_index}.")
@@ -517,6 +514,22 @@ def main() -> None:
             st.info("No results were produced.")
             return
 
+        combined_df = pd.concat(all_results, ignore_index=True).fillna("")
+
+        # Normalise confidence columns from merge
+        if "confidence" not in combined_df.columns:
+            if "confidence_y" in combined_df.columns:
+                combined_df["confidence"] = combined_df["confidence_y"]
+            elif "confidence_x" in combined_df.columns:
+                combined_df["confidence"] = combined_df["confidence_x"]
+        combined_df = combined_df.fillna("")
+
+        for redundant in ("confidence_x", "confidence_y"):
+            if redundant in combined_df.columns:
+                combined_df = combined_df.drop(columns=[redundant])
+
+        st.session_state["triage_results_records"] = combined_df.to_dict("records")
+
         if snippet_store_modified:
             save_snippet_store(snippet_store)
             saved_unique = len({pid for pid in saved_processor_ids if pid})
@@ -526,6 +539,41 @@ def main() -> None:
                     "Review cached snippets below to inspect code or compose grouped notebooks."
                 )
             snippet_store = load_snippet_store()
+
+    # Display persisted triage results when available
+    stored_records = st.session_state.get("triage_results_records")
+    if stored_records:
+        stored_df = pd.DataFrame(stored_records).fillna("")
+        if not stored_df.empty:
+            summary_cols = [
+                "processor_id",
+                "template",
+                "name",
+                "parent_group_path",
+                "migration_category",
+                "recommended_target",
+                "migration_needed",
+                "next_step",
+                "blockers",
+                "confidence",
+                "batch_index",
+            ]
+            available_cols = [col for col in summary_cols if col in stored_df.columns]
+            st.subheader("Triage results")
+            st.dataframe(
+                stored_df[available_cols].set_index(
+                    pd.Index(range(1, len(stored_df[available_cols]) + 1))
+                ),
+                use_container_width=True,
+            )
+
+            st.download_button(
+                "Download triage results CSV",
+                data=stored_df.to_csv(index=False).encode("utf-8"),
+                file_name="triage_results.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
     # --- Cached snippet review & composition ---
     snippet_entries = list(snippet_store.get("snippets", {}).values())
