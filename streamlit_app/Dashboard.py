@@ -12,6 +12,7 @@ from typing import Dict, List
 import pandas as pd
 import streamlit as st
 
+from tools.conversion.snippet_store import SNIPPET_STORE_FILE
 from tools.workbench.full_analysis import run_full_analysis
 from tools.xml_tools import extract_processor_info
 
@@ -22,6 +23,7 @@ ANALYSIS_RESULT_PREFIXES = [
     "lineage_results_",
     "variable_results_",
     "processor_info_",
+    "snippet_store_loaded",
 ]
 
 
@@ -58,6 +60,13 @@ def _clear_analysis_state(file_name: str | None = None) -> None:
     else:
         if tmp_dir:
             st.session_state.pop("analysis_tmp_dir", None)
+
+    # Remove cached processor snippets so downstream pages reset
+    if SNIPPET_STORE_FILE.exists():
+        try:
+            SNIPPET_STORE_FILE.unlink()
+        except OSError:
+            pass
 
 
 # Configure the page
