@@ -186,7 +186,7 @@ def main() -> None:
         endpoint_name = chosen_option
 
     max_tokens = st.slider(
-        "Max tokens", min_value=256, max_value=8192, value=2048, step=256
+        "Max tokens", min_value=256, max_value=32768, value=4096, step=512
     )
 
     st.divider()
