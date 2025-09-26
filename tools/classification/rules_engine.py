@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import yaml
 
+from .group_profiles import build_group_profiles
 from .processor_features import extract_processor_features
 
 PROMOTION_CANDIDATE_CATEGORIES = {
@@ -217,6 +218,13 @@ def classify_workflow(
             if var_name:
                 variable_consumers.setdefault(var_name, set()).add(processor_id)
 
+        scripts_feature = feature.get("scripts", {}) or {}
+        scripts_payload = {
+            "inline_count": scripts_feature.get("inline_count", 0),
+            "external_count": scripts_feature.get("external_count", 0),
+            "external_hosts": scripts_feature.get("external_hosts", []),
+        }
+
         record = {
             "processor_id": processor_id,
             "id": processor_id,
@@ -234,15 +242,7 @@ def classify_workflow(
             "rule": final_classification.get("rule", ""),
             "feature_evidence": {
                 "sql": feature.get("sql", {}),
-                "scripts": {
-                    "inline_count": feature.get("scripts", {}).get("inline_count", 0),
-                    "external_count": feature.get("scripts", {}).get(
-                        "external_count", 0
-                    ),
-                    "external_hosts": feature.get("scripts", {}).get(
-                        "external_hosts", []
-                    ),
-                },
+                "scripts": scripts_payload,
                 "tables": feature.get("tables", {}),
                 "connections": feature.get("connections", {}),
                 "controller_services": feature.get("controller_services", []),
@@ -264,12 +264,14 @@ def classify_workflow(
     )
 
     summary, ambiguous = _summarise_classifications(classifications)
+    group_profiles = build_group_profiles(classifications)
 
     return {
         "workflow": feature_payload.get("workflow", {}),
         "summary": summary,
         "classifications": classifications,
         "ambiguous": ambiguous,
+        "group_profiles": group_profiles,
         "rules_file": str((rules_path or RULES_FILE).resolve()),
         "overrides_file": str((overrides_path or OVERRIDES_FILE).resolve()),
     }

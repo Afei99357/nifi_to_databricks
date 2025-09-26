@@ -90,6 +90,68 @@ def render_summary_metrics(summary: Dict[str, int]) -> None:
         columns[idx % len(columns)].metric(category, int(count))
 
 
+def render_group_profiles(group_profiles: List[Dict[str, Any]]) -> None:
+    if not group_profiles:
+        return
+
+    def _summarise_list(values: Any, *, limit: int = 120) -> str:
+        if not values:
+            return "—"
+        items = [str(item) for item in values if item]
+        if not items:
+            return "—"
+        joined = ", ".join(items)
+        if len(joined) <= limit:
+            return joined
+        return joined[: limit - 1] + "…"
+
+    rows: List[Dict[str, Any]] = []
+    for profile in group_profiles:
+        category_counts = profile.get("migration_category_counts", {}) or {}
+        category_mix = ", ".join(
+            f"{cat}: {count}"
+            for cat, count in sorted(
+                category_counts.items(), key=lambda item: (-item[1], item[0])
+            )
+        )
+
+        external_script_entries = profile.get("external_script_processors", []) or []
+        external_script_names = [
+            entry.get("name") or entry.get("id")
+            for entry in external_script_entries
+            if isinstance(entry, dict) and (entry.get("name") or entry.get("id"))
+        ]
+
+        rows.append(
+            {
+                "Group": profile.get("group") or profile.get("group_path"),
+                "Path": profile.get("group_path"),
+                "Processors": int(profile.get("processor_count", 0)),
+                "Needs migration": int(profile.get("needs_migration_count", 0)),
+                "Ambiguous": int(profile.get("ambiguous_count", 0)),
+                "Dominant category": profile.get("dominant_category") or "",
+                "Category mix": category_mix or "—",
+                "External scripts": int(profile.get("external_script_total", 0)),
+                "Script owners": _summarise_list(external_script_names),
+                "Variables defined": _summarise_list(profile.get("variables_defined")),
+                "Variables used": _summarise_list(profile.get("variables_used")),
+                "Controller services": _summarise_list(
+                    profile.get("controller_services")
+                ),
+                "Incoming groups": _summarise_list(profile.get("incoming_groups")),
+                "Outgoing groups": _summarise_list(profile.get("outgoing_groups")),
+            }
+        )
+
+    if not rows:
+        return
+
+    st.markdown("### 🧭 Group overview")
+    df = pd.DataFrame(rows)
+    df.index = df.index + 1
+    st.dataframe(df, use_container_width=True)
+
+
 def _series_with_default(
     df: pd.DataFrame, column_name: str, *, default: str = "(none)"
 ) -> pd.Series:
@@ -253,6 +315,10 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         )
 
     render_summary_metrics(result.get("summary", {}))
+
+    group_profiles = result.get("group_profiles")
+    if isinstance(group_profiles, list) and group_profiles:
+        render_group_profiles(group_profiles)
 
     ambiguous_count = len(result.get("ambiguous", []))
     if ambiguous_count:

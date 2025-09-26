@@ -2,6 +2,7 @@
 
 from .classify_all_workflows import classify_all
 from .classify_all_workflows import main as cli_main
+from .group_profiles import build_group_profiles
 from .processor_features import extract_processor_features
 from .processor_features import to_json as features_to_json
 from .rules_engine import (
@@ -25,6 +26,7 @@ __all__ = [
     "classify_workflow",
     "classify_all",
     "cli_main",
+    "build_group_profiles",
     "extract_processor_features",
     "features_to_json",
     "generate_suggestions",
