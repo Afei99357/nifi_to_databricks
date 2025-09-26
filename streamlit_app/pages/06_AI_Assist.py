@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Processor triage page leveraging Databricks LLM endpoints."""
+"""AI-assisted migration planner leveraging Databricks LLM endpoints."""
 
 from __future__ import annotations
 
