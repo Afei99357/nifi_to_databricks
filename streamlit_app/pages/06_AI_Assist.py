@@ -81,12 +81,24 @@ Rules:
 """
 
 
+ENDPOINT_OUTPUT_LIMITS = {
+    "databricks-meta-llama-3-3-70b-instruct": 8192,
+    "databricks-claude-sonnet-4": 8192,
+}
+
+
 def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
     rows = []
     for record in records:
         processor_id = record.get("processor_id") or record.get("id")
         if not processor_id:
             continue
+        parent_group = record.get("parent_group") or record.get("parentGroupName")
+        parent_group_path = (
+            record.get("parent_group_path")
+            or record.get("parentGroupPath")
+            or parent_group
+        )
         rows.append(
             {
                 "processor_id": str(processor_id),
@@ -102,6 +114,8 @@ def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
                 "classification_source": str(record.get("classification_source") or ""),
                 "rule": str(record.get("rule") or ""),
                 "confidence": float(record.get("confidence") or 0.0),
+                "parent_group": str(parent_group or ""),
+                "parent_group_path": str(parent_group_path or ""),
             }
         )
     if not rows:
@@ -116,6 +130,8 @@ def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
                 "classification_source",
                 "rule",
                 "confidence",
+                "parent_group",
+                "parent_group_path",
             ]
         )
     df = pd.DataFrame(rows)
@@ -200,9 +216,32 @@ def main() -> None:
     else:
         endpoint_name = chosen_option
 
-    max_tokens = st.slider(
-        "Max tokens", min_value=256, max_value=32768, value=20000, step=512
+    st.subheader("Prompt & response limits")
+    char_budget = st.slider(
+        "Input prompt budget (characters)",
+        min_value=2000,
+        max_value=40000,
+        value=DEFAULT_MAX_CHARS,
+        step=500,
+        help="Caps the size of each request we send to the model. Larger batches will be split once this character budget is reached.",
     )
+
+    max_tokens = st.slider(
+        "Output token cap (LLM response)",
+        min_value=512,
+        max_value=32768,
+        value=20000,
+        step=512,
+        help="Upper bound on response tokens returned by the serving endpoint.",
+    )
+
+    endpoint_limit = ENDPOINT_OUTPUT_LIMITS.get(endpoint_name)
+    if endpoint_limit and max_tokens > endpoint_limit:
+        st.warning(
+            f"Endpoint `{endpoint_name}` supports up to {endpoint_limit} response tokens. "
+            f"Using {endpoint_limit} for this run."
+        )
+        max_tokens = endpoint_limit
 
     st.divider()
 
@@ -263,15 +302,6 @@ def main() -> None:
             value=min(DEFAULT_MAX_PROCESSORS, len(df)) or 1,
             help="Upper bound on processors included in a single model request.",
         )
-
-    char_budget = st.number_input(
-        "Approximate prompt character budget",
-        min_value=500,
-        max_value=20000,
-        value=DEFAULT_MAX_CHARS,
-        step=500,
-        help="Safety limit to avoid oversize prompts; batches exceeding this will be split automatically.",
-    )
 
     search_name = st.text_input("Search by processor name or short type", "")
     exclude_infra = st.checkbox("Ignore Infrastructure Only", value=False)
