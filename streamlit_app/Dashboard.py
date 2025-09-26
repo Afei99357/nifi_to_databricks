@@ -2,14 +2,63 @@
 
 import os
 import sys
+from pathlib import Path
 
 # Add parent directory to Python path to find tools (MUST be before imports)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
 
 from tools.xml_tools import extract_processor_info
+from tools.workbench.full_analysis import run_full_analysis
+
+
+ANALYSIS_RESULT_PREFIXES = [
+    "classification_results_",
+    "table_results_",
+    "script_results_",
+    "lineage_results_",
+    "variable_results_",
+    "processor_info_",
+]
+
+
+def _clear_analysis_state(file_name: str | None = None) -> None:
+    """Remove cached analysis artefacts from session state."""
+
+    for key in list(st.session_state.keys()):
+        if key in {"analysis_progress", "analysis_summary", "analysis_running"}:
+            st.session_state.pop(key, None)
+
+    for flag in [
+        "auto_start_migration",
+        "auto_start_table_extraction",
+        "auto_start_script_extraction",
+        "auto_start_table_lineage",
+        "auto_start_variable_analysis",
+        "classification_running",
+        "table_extraction_running",
+        "script_extraction_running",
+        "table_lineage_running",
+        "variable_analysis_running",
+    ]:
+        st.session_state.pop(flag, None)
+
+    tmp_dir = st.session_state.get("analysis_tmp_dir")
+
+    if file_name:
+        for prefix in ANALYSIS_RESULT_PREFIXES:
+            st.session_state.pop(f"{prefix}{file_name}", None)
+        if tmp_dir:
+            xml_path = Path(tmp_dir) / file_name
+            if xml_path.exists():
+                xml_path.unlink(missing_ok=True)
+    else:
+        if tmp_dir:
+            st.session_state.pop("analysis_tmp_dir", None)
 
 # Configure the page
 st.set_page_config(page_title="NiFi Analyzer Tools", page_icon="", layout="wide")
@@ -20,7 +69,6 @@ def main():
 
     st.markdown("Upload your NiFi XML template file to begin the migration process.")
 
-    # File upload
     uploaded_file = st.file_uploader(
         "Upload NiFi XML file",
         type=["xml"],
@@ -33,67 +81,124 @@ def main():
         st.info(f"📁 Current file: {uploaded_file.name} (uploaded previously)")
 
     # Show migration option when file is available
+    def _format_progress(log: List[Dict[str, str]]) -> str:
+        if not log:
+            return ""
+        icons = {"running": "⏳", "completed": "✅", "failed": "❌"}
+        lines = []
+        for entry in log:
+            icon = icons.get(entry.get("status"), "•")
+            label = entry.get("label") or entry.get("step", "Step")
+            status = entry.get("status", "")
+            message = entry.get("message")
+            if status == "running":
+                detail = "(running)"
+            elif status == "completed":
+                detail = f"— {message}" if message else "— completed"
+            elif status == "failed":
+                detail = f"— failed: {message}" if message else "— failed"
+            else:
+                detail = ""
+            lines.append(f"{icon} **{label}** {detail}")
+        return "\n".join(lines)
+
+    progress_placeholder = st.empty()
+
+    def _update_progress(log: List[Dict[str, str]]) -> None:
+        text = _format_progress(log)
+        if text:
+            progress_placeholder.markdown(text)
+        else:
+            progress_placeholder.empty()
+
     if uploaded_file:
         st.success(f"✅ File uploaded: {uploaded_file.name}")
-
-        # Store file in session state for use in migration page
         st.session_state["uploaded_file"] = uploaded_file
 
-        # Navigation buttons - 5 columns in 2 rows
-        row1_col1, row1_col2, row1_col3 = st.columns(3)
+        control_cols = st.columns([2, 1, 1])
+        run_clicked = False
 
-        with row1_col1:
-            if st.button("🚀 Classify Processors", use_container_width=True):
-                # Set flag to auto-start migration when arriving at migration page
-                st.session_state["auto_start_migration"] = True
-                st.switch_page("pages/01_Processor_Classification.py")
+        analysis_running = st.session_state.get("analysis_running", False)
 
-        with row1_col2:
-            if st.button("🗄️ Extract Tables", use_container_width=True):
-                # Set flag to auto-start table extraction when arriving at page
-                st.session_state["auto_start_table_extraction"] = True
-                st.switch_page("pages/02_Table_Extraction.py")
+        with control_cols[0]:
+            run_clicked = st.button(
+                "🔍 Start Analysis" if not analysis_running else "Analyzing…",
+                use_container_width=True,
+                disabled=analysis_running,
+            )
 
-        with row1_col3:
-            if st.button("📜 Extract Scripts", use_container_width=True):
-                # Set flag to auto-start script extraction when arriving at page
-                st.session_state["auto_start_script_extraction"] = True
-                st.switch_page("pages/03_Script_Extraction.py")
+        with control_cols[1]:
+            if st.button(
+                "🗑️ Clear Results",
+                use_container_width=True,
+                disabled=analysis_running,
+            ):
+                _clear_analysis_state(uploaded_file.name)
+                st.rerun()
 
-        # Second row
-        row2_col1, row2_col2 = st.columns(2)
+        with control_cols[2]:
+            if st.button(
+                "🔄 Re-run Analysis",
+                use_container_width=True,
+                disabled=analysis_running,
+            ):
+                run_clicked = True
 
-        with row2_col1:
-            if st.button("📊 Lineage & Connections", use_container_width=True):
-                # Set flag to auto-start table lineage analysis when arriving at page
-                st.session_state["auto_start_table_lineage"] = True
-                st.switch_page("pages/04_Lineage_Connections.py")
+        if run_clicked and not analysis_running:
+            st.session_state["analysis_running"] = True
+            st.session_state["analysis_progress"] = []
+            st.session_state.pop("analysis_summary", None)
 
-        with row2_col2:
-            if st.button("🔄 Variable Dependencies", use_container_width=True):
-                # Set flag to auto-start variable analysis when arriving at page
-                st.session_state["auto_start_variable_analysis"] = True
-                st.switch_page("pages/05_Variable_Dependencies.py")
+            try:
+                run_full_analysis(
+                    uploaded_bytes=uploaded_file.getvalue(),
+                    file_name=uploaded_file.name,
+                    session_state=st.session_state,
+                    on_update=_update_progress,
+                )
+                st.success("🎉 Full analysis completed.")
+            except Exception as exc:  # pragma: no cover - interactive feedback
+                st.error(f"❌ Analysis failed: {exc}")
+            finally:
+                st.session_state["analysis_running"] = False
 
-        # Second row for utility actions
-        st.markdown("")  # Add some spacing
+        # Show latest progress log if available
+        if not st.session_state.get("analysis_running"):
+            progress_log = st.session_state.get("analysis_progress", [])
+            if progress_log:
+                _update_progress(progress_log)
 
-        if st.button("🗑️ Clear File", use_container_width=True):
-            # Clear uploaded file and any cached results
+        summary = st.session_state.get("analysis_summary")
+        if summary and summary.get("file_name") == uploaded_file.name:
+            st.caption(
+                f"Last analyzed on {summary.get('timestamp', 'unknown')}"
+            )
+
+        # Navigation shortcuts displayed once data is available
+        if st.session_state.get("analysis_progress"):
+            st.markdown("---")
+            st.markdown("### Explore results")
+            nav_cols = st.columns(5)
+            with nav_cols[0]:
+                if st.button("🚀 Processors", use_container_width=True):
+                    st.switch_page("pages/01_Processor_Classification.py")
+            with nav_cols[1]:
+                if st.button("🗄️ Tables", use_container_width=True):
+                    st.switch_page("pages/02_Table_Extraction.py")
+            with nav_cols[2]:
+                if st.button("📜 Scripts", use_container_width=True):
+                    st.switch_page("pages/03_Script_Extraction.py")
+            with nav_cols[3]:
+                if st.button("📊 Lineage", use_container_width=True):
+                    st.switch_page("pages/04_Lineage_Connections.py")
+            with nav_cols[4]:
+                if st.button("🔄 Variables", use_container_width=True):
+                    st.switch_page("pages/05_Variable_Dependencies.py")
+
+        if st.button("🧹 Clear File", use_container_width=True, disabled=analysis_running):
+            _clear_analysis_state(uploaded_file.name)
             if "uploaded_file" in st.session_state:
                 del st.session_state["uploaded_file"]
-            # Clear any migration/lineage/table/processor/dependency results for the file
-            for key in list(st.session_state.keys()):
-                if (
-                    "migration_results_" in key
-                    or "lineage_results_" in key
-                    or "table_results_" in key
-                    or "asset_results_" in key
-                    or "dependency_results_" in key
-                    or "processor_info_" in key
-                    or "completion_time" in key
-                ):
-                    del st.session_state[key]
             st.rerun()
 
         # Processor Information Section
@@ -103,7 +208,6 @@ def main():
         processor_cache_key = f"processor_info_{uploaded_file.name}"
 
         if processor_cache_key not in st.session_state:
-            # Extract processor info from uploaded file
             xml_content = uploaded_file.getvalue().decode("utf-8")
             processors = extract_processor_info(xml_content)
             st.session_state[processor_cache_key] = processors

@@ -12,7 +12,6 @@ outputs/
 migrations/
 generated/
 derived_classification*/
-derived_classification_tsne*.png
 classification_rules.suggestions.yaml
 
 # Temporary and scratch files
@@ -115,3 +114,4 @@ planning/
 BACKLOG.md
 DATABASE_MIGRATION_PLAN.md
 AGENTS.md
+.streamlit_analysis/

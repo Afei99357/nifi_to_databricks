@@ -7,10 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
-from tools.catalog import load_catalog
-
-CATALOG = load_catalog()
-
 
 @dataclass(frozen=True)
 class ProcessorDossier:
@@ -23,8 +19,6 @@ class ProcessorDossier:
     classification_source: str
     rule: str
     confidence: float
-    catalog_category: str
-    catalog_default: str
     feature_summary: Dict[str, object]
     lineage_summary: Dict[str, List[str]]
     variables: Dict[str, List[str]]
@@ -42,8 +36,6 @@ class ProcessorDossier:
             "classification_source": self.classification_source,
             "rule": self.rule,
             "confidence": round(self.confidence, 3),
-            "catalog_category": self.catalog_category,
-            "catalog_default": self.catalog_default,
             "feature_summary": self.feature_summary,
             "lineage_summary": self.lineage_summary,
             "variables": self.variables,
@@ -107,15 +99,6 @@ def _summarise_connections(
     return sorted(set(labels))
 
 
-def _catalog_metadata(short_type: str) -> Dict[str, str]:
-    if not short_type:
-        return {"category": "", "default": ""}
-    category = CATALOG.category_for(short_type) or ""
-    metadata = CATALOG.metadata_for(short_type)
-    default_category = metadata.get("default_migration_category", "")
-    return {"category": category, "default": default_category}
-
-
 def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossier]:
     id_to_short_type = {
         str(rec.get("processor_id")): str(
@@ -161,8 +144,6 @@ def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossie
             feature_evidence.get("controller_services", [])
         )
 
-        catalog_info = _catalog_metadata(str(rec.get("short_type") or ""))
-
         dossier = ProcessorDossier(
             processor_id=processor_id,
             template=str(rec.get("template") or ""),
@@ -173,8 +154,6 @@ def build_dossiers(records: Sequence[Dict[str, object]]) -> List[ProcessorDossie
             classification_source=str(rec.get("classification_source") or ""),
             rule=str(rec.get("rule") or ""),
             confidence=float(rec.get("confidence") or 0.0),
-            catalog_category=catalog_info["category"],
-            catalog_default=catalog_info["default"],
             feature_summary=feature_summary,
             lineage_summary=lineage_summary,
             variables=variables,

@@ -2,7 +2,6 @@
 
 import os
 import sys
-import tempfile
 
 import pandas as pd
 
@@ -10,8 +9,6 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import streamlit as st
-
-from tools.nifi_table_lineage import analyze_nifi_table_lineage
 
 # Configure the page
 st.set_page_config(page_title="Lineage & Connections", page_icon="📊", layout="wide")
@@ -213,114 +210,37 @@ def display_lineage_results(result, uploaded_file):
 
 
 def main():
-    st.title("📊 NiFi Lineage & Connections")
+    st.title("📊 Lineage & Connections")
+    st.markdown("**Analyze table lineage and processor connections extracted from NiFi workflows.**")
 
-    # Check for uploaded file from Dashboard
     uploaded_file = st.session_state.get("uploaded_file", None)
 
-    if uploaded_file:
-        st.success(f"✅ Processing file: {uploaded_file.name}")
-    else:
+    if not uploaded_file:
         st.warning("⚠️ No file selected. Please go back to Dashboard to upload a file.")
         if st.button("🔙 Back to Dashboard"):
             st.switch_page("Dashboard.py")
         return
 
-    # Check for cached lineage results
+    st.success(f"✅ Processing file: {uploaded_file.name}")
+
     lineage_cache_key = f"lineage_results_{uploaded_file.name}"
-    cached_result = st.session_state.get(lineage_cache_key, None)
+    cached_lineage = st.session_state.get(lineage_cache_key)
 
-    # Check if analysis is running
-    analysis_running = st.session_state.get("lineage_running", False)
-
-    # Check for auto-start flag from Dashboard
-    auto_start = st.session_state.get("auto_start_table_lineage", False)
-
-    # Dynamic layout based on whether Analyze Table Lineage button should be shown
-    # Hide button if results exist OR if auto-starting from Dashboard
-    if cached_result or auto_start:
-        # Only show Back to Dashboard button (no Analyze button needed)
-        if st.button(
-            "🔙 Back to Dashboard",
-            disabled=analysis_running,
-            help="Cannot navigate during analysis" if analysis_running else None,
-        ):
-            st.switch_page("Dashboard.py")
-        run_analysis = auto_start
-    else:
-        # Show both buttons when no results exist
-        col1, col2 = st.columns(2)
-
-        with col1:
-            run_analysis = (
-                st.button(
-                    "📊 Analyze Lineage & Connections",
-                    use_container_width=True,
-                    disabled=analysis_running,
-                )
-                or auto_start
-            )
-
-        with col2:
-            if st.button(
-                "🔙 Back to Dashboard",
-                disabled=analysis_running,
-                help="Cannot navigate during analysis" if analysis_running else None,
-            ):
-                st.switch_page("Dashboard.py")
-
-    # Clear auto-start flag after checking
-    if auto_start:
-        st.session_state["auto_start_table_lineage"] = False
-
-    # Display cached results if available
-    if cached_result and not run_analysis:
+    if isinstance(cached_lineage, dict):
         st.info(
-            "📋 Showing cached lineage & connections results. Click 'Analyze Lineage & Connections' to regenerate."
+            "📋 Showing cached lineage analysis generated via the Dashboard analysis."
         )
-        display_lineage_results(cached_result, uploaded_file)
-
-    # Run analysis
-    if uploaded_file and run_analysis and not analysis_running:
-        # Save temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_xml_path = tmp_file.name
-
-        # Set analysis running flag
-        st.session_state["lineage_running"] = True
-
-        # Create temp output directory
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            try:
-                # Show spinner with warning during analysis
-                with st.spinner(
-                    "🔍 Analyzing NiFi lineage & connections... Please do not navigate away."
-                ):
-                    result = analyze_nifi_table_lineage(
-                        xml_path=tmp_xml_path,
-                        outdir=tmp_dir,
-                        write_inter_chains=False,
-                    )
-
-                st.success("✅ Lineage & connections analysis completed!")
-
-                # Cache the result
-                st.session_state[lineage_cache_key] = result
-
-                # Display the results
-                display_lineage_results(result, uploaded_file)
-
-            except Exception as e:
-                st.error(f"❌ Lineage & connections analysis failed: {e}")
-                st.write("**Debug info:**")
-                st.code(str(e))
-            finally:
-                # Clear analysis running flag
-                st.session_state["lineage_running"] = False
-                # Clean up temp file
-                if os.path.exists(tmp_xml_path):
-                    os.unlink(tmp_xml_path)
+        display_lineage_results(cached_lineage, uploaded_file)
+    elif isinstance(cached_lineage, str):
+        st.error(f"❌ Lineage analysis failed: {cached_lineage}")
+        if st.button("🔙 Back to Dashboard", use_container_width=True):
+            st.switch_page("Dashboard.py")
+    else:
+        st.warning(
+            "Run the full analysis from the Dashboard to generate lineage results."
+        )
+        if st.button("🔙 Back to Dashboard", use_container_width=True):
+            st.switch_page("Dashboard.py")
 
 
 if __name__ == "__main__":

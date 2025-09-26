@@ -17,9 +17,6 @@ import pandas as pd
 import streamlit as st
 import yaml  # type: ignore
 
-from tools.catalog import load_catalog
-from tools.classification import classify_workflow
-
 OVERRIDES_PATH = Path("classification_overrides.yaml")
 QUICK_ACTIONS = [
     ("Mark Business Logic", "Business Logic"),
@@ -35,9 +32,6 @@ DEFAULT_TARGETS = {
     "Orchestration / Monitoring": "Workflow support",
     "Infrastructure Only": "Workflow plumbing",
 }
-
-CATALOG = load_catalog()
-
 
 def _load_overrides() -> Dict[str, Dict[str, Any]]:
     if not OVERRIDES_PATH.exists():
@@ -112,7 +106,7 @@ def apply_table_filters(df: pd.DataFrame, *, key_prefix: str) -> pd.DataFrame:
     if df.empty:
         return df
 
-    filter_cols = st.columns(6)
+    filter_cols = st.columns(5)
 
     def select_with_all(column_name: str, label: str, key_suffix: str) -> str:
         values = _series_with_default(df, column_name).unique().tolist()
@@ -140,10 +134,6 @@ def apply_table_filters(df: pd.DataFrame, *, key_prefix: str) -> pd.DataFrame:
             "migration_category", "Category", "category"
         )
     with filter_cols[4]:
-        selected_catalog_category = select_with_all(
-            "catalog_category", "Catalog category", "catalog_category"
-        )
-    with filter_cols[5]:
         selected_rule = select_with_all("rule", "Rule", "rule")
 
     filtered_df = df.copy()
@@ -182,10 +172,6 @@ def apply_table_filters(df: pd.DataFrame, *, key_prefix: str) -> pd.DataFrame:
         rule_series = _series_with_default(filtered_df, "rule")
         filtered_df = filtered_df[rule_series == selected_rule]
 
-    if selected_catalog_category != "All":
-        catalog_series = _series_with_default(filtered_df, "catalog_category")
-        filtered_df = filtered_df[catalog_series == selected_catalog_category]
-
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.index = filtered_df.index + 1
     return filtered_df
@@ -210,26 +196,16 @@ def render_processor_detail(record: Dict[str, Any], *, key_prefix: str) -> None:
     source = record.get("classification_source", record.get("source", "rule"))
     notes = record.get("notes")
     rule = record.get("rule")
-    catalog_category = CATALOG.category_for(record.get("short_type", "")) or "—"
-    catalog_meta = CATALOG.metadata_for(record.get("short_type", ""))
-
     cols = st.columns(3)
     cols[0].markdown(f"**Category:** {category}")
     cols[1].markdown(f"**Target:** {target}")
-    if isinstance(confidence, (int, float)):
-        cols[2].markdown(f"**Confidence:** {confidence:.2f}")
-    else:
-        cols[2].markdown(f"**Confidence:** {confidence or '—'}")
+    cols[2].markdown(
+        f"**Confidence:** {confidence:.2f}" if isinstance(confidence, (int, float)) else f"**Confidence:** {confidence or '—'}"
+    )
 
     cols = st.columns(2)
     cols[0].markdown(f"**Source:** {source}")
     cols[1].markdown(f"**Rule:** {rule or '—'}")
-    cols = st.columns(2)
-    cols[0].markdown(f"**Catalog category:** {catalog_category}")
-    default_migration = (
-        catalog_meta.get("default_migration_category") if catalog_meta else None
-    )
-    cols[1].markdown(f"**Catalog default:** {default_migration or '—'}")
 
     if notes:
         st.markdown(f"**Notes:** {notes}")
@@ -285,21 +261,11 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
         return
 
     df = pd.DataFrame(records)
-    if not df.empty:
-        df["catalog_category"] = df["short_type"].apply(
-            lambda value: CATALOG.category_for(str(value)) or ""
-        )
-        missing_count = int((df["catalog_category"] == "").sum())
-        if missing_count:
-            st.warning(
-                f"{missing_count} processor type(s) are not present in the catalog."
-            )
 
     display_columns = [
         "processor_id",
         "name",
         "short_type",
-        "catalog_category",
         "migration_category",
         "databricks_target",
         "confidence",
@@ -311,17 +277,6 @@ def render_classification_result(result: Any, *, key_prefix: str) -> None:
     filtered_df = apply_table_filters(df, key_prefix=f"{key_prefix}_table_filters")
     display_df = filtered_df[existing_columns] if existing_columns else filtered_df
     st.dataframe(display_df, use_container_width=True)
-
-    if "catalog_category" in filtered_df.columns and not filtered_df.empty:
-        catalog_summary = (
-            filtered_df["catalog_category"]
-            .replace({"": "(unknown)"})
-            .value_counts()
-            .reset_index()
-        )
-        catalog_summary.columns = ["Catalog category", "Count"]
-        with st.expander("Catalog coverage", expanded=False):
-            st.dataframe(catalog_summary, hide_index=True, use_container_width=True)
 
     export_df = df[existing_columns] if existing_columns else df
     csv_export = export_df.to_csv(index=False)
@@ -407,66 +362,26 @@ def handle_upload_flow() -> None:
 
     cache_key = f"classification_results_{uploaded_file.name}"
     cached_result = st.session_state.get(cache_key)
-    running = st.session_state.get("classification_running", False)
-    auto_start = st.session_state.get("auto_start_migration", False)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        run_requested = (
-            st.button(
-                "🚀 Run Classification",
-                use_container_width=True,
-                disabled=running,
-                key="run_classification_button",
-            )
-            or auto_start
+    if isinstance(cached_result, dict):
+        st.info(
+            "📋 Showing cached classification results generated via the Dashboard analysis."
         )
-
-    with col2:
+        render_classification_result(cached_result, key_prefix=cache_key)
+    elif isinstance(cached_result, str):
+        st.error(f"❌ Previous classification failed: {cached_result}")
         if st.button(
-            "🔙 Back to Dashboard",
-            disabled=running,
-            use_container_width=True,
-            key="back_to_dashboard_button",
+            "🔙 Back to Dashboard", use_container_width=True, key="classification_error_back"
         ):
             st.switch_page("Dashboard.py")
-
-    if auto_start:
-        st.session_state["auto_start_migration"] = False
-
-    if isinstance(cached_result, dict) and not run_requested:
-        st.info("📋 Showing cached classification results.")
-        render_classification_result(cached_result, key_prefix=cache_key)
-        return
-    if isinstance(cached_result, str) and not run_requested:
-        st.error(f"❌ Previous classification failed: {cached_result}")
-        return
-
-    if run_requested and not running:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_path = tmp_file.name
-
-        st.session_state["classification_running"] = True
-        try:
-            with st.spinner("Running declarative classifier..."):
-                result = classify_workflow(tmp_path)
-            st.success("✅ Processor classification completed!")
-            st.session_state[cache_key] = result
-            render_classification_result(result, key_prefix=cache_key)
-        except Exception as exc:  # pragma: no cover - UI feedback
-            error_msg = str(exc)
-            st.error(f"❌ Classification failed: {error_msg}")
-            st.code(error_msg)
-            st.session_state[cache_key] = error_msg
-        finally:
-            st.session_state["classification_running"] = False
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-    elif running:
-        st.info("Classification already running. Please wait…")
+    else:
+        st.warning(
+            "Run the full analysis from the Dashboard to generate processor classifications."
+        )
+        if st.button(
+            "🔙 Back to Dashboard", use_container_width=True, key="classification_no_data"
+        ):
+            st.switch_page("Dashboard.py")
 
 
 def _candidate_json_names(template_key: str) -> List[str]:
@@ -615,19 +530,6 @@ def handle_saved_results_flow() -> None:
         columns=["__template_key"]
     )
 
-    if "short_type" in template_df.columns:
-        template_df["catalog_category"] = template_df["short_type"].apply(
-            lambda value: CATALOG.category_for(str(value)) or ""
-        )
-
-    missing_count = int(
-        (template_df.get("catalog_category", pd.Series([])) == "").sum()
-    )
-    if missing_count:
-        st.warning(
-            f"{missing_count} processor type(s) in this template are not present in the catalog."
-        )
-
     st.markdown(
         f"#### Processors for template `{selected_template}` "
         f"({len(template_df)} rows)"
@@ -640,17 +542,6 @@ def handle_saved_results_flow() -> None:
         filtered_df,
         use_container_width=True,
     )
-
-    if "catalog_category" in filtered_df.columns and not filtered_df.empty:
-        catalog_summary = (
-            filtered_df["catalog_category"]
-            .replace({"": "(unknown)"})
-            .value_counts()
-            .reset_index()
-        )
-        catalog_summary.columns = ["Catalog category", "Count"]
-        with st.expander("Catalog coverage for template", expanded=False):
-            st.dataframe(catalog_summary, hide_index=True, use_container_width=True)
 
     json_result, json_path = load_saved_json(json_dir, selected_template)
     if json_result is None:
