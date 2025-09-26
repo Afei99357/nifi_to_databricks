@@ -26,10 +26,13 @@ from tools.classification.processor_payloads import (
     build_payloads,
     format_payloads_for_prompt,
 )
-from tools.conversion.processor_batches import (
+from tools.conversion import (
     DEFAULT_MAX_CHARS,
     DEFAULT_MAX_PROCESSORS,
     build_batches_from_records,
+    load_snippet_store,
+    save_snippet_store,
+    update_snippet_store,
 )
 
 TRIAGE_SYSTEM_PROMPT = """You are a NiFi to Databricks migration strategist.
@@ -63,6 +66,18 @@ Output schema (JSON array):
     "databricks_code": "string"
   }
 ]
+"""
+
+COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer.
+You receive multiple NiFi processor snippets that have already been converted into Databricks-ready fragments.
+Merge them into a single coherent notebook or workflow task description.
+
+Rules:
+- Preserve the logical order supplied.
+- Deduplicate imports / session setup.
+- Include inline TODO comments if additional context or manual work is required (especially when snippets reference external files).
+- Keep the output runnable in a Databricks notebook cell structure.
+- Return JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
 """
 
 
@@ -199,6 +214,8 @@ def main() -> None:
         if st.button("🔙 Back to Dashboard", use_container_width=True):
             st.switch_page("Dashboard.py")
         return
+
+    snippet_store = load_snippet_store()
 
     template_names = sorted(template_payloads.keys())
     st.subheader("Analysis scope")
@@ -344,6 +361,8 @@ def main() -> None:
 
         all_results: List[pd.DataFrame] = []
         raw_responses: List[Dict[str, Any]] = []
+        saved_processor_ids: List[str] = []
+        snippet_store_modified = False
 
         for batch_index, batch_payload in enumerate(batches, start=1):
             batch_ids = batch_payload["processor_ids"]
@@ -447,9 +466,35 @@ def main() -> None:
             merged_df["batch_index"] = batch_index
             all_results.append(merged_df)
 
+            records_payload = merged_df.to_dict("records")
+            update_snippet_store(
+                snippet_store,
+                records_payload,
+                endpoint=endpoint_name,
+                max_tokens=int(max_tokens),
+                batch_index=batch_index,
+            )
+            snippet_store_modified = True
+            saved_processor_ids.extend(
+                [
+                    str(row.get("processor_id"))
+                    for row in records_payload
+                    if str(row.get("databricks_code") or "").strip()
+                ]
+            )
+
         if not all_results:
             st.info("No results were produced.")
             return
+
+        if snippet_store_modified:
+            save_snippet_store(snippet_store)
+            saved_unique = len({pid for pid in saved_processor_ids if pid})
+            if saved_unique:
+                st.success(
+                    f"Stored snippets for {saved_unique} processor(s) in derived_processor_snippets/snippets.json."
+                )
+            snippet_store = load_snippet_store()
 
         combined_df = pd.concat(all_results, ignore_index=True)
         st.subheader("Triage results")
@@ -504,6 +549,213 @@ def main() -> None:
             mime="application/json",
             use_container_width=True,
         )
+
+    # --- Cached snippet review & composition ---
+    snippet_entries = list(snippet_store.get("snippets", {}).values())
+    if snippet_entries:
+        st.subheader("Cached processor snippets")
+        snippet_df = pd.DataFrame(snippet_entries)
+        if not snippet_df.empty:
+            snippet_df = snippet_df.fillna("")
+            snippet_df = snippet_df.sort_values(
+                ["parent_group_path", "processor_id"],
+                kind="stable",
+            ).reset_index(drop=True)
+
+            group_options = ["All"] + sorted(
+                {
+                    str(value) or "(unknown)"
+                    for value in snippet_df.get("parent_group_path", "")
+                }
+            )
+            selected_snippet_group = st.selectbox(
+                "Snippet group",
+                group_options,
+                index=0,
+                help="Filter cached snippets by NiFi group path.",
+                key="snippet_group_select",
+            )
+
+            if selected_snippet_group == "All":
+                snippet_view = snippet_df
+            else:
+                snippet_view = snippet_df[
+                    snippet_df["parent_group_path"].fillna("") == selected_snippet_group
+                ]
+
+            display_cols = [
+                "processor_id",
+                "template",
+                "name",
+                "short_type",
+                "parent_group_path",
+                "migration_category",
+                "code_language",
+                "batch_index",
+                "cached_at",
+            ]
+            available_cols = [
+                col for col in display_cols if col in snippet_view.columns
+            ]
+            st.dataframe(snippet_view[available_cols], use_container_width=True)
+
+            for _, row in snippet_view.iterrows():
+                code = str(row.get("databricks_code", "") or "")
+                if not code.strip():
+                    continue
+                processor_label = (
+                    f"{row.get('processor_id')} · {row.get('name', '')}".strip()
+                )
+                with st.expander(f"Snippet · {processor_label}"):
+                    st.code(code, language=row.get("code_language", "text"))
+
+            download_snippets = json.dumps(
+                snippet_entries, ensure_ascii=False, indent=2
+            )
+            st.download_button(
+                "Download cached snippets JSON",
+                data=download_snippets,
+                file_name="processor_snippets.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
+            compose_options = [
+                option
+                for option in group_options
+                if option != "(unknown)" or option == "All"
+            ]
+            compose_group = st.selectbox(
+                "Compose group",
+                compose_options,
+                help="Select which group to merge into a single notebook.",
+                key="compose_group_select",
+            )
+            compose_notes = st.text_area(
+                "Additional notes for composition",
+                key="compose_notes",
+                placeholder="Optional context or constraints for the composed notebook.",
+            )
+
+            if st.button("Compose notebook for group", key="compose_button"):
+                if not endpoint_name:
+                    st.error("Specify a serving endpoint name before composing.")
+                else:
+                    if compose_group == "All":
+                        compose_df = snippet_df
+                        group_label = "All processors"
+                    else:
+                        compose_df = snippet_df[
+                            snippet_df["parent_group_path"].fillna("") == compose_group
+                        ]
+                        group_label = compose_group
+
+                    compose_records = [
+                        {
+                            "processor_id": row.get("processor_id"),
+                            "name": row.get("name"),
+                            "short_type": row.get("short_type"),
+                            "migration_category": row.get("migration_category"),
+                            "implementation_hint": row.get("implementation_hint"),
+                            "databricks_code": row.get("databricks_code"),
+                            "blockers": row.get("blockers"),
+                            "next_step": row.get("next_step"),
+                        }
+                        for _, row in compose_df.iterrows()
+                        if str(row.get("databricks_code") or "").strip()
+                    ]
+
+                    if not compose_records:
+                        st.warning(
+                            "No cached snippets with code available for the selected group."
+                        )
+                    else:
+                        group_payload = {
+                            "group_name": group_label,
+                            "processor_count": len(compose_records),
+                            "processors": compose_records,
+                        }
+                        if compose_notes.strip():
+                            group_payload["notes"] = compose_notes.strip()
+
+                        messages = [
+                            {
+                                "role": "system",
+                                "content": COMPOSE_SYSTEM_PROMPT.strip(),
+                            },
+                            {
+                                "role": "user",
+                                "content": "GROUP_INPUT:\n"
+                                + json.dumps(
+                                    group_payload, ensure_ascii=False, indent=2
+                                ),
+                            },
+                        ]
+
+                        with st.spinner("Composing notebook from cached snippets..."):
+                            try:
+                                reply = query_endpoint(
+                                    endpoint_name,
+                                    messages,
+                                    int(max_tokens),
+                                )
+                            except Exception as exc:  # pragma: no cover
+                                st.error(f"LLM composition failed: {exc}")
+                            else:
+                                raw_content = reply.get("content", "")
+                                st.subheader("Composition response")
+                                st.code(raw_content or "(no content)")
+
+                                cleaned = raw_content.strip().strip("`")
+                                if cleaned.startswith("json"):
+                                    cleaned = cleaned[4:].lstrip()
+                                if cleaned:
+                                    try:
+                                        payload = json_repair.loads(cleaned)
+                                    except Exception:
+                                        st.warning(
+                                            "Unable to parse composition output as JSON."
+                                        )
+                                    else:
+                                        if isinstance(payload, list) and payload:
+                                            payload = payload[0]
+                                        if isinstance(payload, dict):
+                                            notebook_code = payload.get(
+                                                "notebook_code", ""
+                                            )
+                                            summary = payload.get("summary")
+                                            next_actions = payload.get(
+                                                "next_actions", []
+                                            )
+
+                                            st.subheader(
+                                                f"Composed notebook · {payload.get('group_name', group_label)}"
+                                            )
+                                            if summary:
+                                                st.markdown(summary)
+                                            if notebook_code:
+                                                st.code(
+                                                    notebook_code,
+                                                    language="python",
+                                                )
+                                                st.download_button(
+                                                    "Download composed notebook",
+                                                    data=notebook_code,
+                                                    file_name="composed_notebook.py",
+                                                    mime="text/x-python",
+                                                    use_container_width=True,
+                                                )
+                                            if (
+                                                isinstance(next_actions, list)
+                                                and next_actions
+                                            ):
+                                                st.markdown("**Next actions**")
+                                                for item in next_actions:
+                                                    st.write(f"- {item}")
+                                        else:
+                                            st.warning(
+                                                "Composition output was not a JSON object."
+                                            )
 
 
 if __name__ == "__main__":
