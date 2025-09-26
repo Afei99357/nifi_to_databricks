@@ -12,9 +12,8 @@ from typing import Dict, List
 import pandas as pd
 import streamlit as st
 
-from tools.xml_tools import extract_processor_info
 from tools.workbench.full_analysis import run_full_analysis
-
+from tools.xml_tools import extract_processor_info
 
 ANALYSIS_RESULT_PREFIXES = [
     "classification_results_",
@@ -59,6 +58,7 @@ def _clear_analysis_state(file_name: str | None = None) -> None:
     else:
         if tmp_dir:
             st.session_state.pop("analysis_tmp_dir", None)
+
 
 # Configure the page
 st.set_page_config(page_title="NiFi Analyzer Tools", page_icon="", layout="wide")
@@ -115,7 +115,7 @@ def main():
         st.success(f"✅ File uploaded: {uploaded_file.name}")
         st.session_state["uploaded_file"] = uploaded_file
 
-        control_cols = st.columns([2, 1, 1])
+        control_cols = st.columns([3, 1])
         run_clicked = False
 
         analysis_running = st.session_state.get("analysis_running", False)
@@ -128,15 +128,6 @@ def main():
             )
 
         with control_cols[1]:
-            if st.button(
-                "🗑️ Clear Results",
-                use_container_width=True,
-                disabled=analysis_running,
-            ):
-                _clear_analysis_state(uploaded_file.name)
-                st.rerun()
-
-        with control_cols[2]:
             if st.button(
                 "🔄 Re-run Analysis",
                 use_container_width=True,
@@ -170,9 +161,7 @@ def main():
 
         summary = st.session_state.get("analysis_summary")
         if summary and summary.get("file_name") == uploaded_file.name:
-            st.caption(
-                f"Last analyzed on {summary.get('timestamp', 'unknown')}"
-            )
+            st.caption(f"Last analyzed on {summary.get('timestamp', 'unknown')}")
 
         # Navigation shortcuts displayed once data is available
         if st.session_state.get("analysis_progress"):
@@ -195,7 +184,9 @@ def main():
                 if st.button("🔄 Variables", use_container_width=True):
                     st.switch_page("pages/05_Variable_Dependencies.py")
 
-        if st.button("🧹 Clear File", use_container_width=True, disabled=analysis_running):
+        if st.button(
+            "🧹 Clear File", use_container_width=True, disabled=analysis_running
+        ):
             _clear_analysis_state(uploaded_file.name)
             if "uploaded_file" in st.session_state:
                 del st.session_state["uploaded_file"]

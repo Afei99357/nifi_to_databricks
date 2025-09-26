@@ -414,8 +414,8 @@ def main() -> None:
                 return cleaned
 
             cleaned_content = _clean_response(raw_content)
-            st.subheader(f"Assistant response · Batch {batch_index}")
-            st.code(raw_content or "(no content)")
+            with st.expander(f"LLM response · Batch {batch_index}", expanded=False):
+                st.code(raw_content or "(no content)")
 
             if not cleaned_content:
                 st.warning(f"Response was empty for batch {batch_index}.")
@@ -491,64 +491,11 @@ def main() -> None:
             save_snippet_store(snippet_store)
             saved_unique = len({pid for pid in saved_processor_ids if pid})
             if saved_unique:
-                st.success(
-                    f"Stored snippets for {saved_unique} processor(s) in derived_processor_snippets/snippets.json."
+                st.success(f"Stored snippets for {saved_unique} processor(s).")
+                st.info(
+                    "Review cached snippets below to inspect code or compose grouped notebooks."
                 )
             snippet_store = load_snippet_store()
-
-        combined_df = pd.concat(all_results, ignore_index=True)
-        st.subheader("Triage results")
-        combined_df["has_code"] = combined_df["databricks_code"].apply(
-            lambda value: bool(str(value).strip())
-        )
-        combined_df["code_lines"] = combined_df["databricks_code"].apply(
-            lambda value: len(str(value).splitlines()) if str(value).strip() else 0
-        )
-
-        display_columns = [
-            "batch_index",
-            "processor_id",
-            "template",
-            "name",
-            "short_type",
-            "parent_group",
-            "migration_category",
-            "recommended_target",
-            "migration_needed",
-            "implementation_hint",
-            "blockers",
-            "next_step",
-            "confidence",
-            "code_language",
-            "has_code",
-            "code_lines",
-        ]
-        available_columns = [
-            column for column in display_columns if column in combined_df.columns
-        ]
-        st.dataframe(combined_df[available_columns], use_container_width=True)
-
-        for _, row in combined_df.iterrows():
-            code = str(row.get("databricks_code", "") or "")
-            if not code.strip():
-                continue
-            processor_label = (
-                f"{row.get('processor_id')} · {row.get('name', '')}".strip()
-            )
-            language = str(row.get("code_language", "text") or "text")
-            with st.expander(
-                f"Code · {processor_label} (batch {row.get('batch_index')})"
-            ):
-                st.code(code, language=language)
-
-        download_payload = json.dumps(raw_responses, ensure_ascii=False, indent=2)
-        st.download_button(
-            "Download triage JSON",
-            data=download_payload,
-            file_name="processor_triage_results.json",
-            mime="application/json",
-            use_container_width=True,
-        )
 
     # --- Cached snippet review & composition ---
     snippet_entries = list(snippet_store.get("snippets", {}).values())
