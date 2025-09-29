@@ -85,6 +85,9 @@ ENDPOINT_OUTPUT_LIMITS = {
     "databricks-meta-llama-3-3-70b-instruct": 8192,
 }
 
+SESSION_RESULTS_KEY = "ai_migration_planner_results_records"
+LEGACY_RESULTS_KEY = "triage_result"
+
 
 def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
     rows = []
@@ -185,8 +188,8 @@ def _collect_session_classifications() -> (
 
 
 def main() -> None:
-    st.set_page_config(page_title="Processor Triage", page_icon="🧭", layout="wide")
-    st.title("🧭 Processor Triage")
+    st.set_page_config(page_title="AI Migration Planner", page_icon="🧭", layout="wide")
+    st.title("🧭 AI Migration Planner")
     st.write(
         "Prioritise NiFi processors for Databricks migration using the existing classification evidence."
     )
@@ -208,7 +211,7 @@ def main() -> None:
         "AI models",
         endpoint_choices,
         index=default_index,
-        help="Select the Databricks serving endpoint used for triage.",
+        help="Select the Databricks serving endpoint used for the AI Migration Planner.",
     )
     if chosen_option == "Custom…":
         endpoint_name = st.text_input("Custom endpoint name", value=preset_value)
@@ -347,8 +350,8 @@ def main() -> None:
         placeholder="Add migration constraints, priority groups, or architectural decisions to apply across this batch.",
     )
 
-    st.subheader("3. Run triage")
-    if st.button("Run triage on selection", use_container_width=True):
+    st.subheader("3. Run AI Migration Planner")
+    if st.button("Run AI Migration Planner on selection", use_container_width=True):
         if not endpoint_name:
             st.error("Specify a serving endpoint name to continue.")
             return
@@ -358,10 +361,12 @@ def main() -> None:
 
         selected_df = filtered_df.copy()
         if selected_df.empty:
-            st.warning("No processors selected for triage after filtering.")
+            st.warning(
+                "No processors selected for the AI Migration Planner after filtering."
+            )
             return
         if "processor_id" not in selected_df.columns:
-            st.error("Processor identifiers are required for triage.")
+            st.error("Processor identifiers are required for the AI Migration Planner.")
             return
 
         selected_ids = selected_df["processor_id"].astype(str).tolist()
@@ -457,7 +462,9 @@ def main() -> None:
                 return
 
             if isinstance(parsed, dict):
-                results = parsed.get("triage_result")
+                results = parsed.get("ai_migration_planner_result") or parsed.get(
+                    LEGACY_RESULTS_KEY
+                )
                 if isinstance(results, list):
                     parsed = results
                 else:
@@ -528,7 +535,7 @@ def main() -> None:
             if redundant in combined_df.columns:
                 combined_df = combined_df.drop(columns=[redundant])
 
-        st.session_state["triage_results_records"] = combined_df.to_dict("records")
+        st.session_state[SESSION_RESULTS_KEY] = combined_df.to_dict("records")
 
         if snippet_store_modified:
             save_snippet_store(snippet_store)
@@ -540,8 +547,8 @@ def main() -> None:
                 )
             snippet_store = load_snippet_store()
 
-    # Display persisted triage results when available
-    stored_records = st.session_state.get("triage_results_records")
+    # Display persisted AI Migration Planner results when available
+    stored_records = st.session_state.get(SESSION_RESULTS_KEY)
     if stored_records:
         stored_df = pd.DataFrame(stored_records).fillna("")
         if not stored_df.empty:
@@ -559,7 +566,7 @@ def main() -> None:
                 "batch_index",
             ]
             available_cols = [col for col in summary_cols if col in stored_df.columns]
-            st.subheader("Triage results")
+            st.subheader("AI Migration Planner results")
             st.dataframe(
                 stored_df[available_cols].set_index(
                     pd.Index(range(1, len(stored_df[available_cols]) + 1))
@@ -568,9 +575,9 @@ def main() -> None:
             )
 
             st.download_button(
-                "Download triage results CSV",
+                "Download AI Migration Planner results CSV",
                 data=stored_df.to_csv(index=False).encode("utf-8"),
-                file_name="triage_results.csv",
+                file_name="ai_migration_planner_results.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
