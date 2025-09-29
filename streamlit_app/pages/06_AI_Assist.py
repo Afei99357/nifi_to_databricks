@@ -447,6 +447,12 @@ def main() -> None:
             if additional_notes.strip():
                 user_message += f"\nADDITIONAL_NOTES:\n{additional_notes.strip()}"
 
+            with st.expander(
+                f"Preview payload sent to LLM (batch {batch_index})",
+                expanded=False,
+            ):
+                st.code(user_payload, language="json")
+
             messages = [
                 {"role": "system", "content": TRIAGE_SYSTEM_PROMPT.strip()},
                 {"role": "user", "content": user_message},
