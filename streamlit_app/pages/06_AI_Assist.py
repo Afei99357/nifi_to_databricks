@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 import json_repair
 import pandas as pd
 import streamlit as st
+from requests import HTTPError
 
 # Ensure repository root on path for shared utilities
 CURRENT_DIR = Path(__file__).resolve()
@@ -30,6 +31,7 @@ from tools.conversion import (
     DEFAULT_MAX_CHARS,
     DEFAULT_MAX_PROCESSORS,
     build_batches_from_records,
+    build_script_lookup,
     load_snippet_store,
     save_snippet_store,
     update_snippet_store,
@@ -187,6 +189,21 @@ def _collect_session_classifications() -> (
     return records, templates
 
 
+def _collect_script_lookup() -> Dict[str, Dict[str, object]]:
+    script_entries: List[Dict[str, object]] = []
+    prefix = "script_results_"
+    for key, payload in st.session_state.items():
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        if isinstance(payload, list):
+            for entry in payload:
+                if isinstance(entry, dict):
+                    script_entries.append(entry)
+    if not script_entries:
+        return {}
+    return build_script_lookup(script_entries)
+
+
 def main() -> None:
     st.set_page_config(page_title="AI Migration Planner", page_icon="🧭", layout="wide")
     st.title("🧭 AI Migration Planner")
@@ -248,6 +265,12 @@ def main() -> None:
     st.divider()
 
     records, template_payloads = _collect_session_classifications()
+    script_lookup = _collect_script_lookup()
+    if script_lookup:
+        for record in records:
+            processor_id = str(record.get("processor_id") or record.get("id") or "")
+            if processor_id and processor_id in script_lookup:
+                record["scripts_detail"] = script_lookup[processor_id]
     if not records:
         st.warning(
             "No processor classifications available. Run Start Analysis on the Dashboard first."
@@ -382,6 +405,7 @@ def main() -> None:
             selected_records,
             max_processors=int(processors_per_call),
             max_chars=int(char_budget),
+            script_lookup=script_lookup,
         )
         if not batches:
             st.warning("No processors available for batching.")
@@ -433,6 +457,16 @@ def main() -> None:
             ):
                 try:
                     reply = query_endpoint(endpoint_name, messages, int(max_tokens))
+                except HTTPError as exc:  # pragma: no cover
+                    st.error("LLM call failed on batch " f"{batch_index}: {exc}")
+                    response = getattr(exc, "response", None)
+                    detail = ""
+                    if response is not None:
+                        detail = getattr(response, "text", "") or str(response)
+                    if detail:
+                        st.caption("Endpoint response")
+                        st.code(detail.strip())
+                    return
                 except Exception as exc:  # pragma: no cover
                     st.error(f"LLM call failed on batch {batch_index}: {exc}")
                     return

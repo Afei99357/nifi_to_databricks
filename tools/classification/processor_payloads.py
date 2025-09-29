@@ -26,6 +26,7 @@ class ProcessorPayload:
     variables: Dict[str, List[str]]
     controller_services: List[str]
     notes: str
+    scripts: Dict[str, object]
 
     def to_payload(self) -> Dict[str, object]:
         return {
@@ -45,6 +46,7 @@ class ProcessorPayload:
             "variables": self.variables,
             "controller_services": self.controller_services,
             "notes": self.notes,
+            "scripts": self.scripts,
         }
 
 
@@ -103,6 +105,48 @@ def _summarise_connections(
     return sorted(set(labels))
 
 
+def _summarise_scripts(raw: Dict[str, object] | None) -> Dict[str, object]:
+    if not raw:
+        return {"inline": [], "external": [], "external_hosts": []}
+
+    inline_scripts: List[Dict[str, object]] = []
+    for script in raw.get("inline_scripts", []) or []:
+        if not isinstance(script, dict):
+            inline_scripts.append({"content": str(script)})
+            continue
+        inline_scripts.append(
+            {
+                "property": str(script.get("property_name") or ""),
+                "language": str(script.get("script_type") or "unknown"),
+                "line_count": int(script.get("line_count") or 0),
+                "content": script.get("content", ""),
+                "preview": script.get("content_preview", ""),
+                "referenced_queries": script.get("referenced_queries", []),
+                "resolved_queries": script.get("resolved_queries", []),
+            }
+        )
+
+    external_scripts: List[Dict[str, object]] = []
+    for script in raw.get("external_scripts", []) or []:
+        if not isinstance(script, dict):
+            external_scripts.append({"path": str(script)})
+            continue
+        external_scripts.append(
+            {
+                "path": str(script.get("path") or ""),
+                "type": str(script.get("type") or "unknown"),
+                "property_source": str(script.get("property_source") or ""),
+                "manual_review_note": script.get("manual_review_note", ""),
+            }
+        )
+
+    return {
+        "inline": inline_scripts,
+        "external": external_scripts,
+        "external_hosts": raw.get("external_hosts", []),
+    }
+
+
 def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayload]:
     id_to_short_type = {
         str(rec.get("processor_id")): str(
@@ -147,6 +191,7 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
         controller_services = _summarise_controller_services(
             feature_evidence.get("controller_services", [])
         )
+        scripts = _summarise_scripts(rec.get("scripts_detail"))
 
         group_name = (
             str(
@@ -181,6 +226,7 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
             variables=variables,
             controller_services=controller_services,
             notes=str(rec.get("notes") or ""),
+            scripts=scripts,
         )
         payloads.append(payload)
     return payloads

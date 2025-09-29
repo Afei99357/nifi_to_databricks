@@ -124,6 +124,36 @@ def test_build_batches_from_records_sorted_and_serialised():
     assert "processor_ids" in payload
 
 
+def test_build_batches_from_records_includes_script_lookup():
+    records = [make_record("55")]
+    script_lookup = {
+        "55": {
+            "inline_scripts": [
+                {
+                    "property_name": "Script Body",
+                    "script_type": "python",
+                    "content": "print('hi')",
+                    "line_count": 1,
+                }
+            ],
+            "external_scripts": [],
+            "external_hosts": [],
+        }
+    }
+
+    batches = build_batches_from_records(
+        records,
+        max_processors=4,
+        max_chars=10000,
+        script_lookup=script_lookup,
+    )
+    assert len(batches) == 1
+    processor_payload = batches[0]["processors"][0]
+    assert processor_payload["scripts"]["inline_scripts"][0]["content"].startswith(
+        "print"
+    )
+
+
 def test_estimate_prompt_chars_grows_with_content():
     base = snapshot_from_record(make_record("base"))
     assert base is not None
