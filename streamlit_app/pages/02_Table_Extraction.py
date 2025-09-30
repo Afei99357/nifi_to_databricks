@@ -96,22 +96,30 @@ def display_table_results(tables, uploaded_file):
 
         # Display main table with better formatting
         if not filtered_df.empty:
-            # Prepare display dataframe with cleaner column names
-            display_df = filtered_df[
-                [
-                    "table_name",
-                    "processor_name",
-                    "processor_type",
-                    "property_name",
-                    "processor_id",
-                ]
-            ].copy()
+            columns = [
+                "table_name",
+                "processor_name",
+                "processor_type",
+                "property_name",
+                "processor_id",
+            ]
+            if "io_type" in filtered_df.columns:
+                columns.append("io_type")
+            if "source" in filtered_df.columns:
+                columns.append("source")
+            if "sql_clause" in filtered_df.columns:
+                columns.append("sql_clause")
+
+            display_df = filtered_df[columns].copy()
             display_df.columns = [
                 "Table Name",
                 "Processor Name",
                 "Processor Type",
                 "Property Name",
                 "Processor ID",
+                *(["I/O Type"] if "io_type" in filtered_df.columns else []),
+                *(["Source"] if "source" in filtered_df.columns else []),
+                *(["SQL Clause"] if "sql_clause" in filtered_df.columns else []),
             ]
 
             st.dataframe(
@@ -134,6 +142,29 @@ def display_table_results(tables, uploaded_file):
                     ),
                     "Processor ID": st.column_config.TextColumn(
                         "Processor ID", width="small"
+                    ),
+                    **(
+                        {
+                            "I/O Type": st.column_config.TextColumn(
+                                "I/O Type", width="small"
+                            )
+                        }
+                        if "I/O Type" in display_df.columns
+                        else {}
+                    ),
+                    **(
+                        {"Source": st.column_config.TextColumn("Source", width="small")}
+                        if "Source" in display_df.columns
+                        else {}
+                    ),
+                    **(
+                        {
+                            "SQL Clause": st.column_config.TextColumn(
+                                "SQL Clause", width="medium"
+                            )
+                        }
+                        if "SQL Clause" in display_df.columns
+                        else {}
                     ),
                 },
             )

@@ -272,12 +272,38 @@ def _extract_table_from_property(
         }
 
         if _is_valid_table_name(prop_value, context):
+            ptype_lower = processor_type.lower()
+            io_type = "unknown"
+            if any(
+                token in ptype_lower
+                for token in (
+                    "putsql",
+                    "puthive",
+                    "putdatabaserecord",
+                    "putrecord",
+                    "putdatabase",
+                    "putpostgresql",
+                )
+            ):
+                io_type = "write"
+            elif any(
+                token in ptype_lower
+                for token in (
+                    "querydatabasetable",
+                    "generatetablefetch",
+                    "selecthiveql",
+                    "fetch",
+                )
+            ):
+                io_type = "read"
             return {
                 "table_name": prop_value,
                 "property_name": prop_name,
                 "processor_name": processor_name,
                 "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
+                "source": "property",
+                "io_type": io_type,
             }
 
     return None
@@ -308,16 +334,22 @@ def _extract_tables_from_sql_property(
 
         sql_tables = _extract_tables_from_sql(prop_value, sql_context)
 
-        return [
-            {
-                "table_name": table,
+        results = []
+        for table in sql_tables:
+            entry = {
+                "table_name": table["table_name"],
                 "property_name": prop_name,
                 "processor_name": processor_name,
                 "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
+                "source": "sql",
+                "sql_clause": table.get("clause"),
+                "io_type": table.get("io_type", "unknown"),
+                "confidence": table.get("confidence"),
             }
-            for table in sql_tables
-        ]
+            results.append(entry)
+
+        return results
 
     return []
 
@@ -336,12 +368,21 @@ def _extract_hive_table_from_path_property(
     if "/warehouse/" in prop_value or "/hive/warehouse/" in prop_value:
         hive_table = _extract_hive_table_from_path(prop_value)
         if hive_table:
+            prop_lower = prop_name.lower()
+            io_type = "unknown"
+            if any(
+                token in prop_lower
+                for token in ("output", "target", "destination", "landing")
+            ):
+                io_type = "write"
             return {
                 "table_name": hive_table,
                 "property_name": prop_name,
                 "processor_name": processor_name,
                 "processor_type": _canonical_type(processor_type),
                 "processor_id": processor_id,
+                "source": "path",
+                "io_type": io_type,
             }
 
     return None
@@ -349,44 +390,47 @@ def _extract_hive_table_from_path_property(
 
 def _extract_tables_from_sql(
     sql_content: str, context: Dict[str, Any] = None
-) -> List[str]:
+) -> List[Dict[str, Any]]:
     """Extract table references from SQL queries with context-aware validation."""
-    tables = set()
 
     if context is None:
         context = {}
 
-    # Preprocess SQL to handle common issues
     sql_clean = _preprocess_sql_for_parsing(sql_content)
+    if not sql_clean:
+        return []
 
-    # Enhanced SQL patterns with better context awareness
-    table_patterns = _get_context_aware_sql_patterns()
+    tables: Dict[str, Dict[str, Any]] = {}
+    write_clauses = {
+        "insert",
+        "update",
+        "delete",
+        "create",
+        "drop",
+        "alter",
+        "truncate",
+        "merge",
+    }
 
-    for pattern_info in table_patterns:
+    for pattern_info in _get_context_aware_sql_patterns():
         pattern = pattern_info["pattern"]
         priority = pattern_info["priority"]
         context_hints = pattern_info.get("context", {})
 
         matches = re.findall(pattern, sql_clean, re.IGNORECASE | re.MULTILINE)
         for match in matches:
-            # Handle tuple matches from groups
-            if isinstance(match, tuple):
-                table_name = next((m for m in match if m), "").strip()
-            else:
-                table_name = match.strip()
-
+            table_name = (
+                next((m for m in match if m), "") if isinstance(match, tuple) else match
+            ).strip()
             if not table_name:
                 continue
 
-            # Clean up captured subquery tokens
             candidate = table_name.strip().strip(",")
             if candidate.startswith("(") or candidate.endswith(")"):
                 continue
 
-            # Normalize EL before validation
             candidate = _normalize_el(candidate)
 
-            # Create enhanced context for validation
             validation_context = {
                 **context,
                 "sql_pattern_priority": priority,
@@ -394,10 +438,42 @@ def _extract_tables_from_sql(
                 "from_sql": True,
             }
 
-            if _is_valid_table_name(candidate, validation_context):
-                tables.add(candidate)
+            if not _is_valid_table_name(candidate, validation_context):
+                continue
 
-    return list(tables)
+            record = tables.setdefault(
+                candidate,
+                {
+                    "table_name": candidate,
+                    "clauses": set(),
+                    "io_type": "read",
+                    "confidence": 0.0,
+                },
+            )
+
+            clause = (context_hints.get("clause") or "").lower()
+            if clause:
+                record["clauses"].add(clause)
+                if clause in write_clauses:
+                    record["io_type"] = "write"
+
+            confidence = context_hints.get("confidence") or 0.0
+            if confidence > record["confidence"]:
+                record["confidence"] = confidence
+
+    results: List[Dict[str, Any]] = []
+    for entry in tables.values():
+        clause_str = "/".join(sorted(entry["clauses"])) if entry["clauses"] else None
+        results.append(
+            {
+                "table_name": entry["table_name"],
+                "clause": clause_str,
+                "io_type": entry["io_type"],
+                "confidence": entry["confidence"] or None,
+            }
+        )
+
+    return results
 
 
 def _preprocess_sql_for_parsing(sql_content: str) -> str:

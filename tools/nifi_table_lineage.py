@@ -31,6 +31,7 @@ import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Set, Tuple
 
+from .table_extraction import extract_all_tables_from_nifi_xml
 from .xml_tools import parse_nifi_template_impl
 
 # ---------------- Table extraction helpers ----------------
@@ -440,7 +441,10 @@ def longest_paths(edges: Dict[str, Set[str]], max_examples: int = 5):
 
 
 def analyze_nifi_table_lineage(
-    xml_path: str, outdir: str = ".", write_inter_chains: bool = False
+    xml_path: str,
+    outdir: str = ".",
+    write_inter_chains: bool = False,
+    table_results: List[Dict[str, Any]] | None = None,
 ):
     """
     Analyze NiFi table lineage and generate CSV reports.
@@ -459,40 +463,40 @@ def analyze_nifi_table_lineage(
 
     xml_data = parse_nifi_template_impl(xml_content)
 
-    # Convert xml_tools processor format to our format
+    if table_results is None:
+        table_results = extract_all_tables_from_nifi_xml(xml_path)
+
+    table_index: Dict[str, Dict[str, Set[str]]] = defaultdict(
+        lambda: {"reads": set(), "writes": set(), "unknown": set()}
+    )
+    for entry in table_results:
+        pid = entry.get("processor_id")
+        table_name = entry.get("table_name")
+        if not pid or not table_name:
+            continue
+        table = _clean_table(table_name)
+        io_type = (entry.get("io_type") or "unknown").lower()
+        if io_type == "write":
+            table_index[pid]["writes"].add(table)
+        elif io_type == "read":
+            table_index[pid]["reads"].add(table)
+        else:
+            table_index[pid]["unknown"].add(table)
+
     procs = {}
     for proc in xml_data["processors"]:
-        # Initial extraction (no var-resolve yet)
-        reads, writes = set(), set()
-        for sql in _sql_snippets(proc["type"], proc["properties"]):
-            r, w = _extract_sql_tables(sql)
-            reads |= r
-            writes |= w
+        pid = proc["id"]
+        base_tables = table_index.get(
+            pid, {"reads": set(), "writes": set(), "unknown": set()}
+        )
+        reads = set(base_tables.get("reads", set()))
+        writes = set(base_tables.get("writes", set()))
+        unknown = set(base_tables.get("unknown", set()))
+        if unknown:
+            reads |= unknown
 
-        # Handle non-SQL database processors
-        if (
-            "querydatabasetable" in proc["type"].lower()
-            or "generatetablefetch" in proc["type"].lower()
-        ):
-            t = (
-                proc["properties"].get("Table Name")
-                or proc["properties"].get("table.name")
-                or ""
-            ).strip()
-            if t:
-                reads.add(_clean_table(t))
-
-        if "putdatabaserecord" in proc["type"].lower():
-            t = (
-                proc["properties"].get("Table Name")
-                or proc["properties"].get("table.name")
-                or ""
-            ).strip()
-            if t:
-                writes.add(_clean_table(t))
-
-        procs[proc["id"]] = {
-            "id": proc["id"],
+        procs[pid] = {
+            "id": pid,
             "type": proc["type"],
             "name": proc["name"],
             "props": proc["properties"],

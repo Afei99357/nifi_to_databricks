@@ -79,7 +79,10 @@ def run_full_analysis(
         step = _start("classification")
         classification_result = classify_workflow(str(xml_path))
         session_state[f"classification_results_{file_name}"] = classification_result
-        _complete(step, message=f"{len(classification_result.get('classifications', []))} processors")
+        _complete(
+            step,
+            message=f"{len(classification_result.get('classifications', []))} processors",
+        )
 
         # Table extraction
         step = _start("table_extraction")
@@ -98,7 +101,9 @@ def run_full_analysis(
         lineage_outdir = output_dir or (tmp_dir / "lineage_outputs")
         lineage_outdir.mkdir(parents=True, exist_ok=True)
         lineage_result = analyze_nifi_table_lineage(
-            str(xml_path), outdir=str(lineage_outdir)
+            str(xml_path),
+            outdir=str(lineage_outdir),
+            table_results=table_results,
         )
         session_state[f"lineage_results_{file_name}"] = lineage_result
         _complete(step, message=f"{lineage_result.get('all_chains', 0)} chains")
@@ -115,9 +120,7 @@ def run_full_analysis(
         session_state["analysis_summary"] = {
             "file_name": file_name,
             "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
-            "processor_count": len(
-                classification_result.get("classifications", [])
-            ),
+            "processor_count": len(classification_result.get("classifications", [])),
         }
         return progress
 
@@ -128,4 +131,3 @@ def run_full_analysis(
 
     finally:
         _emit()
-
