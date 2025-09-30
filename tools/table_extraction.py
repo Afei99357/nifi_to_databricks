@@ -7,7 +7,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set, Tuple
 
-from tools.variable_extraction import find_variable_definitions
+from tools.variable_extraction import find_variable_definitions, find_variable_usage
 from tools.xml_tools import parse_nifi_template_impl
 
 # NiFi Expression Language pattern
@@ -42,11 +42,10 @@ def _build_connection_maps(
 
 
 def _collect_literal_variable_assignments(
-    processors: List[Dict[str, Any]],
+    variable_definitions: Dict[str, List[Dict[str, Any]]],
 ) -> Dict[str, Dict[str, str]]:
     literal_assignments: Dict[str, Dict[str, str]] = defaultdict(dict)
-    definitions = find_variable_definitions(processors)
-    for var_name, entries in definitions.items():
+    for var_name, entries in variable_definitions.items():
         for entry in entries:
             if entry.get("definition_type") != "static":
                 continue
@@ -136,14 +135,21 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     controller_services = template_data.get("controller_services", [])
     connections = template_data.get("connections", [])
 
+    processor_lookup = {p["id"]: p for p in processors}
     incoming_map, _ = _build_connection_maps(connections)
-    literal_assignments = _collect_literal_variable_assignments(processors)
+
+    variable_definitions = find_variable_definitions(processors)
+    variable_usage = find_variable_usage(processors)
+    literal_assignments = _collect_literal_variable_assignments(variable_definitions)
     resolver_cache: Dict[str, Dict[str, str]] = {}
 
     controller_service_map = _build_controller_service_map(controller_services)
 
     # Multi-pass extraction pipeline (simplified for better results)
     all_tables = []
+    processor_table_entries: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    seen: Set[Tuple[str, str, str]] = set()
+
     for processor in processors:
         tables = extract_table_references_from_processor(
             processor,
@@ -152,7 +158,75 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
             literal_assignments=literal_assignments,
             resolver_cache=resolver_cache,
         )
-        all_tables.extend(tables)
+        for entry in tables:
+            key = (
+                entry.get("processor_id", ""),
+                entry.get("table_name", ""),
+                entry.get("io_type", ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            processor_table_entries[entry.get("processor_id", "")].append(entry)
+            all_tables.append(entry)
+
+    # Propagate table references to processors that consume variables
+    for var_name, usages in variable_usage.items():
+        definition_entries = variable_definitions.get(var_name, [])
+        if not definition_entries:
+            continue
+        source_processor_ids = [
+            entry.get("processor_id")
+            for entry in definition_entries
+            if entry.get("processor_id")
+        ]
+        if not source_processor_ids:
+            continue
+
+        # Gather tables defined by source processors
+        source_tables: List[Dict[str, Any]] = []
+        for spid in source_processor_ids:
+            source_tables.extend(
+                entry
+                for entry in processor_table_entries.get(spid, [])
+                if entry.get("source") == "sql"
+            )
+        if not source_tables:
+            continue
+
+        for usage in usages:
+            dest_pid = usage.get("processor_id")
+            if not dest_pid or dest_pid == "unknown":
+                continue
+            dest_proc = processor_lookup.get(dest_pid, {})
+            dest_type = _canonical_type(dest_proc.get("type", "unknown"))
+            if dest_type not in INHERIT_TABLE_TYPES:
+                continue
+            for table_entry in source_tables:
+                key = (
+                    dest_pid,
+                    table_entry.get("table_name", ""),
+                    table_entry.get("io_type", ""),
+                )
+                if key in seen:
+                    continue
+                inherited = dict(table_entry)
+                inherited.update(
+                    {
+                        "processor_id": dest_pid,
+                        "processor_name": dest_proc.get("name", "unknown"),
+                        "processor_type": _canonical_type(
+                            dest_proc.get("type", "unknown")
+                        ),
+                        "property_name": usage.get("property_name"),
+                        "source": table_entry.get("source", "variable"),
+                        "origin_processor_id": table_entry.get("processor_id"),
+                        "origin_property_name": table_entry.get("property_name"),
+                    }
+                )
+                seen.add(key)
+                processor_table_entries[dest_pid].append(inherited)
+                all_tables.append(inherited)
 
     # Apply basic anti-pattern filtering only
     filtered_tables = []
@@ -1112,3 +1186,13 @@ def get_table_summary(tables: List[Dict[str, Any]]) -> Dict[str, Any]:
             sorted(property_types.items(), key=lambda x: x[1], reverse=True)[:5]
         ),
     }
+
+
+INHERIT_TABLE_TYPES = {
+    "executestreamcommand",
+    "putsql",
+    "puthiveql",
+    "putdatabaserecord",
+    "putdatabase",
+    "putdatabasetable",
+}
