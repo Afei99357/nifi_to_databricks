@@ -25,37 +25,30 @@ def display_lineage_results(result, uploaded_file):
     with col3:
         st.metric("Table Chains", result["all_chains"])
 
-    # Display all chains table
-    st.markdown("### 📋 All Table Lineage Chains")
-    if result["chains_data"]:
-        # Try to read CSV data first, but use fallback if file doesn't exist (common after navigation)
-        chains_df = None
-        try:
-            if result.get("all_chains_csv") and os.path.exists(
-                result["all_chains_csv"]
-            ):
-                chains_df = pd.read_csv(result["all_chains_csv"])
-        except Exception:
-            pass  # Fall through to manual DataFrame creation
+    # Display processor table usage summary
+    st.markdown("### 🗂️ Table Usage by Processor")
+    proc_tables = result.get("processor_tables", {})
+    table_entries = []
+    for pid, info in proc_tables.items():
+        reads = info.get("reads", [])
+        writes = info.get("writes", [])
+        if not reads and not writes:
+            continue
+        table_entries.append(
+            {
+                "Processor": info.get("processor_name", pid),
+                "Processor ID": pid,
+                "Processor Type": info.get("processor_type"),
+                "Tables Read": ", ".join(reads),
+                "Tables Written": ", ".join(writes),
+            }
+        )
 
-        # Use cached CSV content if available, otherwise create manually
-        if chains_df is None or chains_df.empty:
-            chains_df = pd.DataFrame(
-                [
-                    {
-                        "source_table": chain[0],
-                        "target_table": chain[1],
-                        "processor_ids": " -> ".join(chain[2]),
-                        "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
-                        "hop_count": len(chain[2]),
-                    }
-                    for chain in result["chains_data"]
-                ]
-            )
-
-        st.dataframe(chains_df, use_container_width=True)
+    if table_entries:
+        table_df = pd.DataFrame(table_entries)
+        st.dataframe(table_df, use_container_width=True, hide_index=True)
     else:
-        st.info("No table lineage chains found.")
+        st.info("No processors with table interactions were detected.")
 
     # Expandable connections details section
     if result.get("connections_data"):
@@ -170,48 +163,26 @@ def display_lineage_results(result, uploaded_file):
             else:
                 st.info("No connection details available.")
 
-    # Download button for table lineage
     st.markdown("---")
-    try:
-        # Try to read from file first, fallback to generating from chains_data
-        all_csv_content = None
-        if result.get("all_chains_csv") and os.path.exists(result["all_chains_csv"]):
-            with open(result["all_chains_csv"], "r") as f:
-                all_csv_content = f.read()
-        else:
-            # Generate CSV content from chains_data if file doesn't exist
-            if result.get("chains_data"):
-                chains_df = pd.DataFrame(
-                    [
-                        {
-                            "source_table": chain[0],
-                            "target_table": chain[1],
-                            "processor_ids": " -> ".join(chain[2]),
-                            "chain_type": ("inter" if len(chain[2]) > 1 else "intra"),
-                            "hop_count": len(chain[2]),
-                        }
-                        for chain in result["chains_data"]
-                    ]
-                )
-                all_csv_content = chains_df.to_csv(index=False)
-
-        if all_csv_content:
+    if table_entries:
+        try:
+            summary_csv = pd.DataFrame(table_entries).to_csv(index=False)
             st.download_button(
-                label="📥 Download Table Lineage CSV",
-                data=all_csv_content,
-                file_name=f"table_lineage_{uploaded_file.name.replace('.xml', '')}.csv",
+                label="📥 Download Processor Table Summary",
+                data=summary_csv,
+                file_name=f"processor_tables_{uploaded_file.name.replace('.xml', '')}.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
-        else:
-            st.info("No table lineage data available for download.")
-    except Exception as e:
-        st.error(f"Error preparing CSV download: {e}")
+        except Exception as e:
+            st.error(f"Error preparing summary CSV: {e}")
 
 
 def main():
     st.title("📊 Lineage & Connections")
-    st.markdown("**Analyze table lineage and processor connections extracted from NiFi workflows.**")
+    st.markdown(
+        "**Analyze table lineage and processor connections extracted from NiFi workflows.**"
+    )
 
     uploaded_file = st.session_state.get("uploaded_file", None)
 

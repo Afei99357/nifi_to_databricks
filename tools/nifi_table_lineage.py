@@ -466,11 +466,18 @@ def analyze_nifi_table_lineage(
     if table_results is None:
         table_results = extract_all_tables_from_nifi_xml(xml_path)
 
-    table_index: Dict[str, Dict[str, Set[str]]] = defaultdict(
-        lambda: {"reads": set(), "writes": set(), "unknown": set()}
+    table_index: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "reads": set(),
+            "writes": set(),
+            "unknown": set(),
+            "raw": [],
+            "processor_type": None,
+        }
     )
     for entry in table_results:
         pid = entry.get("processor_id")
+        ptype = entry.get("processor_type")
         table_name = entry.get("table_name")
         if not pid or not table_name:
             continue
@@ -482,6 +489,9 @@ def analyze_nifi_table_lineage(
             table_index[pid]["reads"].add(table)
         else:
             table_index[pid]["unknown"].add(table)
+        table_index[pid]["raw"].append(entry)
+        if ptype:
+            table_index[pid]["processor_type"] = ptype
 
     procs = {}
     for proc in xml_data["processors"]:
@@ -502,6 +512,8 @@ def analyze_nifi_table_lineage(
             "props": proc["properties"],
             "reads": reads,
             "writes": writes,
+            "raw_tables": table_index.get(pid, {}).get("raw", []),
+            "table_source_type": table_index.get(pid, {}).get("processor_type"),
         }
 
     # Convert xml_tools connections to adjacency dictionary
@@ -544,6 +556,17 @@ def analyze_nifi_table_lineage(
         "domain_chains_data": dom_chains,
         "connections_data": adj,
         "processor_names": processor_names,
+        "processor_tables": {
+            pid: {
+                "reads": sorted(info.get("reads", set())),
+                "writes": sorted(info.get("writes", set())),
+                "raw": info.get("raw_tables", []),
+                "processor_type": info.get("type"),
+                "table_source_type": info.get("table_source_type"),
+                "processor_name": info.get("name"),
+            }
+            for pid, info in procs.items()
+        },
     }
 
 
