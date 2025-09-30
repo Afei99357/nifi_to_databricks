@@ -68,7 +68,8 @@ def _build_group_flow_mermaid(payload: dict | None, max_groups: int = 10) -> str
         top_category = categories.most_common(1)[0][0] if categories else "Unknown"
         label = f"{group}\\n{top_category}\\n{stats['count']} procs"
         node_id = _to_node_id(group)
-        lines.append(f"    {node_id}[{label.replace('\\n', '<br/>')}]")
+        display_label = label.replace("\\n", "<br/>")
+        lines.append(f"    {node_id}[{display_label}]")
 
     for (src, dst), count in sorted(
         edges.items(), key=lambda item: item[1], reverse=True
