@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections import Counter, defaultdict
 
 import pandas as pd
 
@@ -9,6 +10,77 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import streamlit as st
+
+
+def _to_node_id(text: str) -> str:
+    return (
+        text.replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+        .replace("(", "_")
+        .replace(")", "_")
+    )
+
+
+def _build_group_flow_mermaid(payload: dict | None, max_groups: int = 10) -> str | None:
+    if not payload or not isinstance(payload, dict):
+        return None
+    records = payload.get("classifications") or []
+    if not records:
+        return None
+
+    group_stats: dict[str, dict] = {}
+    id_to_group: dict[str, str] = {}
+
+    for record in records:
+        pid = record.get("processor_id")
+        if not pid:
+            continue
+        group = record.get("parent_group_path") or record.get("parent_group") or "Root"
+        id_to_group[pid] = group
+        stats = group_stats.setdefault(group, {"count": 0, "categories": Counter()})
+        stats["count"] += 1
+        stats["categories"][record.get("migration_category") or "Unknown"] += 1
+
+    if not group_stats:
+        return None
+
+    top_groups = sorted(
+        group_stats.items(), key=lambda item: item[1]["count"], reverse=True
+    )[:max_groups]
+    selected = {group for group, _ in top_groups}
+
+    edges: dict[tuple[str, str], int] = defaultdict(int)
+    for record in records:
+        pid = record.get("processor_id")
+        src_group = id_to_group.get(pid)
+        if not src_group or src_group not in selected:
+            continue
+        connections = (record.get("feature_evidence") or {}).get("connections", {})
+        for target in connections.get("outgoing", []) or []:
+            dst_group = id_to_group.get(target)
+            if dst_group and dst_group in selected and dst_group != src_group:
+                edges[(src_group, dst_group)] += 1
+
+    lines = ["graph LR"]
+    for group, stats in top_groups:
+        categories = stats["categories"]
+        top_category = categories.most_common(1)[0][0] if categories else "Unknown"
+        label = f"{group}\\n{top_category}\\n{stats['count']} procs"
+        node_id = _to_node_id(group)
+        lines.append(f"    {node_id}[{label.replace('\\n', '<br/>')}]")
+
+    for (src, dst), count in sorted(
+        edges.items(), key=lambda item: item[1], reverse=True
+    ):
+        src_id = _to_node_id(src)
+        dst_id = _to_node_id(dst)
+        lines.append(f"    {src_id} -->|{count}| {dst_id}")
+
+    if len(lines) <= 1:
+        return None
+    return "\n".join(lines)
+
 
 # Configure the page
 st.set_page_config(page_title="Lineage & Connections", page_icon="📊", layout="wide")
@@ -208,10 +280,20 @@ def display_lineage_results(result, uploaded_file):
     except Exception as e:
         st.error(f"Error preparing CSV download: {e}")
 
+    classification_key = f"classification_results_{uploaded_file.name}"
+    classification_payload = st.session_state.get(classification_key)
+    mermaid = _build_group_flow_mermaid(classification_payload)
+    if mermaid:
+        st.markdown("---")
+        st.markdown("### 🧭 Major Processor Flow (Top Groups)")
+        st.markdown(f"```mermaid\n{mermaid}\n```")
+
 
 def main():
     st.title("📊 Lineage & Connections")
-    st.markdown("**Analyze table lineage and processor connections extracted from NiFi workflows.**")
+    st.markdown(
+        "**Analyze table lineage and processor connections extracted from NiFi workflows.**"
+    )
 
     uploaded_file = st.session_state.get("uploaded_file", None)
 
