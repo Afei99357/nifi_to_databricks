@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -25,6 +26,16 @@ ANALYSIS_RESULT_PREFIXES = [
     "processor_info_",
     "snippet_store_loaded",
 ]
+
+
+def _clear_ai_session_state() -> None:
+    """Remove AI planner artefacts that are independent of template name."""
+
+    for key in [
+        "ai_migration_planner_results_records",
+        "snippet_group_select",
+    ]:
+        st.session_state.pop(key, None)
 
 
 def _clear_analysis_state(file_name: str | None = None) -> None:
@@ -68,6 +79,9 @@ def _clear_analysis_state(file_name: str | None = None) -> None:
         except OSError:
             pass
 
+    st.session_state.pop("uploaded_file_meta", None)
+    _clear_ai_session_state()
+
 
 # Configure the page
 st.set_page_config(page_title="NiFi Analyzer Tools", page_icon="", layout="wide")
@@ -88,6 +102,19 @@ def main():
     if not uploaded_file and "uploaded_file" in st.session_state:
         uploaded_file = st.session_state["uploaded_file"]
         st.info(f"📁 Current file: {uploaded_file.name} (uploaded previously)")
+    elif uploaded_file:
+        file_bytes = uploaded_file.getvalue()
+        checksum = hashlib.md5(file_bytes).hexdigest()
+        current_meta = (uploaded_file.name, len(file_bytes), checksum)
+
+        # Clear previous analysis artefacts if a different file is uploaded
+        previous_meta = st.session_state.get("uploaded_file_meta")
+        if previous_meta and previous_meta != current_meta:
+            _clear_analysis_state(previous_meta[0])
+        if previous_meta != current_meta:
+            _clear_ai_session_state()
+
+        st.session_state["uploaded_file_meta"] = current_meta
 
     # Show migration option when file is available
     def _format_progress(log: List[Dict[str, str]]) -> str:
@@ -199,6 +226,7 @@ def main():
             _clear_analysis_state(uploaded_file.name)
             if "uploaded_file" in st.session_state:
                 del st.session_state["uploaded_file"]
+            st.session_state.pop("uploaded_file_meta", None)
             st.rerun()
 
         # Processor Information Section
