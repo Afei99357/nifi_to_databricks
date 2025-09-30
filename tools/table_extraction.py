@@ -4,8 +4,11 @@ Extracts all table references from NiFi XML regardless of database type (SQL, No
 """
 
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set, Tuple
+
+from tools.variable_extraction import find_variable_definitions
+from tools.xml_tools import parse_nifi_template_impl
 
 # NiFi Expression Language pattern
 EL_PATTERN = re.compile(r"\$\{[^}]+\}")
@@ -24,6 +27,97 @@ def _canonical_type(name: str) -> str:
     return short.lower()
 
 
+def _build_connection_maps(
+    connections: List[Dict[str, Any]],
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    incoming: Dict[str, List[str]] = defaultdict(list)
+    outgoing: Dict[str, List[str]] = defaultdict(list)
+    for connection in connections:
+        source = connection.get("source")
+        destination = connection.get("destination")
+        if source and destination:
+            outgoing[source].append(destination)
+            incoming[destination].append(source)
+    return incoming, outgoing
+
+
+def _collect_literal_variable_assignments(
+    processors: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, str]]:
+    literal_assignments: Dict[str, Dict[str, str]] = defaultdict(dict)
+    definitions = find_variable_definitions(processors)
+    for var_name, entries in definitions.items():
+        for entry in entries:
+            if entry.get("definition_type") != "static":
+                continue
+            pid = entry.get("processor_id")
+            value = entry.get("property_value")
+            if not pid or value is None:
+                continue
+            literal_assignments[pid][var_name] = value
+    return literal_assignments
+
+
+def _resolve_variables_for_processor(
+    processor_id: str,
+    incoming_map: Dict[str, List[str]],
+    literal_assignments: Dict[str, Dict[str, str]],
+    cache: Dict[str, Dict[str, str]],
+    visiting: Set[str] | None = None,
+) -> Dict[str, str]:
+    if processor_id in cache:
+        return cache[processor_id]
+
+    if visiting is None:
+        visiting = set()
+    if processor_id in visiting:
+        return {}
+
+    visiting.add(processor_id)
+    resolved: Dict[str, str] = {}
+
+    for upstream in incoming_map.get(processor_id, []):
+        upstream_vars = _resolve_variables_for_processor(
+            upstream, incoming_map, literal_assignments, cache, visiting
+        )
+        if upstream_vars:
+            resolved.update(upstream_vars)
+
+    if processor_id in literal_assignments:
+        resolved.update(literal_assignments[processor_id])
+
+    visiting.remove(processor_id)
+    cache[processor_id] = resolved
+    return resolved
+
+
+EL_CAPTURE_PATTERN = re.compile(r"\$\{([^}]+)\}")
+
+
+def _resolve_expression_language(value: str, variables: Dict[str, str]) -> str:
+    if not value or not isinstance(value, str):
+        return value
+
+    resolved = value
+    for _ in range(3):
+        changed = False
+
+        def replace(match: re.Match[str]) -> str:
+            nonlocal changed
+            raw = match.group(1)
+            key = raw.split(":", 1)[0]
+            if key in variables:
+                changed = True
+                return variables[key]
+            return match.group(0)
+
+        new_value = EL_CAPTURE_PATTERN.sub(replace, resolved)
+        if not changed:
+            break
+        resolved = new_value
+    return resolved
+
+
 def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     """
     Extract all table references from NiFi XML file using multi-pass validation.
@@ -34,25 +128,29 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of table dictionaries with metadata
     """
-    from tools.xml_tools import parse_nifi_template_impl
-
-    # Parse processors from XML
     with open(xml_path, "r", encoding="utf-8") as f:
         xml_content = f.read()
 
-    # Use the full template parser to get processors with properties
     template_data = parse_nifi_template_impl(xml_content)
     processors = template_data.get("processors", [])
     controller_services = template_data.get("controller_services", [])
+    connections = template_data.get("connections", [])
 
-    # Create mapping of controller service ID to connection details
+    incoming_map, _ = _build_connection_maps(connections)
+    literal_assignments = _collect_literal_variable_assignments(processors)
+    resolver_cache: Dict[str, Dict[str, str]] = {}
+
     controller_service_map = _build_controller_service_map(controller_services)
 
     # Multi-pass extraction pipeline (simplified for better results)
     all_tables = []
     for processor in processors:
         tables = extract_table_references_from_processor(
-            processor, controller_service_map
+            processor,
+            controller_service_map=controller_service_map,
+            incoming_map=incoming_map,
+            literal_assignments=literal_assignments,
+            resolver_cache=resolver_cache,
         )
         all_tables.extend(tables)
 
@@ -149,7 +247,10 @@ def _parse_connection_url(connection_url: str) -> str:
 
 def extract_table_references_from_processor(
     processor: Dict[str, Any],
-    controller_service_map: Dict[str, Dict[str, Any]] = None,
+    controller_service_map: Dict[str, Dict[str, Any]] | None = None,
+    incoming_map: Dict[str, List[str]] | None = None,
+    literal_assignments: Dict[str, Dict[str, str]] | None = None,
+    resolver_cache: Dict[str, Dict[str, str]] | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Extract all table references from a single processor.
@@ -175,15 +276,24 @@ def extract_table_references_from_processor(
         properties, controller_service_map
     )
 
+    resolver_cache = resolver_cache or {}
+    incoming_map = incoming_map or {}
+    literal_assignments = literal_assignments or {}
+
+    var_values = _resolve_variables_for_processor(
+        processor_id, incoming_map, literal_assignments, resolver_cache
+    )
+
     for prop_name, prop_value in properties.items():
         if not prop_value or not isinstance(prop_value, str):
             continue
 
         prop_value = prop_value.strip()
-        # 1. Direct table name properties
+        resolved_value = _resolve_expression_language(prop_value, var_values)
+
         table_from_property = _extract_table_from_property(
             prop_name,
-            prop_value,
+            resolved_value,
             processor_type,
             processor_name,
             processor_id,
@@ -195,7 +305,7 @@ def extract_table_references_from_processor(
         # 2. Extract from SQL queries
         sql_tables = _extract_tables_from_sql_property(
             prop_name,
-            prop_value,
+            resolved_value,
             processor_type,
             processor_name,
             processor_id,
@@ -206,7 +316,7 @@ def extract_table_references_from_processor(
         # 3. Extract from Hive warehouse paths
         hive_table = _extract_hive_table_from_path_property(
             prop_name,
-            prop_value,
+            resolved_value,
             processor_type,
             processor_name,
             processor_id,
