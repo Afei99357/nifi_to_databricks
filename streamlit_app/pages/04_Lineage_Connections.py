@@ -287,7 +287,7 @@ def display_lineage_results(result, uploaded_file):
     if mermaid:
         st.markdown("---")
         st.markdown("### 🧭 Major Processor Flow (Top Groups)")
-        st.markdown(f"```mermaid\n{mermaid}\n```", unsafe_allow_html=True)
+        st.markdown(f"```mermaid\n{mermaid}\n```")
 
 
 def main():
