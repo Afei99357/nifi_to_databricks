@@ -520,6 +520,34 @@ def analyze_nifi_table_lineage(
     adj = build_connections_from_xml_tools(xml_data["connections"])
 
     chains = extract_atomic_chains(procs, adj, make_inter_chains=write_inter_chains)
+    table_lineage_links: List[Dict[str, str]] = []
+    if write_inter_chains:
+        for src_pid, targets in adj.items():
+            src_proc = procs.get(src_pid)
+            if not src_proc:
+                continue
+            writes = src_proc.get("writes") or set()
+            if not writes:
+                continue
+            for dst_pid in targets:
+                dst_proc = procs.get(dst_pid)
+                if not dst_proc:
+                    continue
+                reads = dst_proc.get("reads") or set()
+                overlap = writes & reads
+                if not overlap:
+                    continue
+                for table in overlap:
+                    table_lineage_links.append(
+                        {
+                            "table": table,
+                            "writer_id": src_pid,
+                            "writer_name": src_proc.get("name"),
+                            "reader_id": dst_pid,
+                            "reader_name": dst_proc.get("name"),
+                        }
+                    )
+
     dom_chains = domain_only(chains)
 
     # Write CSVs
@@ -567,6 +595,7 @@ def analyze_nifi_table_lineage(
             }
             for pid, info in procs.items()
         },
+        "table_lineage_links": table_lineage_links,
     }
 
 

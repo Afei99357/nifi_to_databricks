@@ -2,6 +2,8 @@
 
 import os
 import sys
+from collections import defaultdict
+from typing import Dict, Set
 
 import pandas as pd
 
@@ -54,6 +56,37 @@ def display_lineage_results(result, uploaded_file):
         st.dataframe(table_df, use_container_width=True, hide_index=True)
     else:
         st.info("No processors with table interactions were detected.")
+
+    # Table dependency flows (writers to readers)
+    inter_links = result.get("table_lineage_links", [])
+    if inter_links:
+        st.markdown("### 🔄 Table Flow Dependencies")
+        table_flow_map: Dict[str, Dict[str, Set[str]]] = defaultdict(
+            lambda: defaultdict(set)
+        )
+        for link in inter_links:
+            table = link.get("table")
+            writer = f"{link.get('writer_name', 'unknown')} ({link.get('writer_id', '')[:8]})"
+            reader = f"{link.get('reader_name', 'unknown')} ({link.get('reader_id', '')[:8]})"
+            table_flow_map[table][writer].add(reader)
+
+        flow_rows = []
+        for table, writers in table_flow_map.items():
+            for writer, readers in writers.items():
+                flow_rows.append(
+                    {
+                        "Table": table,
+                        "Writer Processor": writer,
+                        "Readers": ", ".join(sorted(readers)),
+                        "Reader Count": len(readers),
+                    }
+                )
+
+        if flow_rows:
+            flow_df = pd.DataFrame(flow_rows)
+            st.dataframe(flow_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No downstream readers detected for written tables.")
 
     st.markdown("---")
     if table_entries:

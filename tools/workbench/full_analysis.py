@@ -104,6 +104,7 @@ def run_full_analysis(
             str(xml_path),
             outdir=str(lineage_outdir),
             table_results=table_results,
+            write_inter_chains=True,
         )
         session_state[f"lineage_results_{file_name}"] = lineage_result
         _complete(step, message=f"{lineage_result.get('all_chains', 0)} chains")
