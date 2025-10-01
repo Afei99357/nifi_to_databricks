@@ -219,6 +219,10 @@ def main() -> None:
         "databricks-claude-sonnet-4",
         "Custom…",
     ]
+    default_target = "databricks-claude-sonnet-4"
+    if not default_endpoint:
+        default_endpoint = default_target
+
     if default_endpoint in endpoint_choices[:-1]:
         default_index = endpoint_choices.index(default_endpoint)
         preset_value = ""
