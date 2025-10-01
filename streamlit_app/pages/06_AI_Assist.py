@@ -237,8 +237,8 @@ def main() -> None:
 
     st.subheader("Prompt & response limits")
     char_budget = DEFAULT_MAX_CHARS
-    # Claude Sonnet 4 on Databricks caps responses at 65,536 tokens—stay just under.
-    max_tokens = 65000
+    # Claude Sonnet 4 on Databricks caps responses at 65,536 tokens—stay below for safety.
+    max_tokens = 60000
 
     endpoint_limit = ENDPOINT_OUTPUT_LIMITS.get(endpoint_name)
     if endpoint_limit and max_tokens > endpoint_limit:
