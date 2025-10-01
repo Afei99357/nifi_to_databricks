@@ -80,7 +80,7 @@ Rules:
 - Preserve the logical order supplied for the remaining processors.
 - Deduplicate imports / session setup.
 - Include inline TODO comments if additional context or manual work is required (especially when snippets reference external files).
-- Keep the output runnable in a Databricks notebook cell structure.
+- Emit a plain Python script format (no `%md`, `%sql`, or `# MAGIC` directives); use Python comments and embedded `spark.sql(...)` calls for SQL cells.
 - Return JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
 """
 
