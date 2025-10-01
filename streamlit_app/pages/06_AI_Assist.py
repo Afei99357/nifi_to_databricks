@@ -75,7 +75,9 @@ You receive multiple NiFi processor snippets that have already been converted in
 Merge them into a single coherent notebook or workflow task description.
 
 Rules:
-- Preserve the logical order supplied.
+- Before composing, drop processors that the Databricks migration no longer needs (logging-only, infrastructure-only, route/notify steps that have native replacements).
+- Capture any removals in the summary so readers know which processors were omitted and why.
+- Preserve the logical order supplied for the remaining processors.
 - Deduplicate imports / session setup.
 - Include inline TODO comments if additional context or manual work is required (especially when snippets reference external files).
 - Keep the output runnable in a Databricks notebook cell structure.
