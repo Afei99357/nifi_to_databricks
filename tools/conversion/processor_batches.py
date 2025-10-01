@@ -172,6 +172,7 @@ def build_batch_payload(
     processor_dicts = [snapshot.to_prompt_dict() for snapshot in batch]
     processor_ids = [snapshot.processor_id for snapshot in batch]
     templates = sorted({snapshot.template for snapshot in batch if snapshot.template})
+    prompt_char_count = sum(estimate_prompt_chars(snapshot) for snapshot in batch)
 
     return {
         "batch_index": batch_index,
@@ -179,6 +180,7 @@ def build_batch_payload(
         "templates": templates,
         "processor_count": len(batch),
         "processors": processor_dicts,
+        "prompt_char_count": prompt_char_count,
     }
 
 

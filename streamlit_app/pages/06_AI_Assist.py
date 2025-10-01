@@ -239,7 +239,7 @@ def main() -> None:
     char_budget = st.slider(
         "Input prompt budget (characters)",
         min_value=2000,
-        max_value=40000,
+        max_value=20000,
         value=DEFAULT_MAX_CHARS,
         step=500,
         help="Caps the size of each request we send to the model. Larger batches will be split once this character budget is reached.",
@@ -248,7 +248,7 @@ def main() -> None:
     max_tokens = st.slider(
         "Output token cap (LLM response)",
         min_value=512,
-        max_value=32768,
+        max_value=20000,
         value=20000,
         step=512,
         help="Upper bound on response tokens returned by the serving endpoint.",
@@ -407,6 +407,27 @@ def main() -> None:
             st.warning("No processors available for batching.")
             return
 
+        batch_summaries = []
+        for payload in batches:
+            batch_summaries.append(
+                {
+                    "batch": payload.get("batch_index"),
+                    "processors": len(payload.get("processor_ids", [])),
+                    "est_chars": payload.get("prompt_char_count", 0),
+                }
+            )
+
+        if batch_summaries:
+            summary_df = pd.DataFrame(batch_summaries)
+            summary_df = summary_df.sort_values("batch").reset_index(drop=True)
+            st.caption(
+                "Batch plan (processor count vs. estimated prompt characters)."
+            )
+            st.dataframe(
+                summary_df,
+                use_container_width=True,
+            )
+
         selected_templates = (
             sorted(selected_df["template"].dropna().unique().tolist())
             if "template" in selected_df.columns
@@ -428,6 +449,10 @@ def main() -> None:
                 continue
 
             batch_df = selected_df[selected_df["processor_id"].isin(batch_ids)]
+            st.caption(
+                f"Batch {batch_index}: {len(batch_ids)} processors, "
+                f"≈{batch_payload.get('prompt_char_count', 0):,} chars"
+            )
             payloads = build_payloads(batch_records)
             payload_json = format_payloads_for_prompt(payloads)
             user_payload = _prepare_user_payload(
