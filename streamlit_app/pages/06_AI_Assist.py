@@ -236,23 +236,8 @@ def main() -> None:
         endpoint_name = chosen_option
 
     st.subheader("Prompt & response limits")
-    char_budget = st.slider(
-        "Input prompt budget (characters)",
-        min_value=2000,
-        max_value=50000,
-        value=DEFAULT_MAX_CHARS,
-        step=500,
-        help="Caps the size of each request we send to the model. Larger batches will be split once this character budget is reached.",
-    )
-
-    max_tokens = st.slider(
-        "Output token cap (LLM response)",
-        min_value=512,
-        max_value=50000,
-        value=30000,
-        step=512,
-        help="Upper bound on response tokens returned by the serving endpoint.",
-    )
+    char_budget = DEFAULT_MAX_CHARS
+    max_tokens = 100000
 
     endpoint_limit = ENDPOINT_OUTPUT_LIMITS.get(endpoint_name)
     if endpoint_limit and max_tokens > endpoint_limit:
