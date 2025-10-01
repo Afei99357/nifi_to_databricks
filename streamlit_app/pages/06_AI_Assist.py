@@ -348,7 +348,8 @@ def main() -> None:
         ]
     if exclude_infra:
         filtered_df = filtered_df[
-            filtered_df["migration_category"] != "Infrastructure Only"
+            filtered_df["migration_category"].fillna("").str.strip()
+            != "Infrastructure Only"
         ]
 
     if filtered_df.empty:
