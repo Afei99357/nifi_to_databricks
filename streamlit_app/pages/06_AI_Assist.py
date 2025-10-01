@@ -239,7 +239,7 @@ def main() -> None:
     char_budget = st.slider(
         "Input prompt budget (characters)",
         min_value=2000,
-        max_value=20000,
+        max_value=50000,
         value=DEFAULT_MAX_CHARS,
         step=500,
         help="Caps the size of each request we send to the model. Larger batches will be split once this character budget is reached.",
@@ -248,8 +248,8 @@ def main() -> None:
     max_tokens = st.slider(
         "Output token cap (LLM response)",
         min_value=512,
-        max_value=20000,
-        value=20000,
+        max_value=50000,
+        value=30000,
         step=512,
         help="Upper bound on response tokens returned by the serving endpoint.",
     )

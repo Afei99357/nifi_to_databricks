@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 DEFAULT_MAX_PROCESSORS = 10
-DEFAULT_MAX_CHARS = 20000
+DEFAULT_MAX_CHARS = 30000
 
 
 @dataclass(frozen=True)
