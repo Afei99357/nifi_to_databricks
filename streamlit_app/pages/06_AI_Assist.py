@@ -309,6 +309,7 @@ def main() -> None:
             "Migration categories",
             options=categories,
             default=categories,
+            help="Deselect categories to exclude them from the AI Migration Planner.",
         )
     with col2:
         source_options = sorted(
@@ -329,7 +330,6 @@ def main() -> None:
         )
 
     search_name = st.text_input("Search by processor name or short type", "")
-    exclude_infra = st.checkbox("Ignore Infrastructure Only", value=False)
 
     filtered_df = df.copy()
     if category_filter:
@@ -345,11 +345,6 @@ def main() -> None:
         filtered_df = filtered_df[
             filtered_df["name"].str.lower().str.contains(query, na=False)
             | filtered_df["short_type"].str.lower().str.contains(query, na=False)
-        ]
-    if exclude_infra:
-        filtered_df = filtered_df[
-            filtered_df["migration_category"].fillna("").str.strip()
-            != "Infrastructure Only"
         ]
 
     if filtered_df.empty:
