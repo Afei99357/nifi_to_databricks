@@ -1,0 +1,15 @@
+Usage example for export_external_filenames.py
+=============================================
+
+Export unique external script paths from NiFi templates inside
+`nifi_pipeline_file/`, searching recursively and placing per-template
+lists under `external_script_exports/`:
+
+    .venv/bin/python scripts/export_external_filenames.py \
+        nifi_pipeline_file \
+        --recursive \
+        --output-dir external_script_exports \
+        --skip-empty
+
+This command prints progress for each XML file and writes one text file per
+NiFi template containing the sorted list of unique external script filenames.
