@@ -37,23 +37,22 @@ from tools.conversion import (
     update_snippet_store,
 )
 
-TRIAGE_SYSTEM_PROMPT = """You are a NiFi to Databricks migration strategist.
-You will receive JSON describing a batch of processors, with evidence synthesized from the NiFi flow.
-Decide which processors require Databricks implementation, choose an appropriate target pattern, highlight blockers, and draft runnable Databricks code for the recommended solution.
+TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
-- Base decisions only on supplied evidence; if information is missing, state the gap explicitly.
-- Treat `Infrastructure Only` processors as retirement candidates unless evidence shows required orchestration.
-- For shared scripts or controller services, call out cross-cutting dependencies instead of repeating identical guidance.
-- Limit blockers to concrete, actionable items (e.g., external script, controller service, missing schema).
-- Keep rationales factual, <= 30 words.
-- Preferred targets: auto_loader, copy_into, spark_batch, spark_structured_streaming, dbsql, workflow_task_shell, uc_table_ddl. Use retire for decommission and manual_investigation when unclear.
-- When migration is required, populate `databricks_code` with <= 200 lines of runnable code tailored to the recommended target (PySpark for Spark jobs, SQL for dbsql/copy_into/uc_table_ddl, shell/bash for workflow_task_shell).
-- Include essential imports, configuration, and comments so the code can run inside a Databricks notebook or Jobs task.
-- Return an empty string for `databricks_code` when migration is not needed.
-- Output ONLY JSON following the schema below.
-
-Output schema (JSON array):
+- Scope and mapping: Map NiFi processors to Databricks patterns:
+  - Sources/Sinks: files (HDFS/S3/ADLS), JDBC, Kafka, HTTP → Auto Loader, COPY INTO, spark.read/write, Structured Streaming.
+  - SQL processors: inline SQL → spark.sql(...) or DBSQL compatible statements.
+  - Script runners (ExecuteStreamCommand/InvokeScriptedProcessor): try native replacement first; otherwise emit workflow_task_shell + a TODO.
+  - Attribute/route/orchestration: keep only if they affect data/branching; otherwise mark as "retire".
+- Code style: Emit plain Python (no notebook magics or %sql). Use spark.sql(...) for SQL. Keep snippets ≤ 200 lines each, runnable in a notebook cell.
+- Parameters: Accept runtime inputs via a top config block or widgets (dates, identifiers, catalog/schema/tables/paths, connection names).
+- Idempotency and writes: Prefer MERGE for upserts; use INSERT OVERWRITE only for full partition refresh. No ORDER BY in inserts.
+- Validation and logging: Add basic row-count checks and log meaningful messages. Raise on failures (don’t swallow exceptions).
+- Performance: Repartition before writes if needed; apply OPTIMIZE/ANALYZE only when beneficial and targeted.
+- Secrets: Never inline credentials. Use dbutils.secrets.get(scope, key). If unknown, add a TODO line.
+- Be conservative: If something is unclear, mark "unknown" and add a minimal TODO—do not invent schemas, endpoints, or business rules.
+- Response format only: Return ONLY JSON using this schema:
 [
   {
     "processor_id": "string",
@@ -64,24 +63,22 @@ Output schema (JSON array):
     "rationale": "string",
     "next_step": "generate_notebook|manual_review|confirm_native|retire",
     "confidence": "high|medium|low",
-    "code_language": "pyspark|sql|shell|python|unknown",
+    "code_language": "pyspark",
     "databricks_code": "string"
   }
 ]
 """
 
-COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer.
-You receive multiple NiFi processor snippets that have already been converted into Databricks-ready fragments.
-Merge them into a single coherent notebook or workflow task description.
+COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Python notebook script.
 
 Rules:
-- Before composing, drop processors that the Databricks migration no longer needs (logging-only, infrastructure-only, route/notify steps that have native replacements).
-- Capture any removals in the summary so readers know which processors were omitted and why.
-- Preserve the logical order supplied for the remaining processors.
-- Deduplicate imports / session setup.
-- Include inline TODO comments if additional context or manual work is required (especially when snippets reference external files).
-- Emit a plain Python script format (no `%md`, `%sql`, or `# MAGIC` directives); use Python comments and embedded `spark.sql(...)` calls for SQL cells.
-- Return JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
+- Trim first: Drop processors not needed post-migration (pure logging, infrastructure-only, orchestration that Databricks Jobs natively covers). List each removal with reason in the summary.
+- Output format: Plain Python only (no magics). Use spark.sql(...) for SQL. Begin with imports + config (widgets or dict), then functions by stage (ingest, transform, write, validate, cleanup), then main().
+- Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling. Keep idempotency (MERGE or targeted overwrite).
+- External scripts: Prefer native equivalents; if kept as shell tasks, emit clear TODOs with exact script paths and expected behavior.
+- Validation: Include row-count checks and minimal DQ assertions for the composed flow.
+- Summary: Describe what was kept/trimmed, open TODOs, and assumptions. Keep actionable.
+- Response format only: Return ONLY JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
 """
 
 
