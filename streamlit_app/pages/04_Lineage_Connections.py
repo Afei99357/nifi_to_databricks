@@ -2,8 +2,6 @@
 
 import os
 import sys
-from collections import defaultdict
-from typing import Dict, Set
 
 import pandas as pd
 
@@ -20,18 +18,26 @@ def display_lineage_results(result, uploaded_file):
     """Display table lineage results from either fresh run or cache"""
     # Display summary metrics
     proc_tables = result.get("processor_tables", {})
-    data_flow_count = sum(1 for info in proc_tables.values() if info.get("writes"))
-    unique_targets = {
+    processors_with_reads = sum(1 for info in proc_tables.values() if info.get("reads"))
+    processors_with_writes = sum(
+        1 for info in proc_tables.values() if info.get("writes")
+    )
+    unique_tables_read = {
+        table for info in proc_tables.values() for table in info.get("reads", [])
+    }
+    unique_tables_written = {
         table for info in proc_tables.values() for table in info.get("writes", [])
     }
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Processors", result["processors"])
+        st.metric("Processors with Reads", processors_with_reads)
     with col2:
-        st.metric("Data-moving processors", data_flow_count)
+        st.metric("Processors with Writes", processors_with_writes)
     with col3:
-        st.metric("Unique target tables", len(unique_targets))
+        st.metric("Unique Tables Read", len(unique_tables_read))
+    with col4:
+        st.metric("Unique Tables Written", len(unique_tables_written))
 
     # Display processor table usage summary
     st.markdown("### 🗂️ Table Usage by Processor")
@@ -56,37 +62,6 @@ def display_lineage_results(result, uploaded_file):
         st.dataframe(table_df, use_container_width=True, hide_index=True)
     else:
         st.info("No processors with table interactions were detected.")
-
-    # Table dependency flows (writers to readers)
-    inter_links = result.get("table_lineage_links", [])
-    if inter_links:
-        st.markdown("### 🔄 Table Flow Dependencies")
-        table_flow_map: Dict[str, Dict[str, Set[str]]] = defaultdict(
-            lambda: defaultdict(set)
-        )
-        for link in inter_links:
-            table = link.get("table")
-            writer = f"{link.get('writer_name', 'unknown')} ({link.get('writer_id', '')[:8]})"
-            reader = f"{link.get('reader_name', 'unknown')} ({link.get('reader_id', '')[:8]})"
-            table_flow_map[table][writer].add(reader)
-
-        flow_rows = []
-        for table, writers in table_flow_map.items():
-            for writer, readers in writers.items():
-                flow_rows.append(
-                    {
-                        "Table": table,
-                        "Writer Processor": writer,
-                        "Readers": ", ".join(sorted(readers)),
-                        "Reader Count": len(readers),
-                    }
-                )
-
-        if flow_rows:
-            flow_df = pd.DataFrame(flow_rows)
-            st.dataframe(flow_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No downstream readers detected for written tables.")
 
     st.markdown("---")
     if table_entries:
