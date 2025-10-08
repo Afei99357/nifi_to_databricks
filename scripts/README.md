@@ -9,7 +9,7 @@ Extract table references from multiple NiFi XML files and save results to CSV.
 ### Basic Usage
 
 ```bash
-python scripts/batch_table_extraction.py \
+uv run python scripts/batch_table_extraction.py \
   --input-dir ./xml_files \
   --output-file tables.csv
 ```
@@ -29,14 +29,14 @@ python scripts/batch_table_extraction.py \
 
 **Process all XML files in a directory:**
 ```bash
-python scripts/batch_table_extraction.py \
+uv run python scripts/batch_table_extraction.py \
   -i ./nifi_pipeline_file \
   -o all_tables.csv
 ```
 
 **Recursive search with verbose output:**
 ```bash
-python scripts/batch_table_extraction.py \
+uv run python scripts/batch_table_extraction.py \
   -i ./workflows \
   -o tables.csv \
   --recursive \
@@ -45,7 +45,7 @@ python scripts/batch_table_extraction.py \
 
 **Process specific file pattern:**
 ```bash
-python scripts/batch_table_extraction.py \
+uv run python scripts/batch_table_extraction.py \
   -i ./xml_files \
   -o icn8_tables.csv \
   --pattern "*ICN8*.xml"
@@ -53,7 +53,7 @@ python scripts/batch_table_extraction.py \
 
 **Continue processing if some files fail:**
 ```bash
-python scripts/batch_table_extraction.py \
+uv run python scripts/batch_table_extraction.py \
   -i ./xml_files \
   -o results.csv \
   --continue-on-error
@@ -95,24 +95,12 @@ Unique tables:          69
 Unique processors:      42
 ```
 
-### Use with Virtual Environment
-
-If you're using a Python virtual environment:
-
-```bash
-# Activate virtual environment
-source .venv/bin/activate
-
-# Run the script
-python scripts/batch_table_extraction.py -i ./xml_files -o tables.csv
-```
-
 ### Getting Help
 
 View all available options:
 
 ```bash
-python scripts/batch_table_extraction.py --help
+uv run python scripts/batch_table_extraction.py --help
 ```
 
 ## Other Scripts
