@@ -522,31 +522,68 @@ def analyze_nifi_table_lineage(
     chains = extract_atomic_chains(procs, adj, make_inter_chains=write_inter_chains)
     table_lineage_links: List[Dict[str, str]] = []
     if write_inter_chains:
-        for src_pid, targets in adj.items():
-            src_proc = procs.get(src_pid)
-            if not src_proc:
-                continue
-            writes = src_proc.get("writes") or set()
-            if not writes:
-                continue
-            for dst_pid in targets:
-                dst_proc = procs.get(dst_pid)
-                if not dst_proc:
+        # Build index of all tables written and read by each processor
+        table_writers: Dict[str, List[str]] = defaultdict(list)
+        table_readers: Dict[str, List[str]] = defaultdict(list)
+
+        for pid, proc in procs.items():
+            writes = proc.get("writes") or set()
+            reads = proc.get("reads") or set()
+            for table in writes:
+                table_writers[table].append(pid)
+            for table in reads:
+                table_readers[table].append(pid)
+
+        # Build a reachability map to determine upstream/downstream relationships
+        # If we can reach B from A through the connection graph, A is upstream of B
+        def is_reachable(start_pid: str, end_pid: str, max_depth: int = 50) -> bool:
+            """Check if end_pid is reachable from start_pid through connections."""
+            if start_pid == end_pid:
+                return False
+            visited = set()
+            queue = [(start_pid, 0)]
+            while queue:
+                current, depth = queue.pop(0)
+                if depth > max_depth:
                     continue
-                reads = dst_proc.get("reads") or set()
-                overlap = writes & reads
-                if not overlap:
+                if current == end_pid:
+                    return True
+                if current in visited:
                     continue
-                for table in overlap:
-                    table_lineage_links.append(
-                        {
-                            "table": table,
-                            "writer_id": src_pid,
-                            "writer_name": src_proc.get("name"),
-                            "reader_id": dst_pid,
-                            "reader_name": dst_proc.get("name"),
-                        }
-                    )
+                visited.add(current)
+                for neighbor in adj.get(current, []):
+                    queue.append((neighbor, depth + 1))
+            return False
+
+        # Find all table flow relationships
+        for table in table_writers.keys():
+            writers = table_writers.get(table, [])
+            readers = table_readers.get(table, [])
+
+            for writer_pid in writers:
+                writer_proc = procs.get(writer_pid)
+                if not writer_proc:
+                    continue
+
+                for reader_pid in readers:
+                    if writer_pid == reader_pid:
+                        continue  # Skip self-references
+
+                    reader_proc = procs.get(reader_pid)
+                    if not reader_proc:
+                        continue
+
+                    # Check if there's a path from writer to reader
+                    if is_reachable(writer_pid, reader_pid):
+                        table_lineage_links.append(
+                            {
+                                "table": table,
+                                "writer_id": writer_pid,
+                                "writer_name": writer_proc.get("name"),
+                                "reader_id": reader_pid,
+                                "reader_name": reader_proc.get("name"),
+                            }
+                        )
 
     dom_chains = domain_only(chains)
 
