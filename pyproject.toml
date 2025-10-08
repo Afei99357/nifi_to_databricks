@@ -78,6 +78,10 @@ ignore_errors = true  # TODO: Fix dbutils import (Databricks-specific)
 module = "utils.xml_utils"
 ignore_errors = true  # TODO: Fix Collection indexing issue
 
+[[tool.mypy.overrides]]
+module = "scripts.databricks_batch_table_extraction"
+ignore_errors = true  # Databricks-specific: dbutils and display only available in Databricks
+
 [tool.pytest.ini_options]
 # Test discovery
 testpaths = ["tests"]
