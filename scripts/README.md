@@ -8,8 +8,20 @@ Extract table references from multiple NiFi XML files and save results to CSV.
 
 ### Basic Usage
 
+**Using uv (recommended):**
 ```bash
 uv run python scripts/batch_table_extraction.py \
+  --input-dir ./xml_files \
+  --output-file tables.csv
+```
+
+**Using Python directly (requires virtual environment):**
+```bash
+# First activate virtual environment
+source .venv/bin/activate
+
+# Then run the script
+python scripts/batch_table_extraction.py \
   --input-dir ./xml_files \
   --output-file tables.csv
 ```
@@ -26,6 +38,8 @@ uv run python scripts/batch_table_extraction.py \
 | `--continue-on-error` | | Continue if a file fails | `False` |
 
 ### Examples
+
+All examples use `uv run python`. If using Python directly, activate `.venv` first and omit `uv run`.
 
 **Process all XML files in a directory:**
 ```bash
