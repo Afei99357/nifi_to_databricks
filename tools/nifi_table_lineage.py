@@ -443,7 +443,7 @@ def longest_paths(edges: Dict[str, Set[str]], max_examples: int = 5):
 def analyze_nifi_table_lineage(
     xml_path: str,
     outdir: str = ".",
-    write_inter_chains: bool = False,
+    write_inter_chains: bool = True,
     table_results: List[Dict[str, Any]] | None = None,
 ):
     """
