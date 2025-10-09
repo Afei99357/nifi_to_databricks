@@ -201,14 +201,22 @@ else:
     output_dir = output_path.parent
 
     # Save to CSV
-    # Note: For DBFS paths, you may need to use /dbfs/ prefix
+    # Handle different path types in Databricks (DBFS, Workspace, Unity Catalog Volumes)
     if str(output_file).startswith("/dbfs/"):
         save_path = output_file
     elif str(output_file).startswith("dbfs:/"):
         save_path = output_file.replace("dbfs:/", "/dbfs/")
+    elif str(output_file).startswith("/Volumes/"):
+        # Unity Catalog Volume path
+        save_path = output_file
+        # If path is a directory, append default filename
+        if not save_path.endswith(".csv"):
+            save_path = str(Path(save_path) / "batch_tables_output.csv")
     else:
         # Workspace path - may need adjustment based on your setup
         save_path = output_file
+        if not save_path.endswith(".csv"):
+            save_path = str(Path(save_path) / "batch_tables_output.csv")
 
     df.to_csv(save_path, index=False)
     print(f"✓ Wrote {len(all_tables)} table entries to {output_file}")
