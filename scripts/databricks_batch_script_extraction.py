@@ -39,12 +39,6 @@ try:
 except NameError:
     pass  # Only available in Databricks environment
 
-# Remove any existing widgets first
-try:
-    dbutils.widgets.removeAll()
-except Exception:
-    pass  # Ignore if no widgets exist
-
 # Create widgets for parameters
 dbutils.widgets.text("input_dir", "/Workspace/xml_files", "1. Input XML Directory")
 dbutils.widgets.text(
