@@ -39,33 +39,82 @@ try:
 except NameError:
     pass  # Only available in Databricks environment
 
-# Create widgets for parameters
-dbutils.widgets.text("input_dir", "/Workspace/xml_files", "1. Input XML Directory")
-dbutils.widgets.text(
+
+# --- Safe widgets helper for Databricks notebooks ---
+def _has_dbutils():
+    try:
+        dbutils  # type: ignore  # noqa: F821
+        return True
+    except NameError:
+        return False
+
+
+def get_arg(name: str, default: str = "") -> str:
+    """
+    Robustly fetch a widget/argument value:
+    - If widget exists -> get it
+    - Else try getArgument (older runtime compatibility)
+    - Else return default
+    """
+    if not _has_dbutils():
+        return default
+
+    # Try widget get
+    try:
+        return dbutils.widgets.get(name)  # type: ignore  # noqa: F821
+    except Exception:
+        pass
+
+    # Try older API
+    try:
+        return dbutils.widgets.getArgument(name, default)  # type: ignore  # noqa: F821
+    except Exception:
+        return default
+
+
+def ensure_text_widget(name: str, default: str, label: str):
+    if not _has_dbutils():
+        return
+    try:
+        # If it already exists, don't recreate; just ensure there's a value
+        _ = dbutils.widgets.get(name)  # type: ignore  # noqa: F821
+    except Exception:
+        dbutils.widgets.text(name, default, label)  # type: ignore  # noqa: F821
+
+
+# ---- Define + ensure widgets exist (idempotent) ----
+ensure_text_widget("input_dir", "/Workspace/xml_files", "1. Input XML Directory")
+ensure_text_widget(
     "output_file", "/Workspace/results/scripts.csv", "2. Output CSV File"
 )
-dbutils.widgets.text("recursive", "False", "3. Recursive Search (True/False)")
-dbutils.widgets.text("file_pattern", "*.xml", "4. File Pattern")
-dbutils.widgets.text(
+ensure_text_widget("recursive", "False", "3. Recursive Search (True/False)")
+ensure_text_widget("file_pattern", "*.xml", "4. File Pattern")
+ensure_text_widget(
     "tools_path", "/Workspace/Users/<your-email>/nifi_tools", "5. Tools Path"
 )
 
-# Get parameter values
-input_dir = dbutils.widgets.get("input_dir")
-output_file = dbutils.widgets.get("output_file")
-recursive = dbutils.widgets.get("recursive").strip().lower() in ("true", "1", "yes")
-file_pattern = dbutils.widgets.get("file_pattern")
-tools_path = dbutils.widgets.get("tools_path")
+# ---- Read args with fallbacks ----
+input_dir = get_arg("input_dir", "/Workspace/xml_files")
+output_file = get_arg("output_file", "/Workspace/results/scripts.csv")
+recursive_s = get_arg("recursive", "False")
+file_pattern = get_arg("file_pattern", "*.xml")
+tools_path = get_arg("tools_path", "/Workspace/Users/<your-email>/nifi_tools")
+
+# Parse boolean robustly
+recursive = str(recursive_s).strip().lower() in {"true", "1", "yes", "y", "t"}
 
 # Add tools path to Python path
-sys.path.insert(0, tools_path)
+if tools_path and tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
 
-print(f"✓ Configuration loaded:")
-print(f"  Input Directory: {input_dir}")
-print(f"  Output File: {output_file}")
-print(f"  Recursive: {recursive}")
-print(f"  File Pattern: {file_pattern}")
-print(f"  Tools Path: {tools_path}")
+# Echo config in the notebook output
+if _has_dbutils():
+    print("✓ Configuration loaded:")
+    print(f"  Input Directory: {input_dir}")
+    print(f"  Output File:     {output_file}")
+    print(f"  Recursive:       {recursive}")
+    print(f"  File Pattern:    {file_pattern}")
+    print(f"  Tools Path:      {tools_path}")
 
 # COMMAND ----------
 
