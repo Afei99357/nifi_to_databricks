@@ -44,7 +44,7 @@ dbutils.widgets.text("input_dir", "/Workspace/xml_files", "1. Input XML Director
 dbutils.widgets.text(
     "output_file", "/Workspace/results/scripts.csv", "2. Output CSV File"
 )
-dbutils.widgets.dropdown("recursive", "False", ["True", "False"], "3. Recursive Search")
+dbutils.widgets.text("recursive", "False", "3. Recursive Search (True/False)")
 dbutils.widgets.text("file_pattern", "*.xml", "4. File Pattern")
 dbutils.widgets.text(
     "tools_path", "/Workspace/Users/<your-email>/nifi_tools", "5. Tools Path"
@@ -53,7 +53,7 @@ dbutils.widgets.text(
 # Get parameter values
 input_dir = dbutils.widgets.get("input_dir")
 output_file = dbutils.widgets.get("output_file")
-recursive = dbutils.widgets.get("recursive") == "True"
+recursive = dbutils.widgets.get("recursive").strip().lower() in ("true", "1", "yes")
 file_pattern = dbutils.widgets.get("file_pattern")
 tools_path = dbutils.widgets.get("tools_path")
 
