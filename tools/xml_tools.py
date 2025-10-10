@@ -32,6 +32,8 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
 
     processors: List[Dict[str, Any]] = []
     connections: List[Dict[str, Any]] = []
+    input_ports: List[Dict[str, Any]] = []
+    output_ports: List[Dict[str, Any]] = []
 
     # Build process group mapping (name + parent) for hierarchy resolution
     process_groups: Dict[str, Dict[str, Any]] = {}
@@ -99,10 +101,36 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
 
         processors.append(proc_info)
 
+    # Extract input ports
+    for port in root.findall(".//inputPorts"):
+        port_id = _trim(port.findtext("id") or "Unknown")
+        parent_group_id = port.findtext("parentGroupId")
+        input_ports.append(
+            {
+                "id": port_id,
+                "name": _trim(port.findtext("name") or "Unknown"),
+                "parentGroupId": parent_group_id,
+            }
+        )
+
+    # Extract output ports
+    for port in root.findall(".//outputPorts"):
+        port_id = _trim(port.findtext("id") or "Unknown")
+        parent_group_id = port.findtext("parentGroupId")
+        output_ports.append(
+            {
+                "id": port_id,
+                "name": _trim(port.findtext("name") or "Unknown"),
+                "parentGroupId": parent_group_id,
+            }
+        )
+
     # Extract connections
     for connection in root.findall(".//connections"):
         source = _trim(connection.findtext(".//source/id") or "Unknown")
         destination = _trim(connection.findtext(".//destination/id") or "Unknown")
+        source_type = _trim(connection.findtext(".//source/type") or "PROCESSOR")
+        dest_type = _trim(connection.findtext(".//destination/type") or "PROCESSOR")
         rels = [
             _trim(rel.text or "")
             for rel in connection.findall(".//selectedRelationships")
@@ -112,6 +140,8 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
             {
                 "source": source,
                 "destination": destination,
+                "source_type": source_type,
+                "destination_type": dest_type,
                 "relationships": rels,
             }
         )
@@ -119,6 +149,8 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
     return {
         "processors": processors,
         "connections": connections,
+        "input_ports": input_ports,
+        "output_ports": output_ports,
         "processor_count": len(processors),
         "connection_count": len(connections),
         "process_groups": process_groups,

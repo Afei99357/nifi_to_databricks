@@ -34,11 +34,15 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
     template_data = parse_nifi_template_impl(xml_content)
     processors = template_data["processors"]
     connections = template_data["connections"]
+    input_ports = template_data.get("input_ports", [])
+    output_ports = template_data.get("output_ports", [])
 
     # Extract variable patterns
     variable_definitions = find_variable_definitions(processors)
     variable_usage = find_variable_usage(processors)
-    variable_flows = trace_variable_flows(processors, connections)
+    variable_flows = trace_variable_flows(
+        processors, connections, input_ports, output_ports
+    )
 
     # Build comprehensive mapping
     all_variables = set(variable_definitions.keys()) | set(variable_usage.keys())
@@ -215,8 +219,125 @@ def find_variable_usage(processors: List[Dict[str, Any]]) -> Dict[str, List]:
     return dict(variable_usage)
 
 
+def _build_flattened_connection_graph(
+    connections: List[Dict[str, Any]],
+    input_ports: List[Dict[str, Any]],
+    output_ports: List[Dict[str, Any]],
+    processor_lookup: Dict[str, Dict[str, Any]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Build a flattened connection graph that resolves through input/output ports.
+
+    This function traces connections across process group boundaries by:
+    1. Finding processor->input_port connections
+    2. Finding output_port->processor connections
+    3. Resolving port-to-port connections within groups
+    4. Creating direct processor-to-processor edges
+
+    Args:
+        connections: List of all connections
+        input_ports: List of input ports
+        output_ports: List of output ports
+        processor_lookup: Dict mapping processor IDs to processor info
+
+    Returns:
+        Dict mapping processor IDs to list of their downstream connections
+    """
+    connection_graph = defaultdict(list)
+
+    # Build port lookups
+    input_port_lookup = {p["id"]: p for p in input_ports}
+    output_port_lookup = {p["id"]: p for p in output_ports}
+
+    # Group connections by type
+    proc_to_proc = []  # Direct processor to processor
+    proc_to_input = defaultdict(list)  # Processor to input port
+    output_to_proc = defaultdict(list)  # Output port to processor
+    proc_to_output = defaultdict(list)  # Processor to output port
+    input_to_proc = defaultdict(list)  # Input port to processor
+    port_to_port = []  # Port to port connections
+
+    for conn in connections:
+        source_id = conn["source"]
+        dest_id = conn["destination"]
+        source_type = conn.get("source_type", "PROCESSOR")
+        dest_type = conn.get("destination_type", "PROCESSOR")
+        relationships = conn.get("relationships", [])
+
+        conn_info = {
+            "relationships": relationships,
+            "connection_id": conn.get("id", "unknown"),
+        }
+
+        # Categorize connection
+        if source_type == "PROCESSOR" and dest_type == "PROCESSOR":
+            if source_id in processor_lookup and dest_id in processor_lookup:
+                proc_to_proc.append((source_id, dest_id, conn_info))
+        elif source_type == "PROCESSOR" and dest_type == "INPUT_PORT":
+            proc_to_input[source_id].append((dest_id, conn_info))
+        elif source_type == "OUTPUT_PORT" and dest_type == "PROCESSOR":
+            output_to_proc[source_id].append((dest_id, conn_info))
+        elif source_type == "PROCESSOR" and dest_type == "OUTPUT_PORT":
+            proc_to_output[source_id].append((dest_id, conn_info))
+        elif source_type == "INPUT_PORT" and dest_type == "PROCESSOR":
+            input_to_proc[source_id].append((dest_id, conn_info))
+        elif "PORT" in source_type or "PORT" in dest_type:
+            port_to_port.append((source_id, dest_id, source_type, dest_type, conn_info))
+
+    # Add direct processor-to-processor connections
+    for source_id, dest_id, conn_info in proc_to_proc:
+        connection_graph[source_id].append(
+            {
+                "target_id": dest_id,
+                "relationships": conn_info["relationships"],
+                "connection_id": conn_info["connection_id"],
+            }
+        )
+
+    # Resolve processor -> input_port -> processor connections
+    # When a processor connects to an input port, find which processors that input port connects to
+    for proc_id, port_connections in proc_to_input.items():
+        for input_port_id, conn_info in port_connections:
+            # Find processors that this input port connects to
+            for target_proc_id, target_conn_info in input_to_proc.get(
+                input_port_id, []
+            ):
+                if target_proc_id in processor_lookup:
+                    connection_graph[proc_id].append(
+                        {
+                            "target_id": target_proc_id,
+                            "relationships": conn_info["relationships"],
+                            "connection_id": conn_info["connection_id"],
+                            "via_port": input_port_id,
+                        }
+                    )
+
+    # Resolve processor -> output_port -> processor connections
+    # When a processor connects to an output port, find which processors that output port connects to
+    for proc_id, port_connections in proc_to_output.items():
+        for output_port_id, conn_info in port_connections:
+            # Find processors that this output port connects to
+            for target_proc_id, target_conn_info in output_to_proc.get(
+                output_port_id, []
+            ):
+                if target_proc_id in processor_lookup:
+                    connection_graph[proc_id].append(
+                        {
+                            "target_id": target_proc_id,
+                            "relationships": conn_info["relationships"],
+                            "connection_id": conn_info["connection_id"],
+                            "via_port": output_port_id,
+                        }
+                    )
+
+    return connection_graph
+
+
 def trace_variable_flows(
-    processors: List[Dict[str, Any]], connections: List[Dict[str, Any]]
+    processors: List[Dict[str, Any]],
+    connections: List[Dict[str, Any]],
+    input_ports: List[Dict[str, Any]],
+    output_ports: List[Dict[str, Any]],
 ) -> Dict[str, List]:
     """
     Trace how variables flow through processor connections.
@@ -224,27 +345,19 @@ def trace_variable_flows(
     Args:
         processors: List of all processors
         connections: List of all connections
+        input_ports: List of all input ports
+        output_ports: List of all output ports
 
     Returns:
         Dictionary mapping variable names to their flow chains
     """
     # Build processor lookup and connection graph
     processor_lookup = {p["id"]: p for p in processors}
-    connection_graph = defaultdict(list)
 
-    for conn in connections:
-        source_id = conn["source"]
-        dest_id = conn["destination"]
-        relationships = conn.get("relationships", [])
-
-        if source_id in processor_lookup and dest_id in processor_lookup:
-            connection_graph[source_id].append(
-                {
-                    "target_id": dest_id,
-                    "relationships": relationships,
-                    "connection_id": conn.get("id", "unknown"),
-                }
-            )
+    # Build flattened connection graph that resolves through ports
+    connection_graph = _build_flattened_connection_graph(
+        connections, input_ports, output_ports, processor_lookup
+    )
 
     # Get variable definitions and usage
     variable_definitions = find_variable_definitions(processors)
