@@ -26,18 +26,10 @@
 
 # COMMAND ----------
 
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+# Remove existing widgets if they exist
+dbutils.widgets.removeAll()
 
-import pandas as pd
-
-# Type stubs for Databricks-specific functions (ignored by mypy)
-try:
-    dbutils  # type: ignore
-    display  # type: ignore
-except NameError:
-    pass  # Only available in Databricks environment
+# COMMAND ----------
 
 # Create widgets for parameters
 dbutils.widgets.text("input_dir", "/Workspace/xml_files", "1. Input XML Directory")
@@ -49,6 +41,14 @@ dbutils.widgets.text("file_pattern", "*.xml", "4. File Pattern")
 dbutils.widgets.text(
     "tools_path", "/Workspace/Users/<your-email>/nifi_tools", "5. Tools Path"
 )
+
+# COMMAND ----------
+
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import pandas as pd
 
 # Get parameter values
 input_dir = dbutils.widgets.get("input_dir")
