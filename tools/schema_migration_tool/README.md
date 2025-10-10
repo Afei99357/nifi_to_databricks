@@ -1,500 +1,487 @@
-# Table Migration Tools: Hive/HDFS to Databricks
+# Schema Migration Tool
 
-This directory contains tools for migrating external Hive tables from HDFS to Databricks Delta tables.
+Convert Hive/Impala `CREATE EXTERNAL TABLE` DDL statements to Databricks-compatible DDL.
 
-## Contents
+## Features
 
-1. **`table_ddl_converter.py`** - Python script to generate Databricks-compatible DDL from Hive DDL
-2. **`databricks_table_migration.py`** - Databricks notebook for end-to-end table migration
-3. **`README.md`** - This documentation
+- **Automatic DDL Parsing** - Parses Hive/Impala DDL and extracts table structure
+- **Path Conversion** - Converts HDFS paths to Databricks storage paths
+- **Type Optimization** - Automatically converts STRING timestamp columns to TIMESTAMP
+- **Multiple Formats** - Generate Delta table (recommended) or External Parquet DDL
+- **CLI Tool** - Simple command-line interface
+- **Python API** - Programmatic access for automation
 
 ## Quick Start
 
-### Option 1: Generate DDL Only (No Data Migration)
+### Input: Hive DDL
+```sql
+CREATE EXTERNAL TABLE obf_schema.obf_table_raw (
+  col_a STRING,
+  col_b_ts STRING,
+  col_c_ts STRING,
+  col_d INT
+)
+PARTITIONED BY (
+  part_a_ts STRING,
+  part_b_ts STRING
+)
+STORED AS PARQUET
+LOCATION 'hdfs://files-dev-server-1/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw'
+```
 
-Use this when you just need the table structure in Databricks:
+### Output: Databricks Delta DDL
+```sql
+CREATE TABLE obf_schema.obf_table_raw (
+  col_a STRING,
+  col_b_ts TIMESTAMP,  -- Converted from STRING
+  col_c_ts TIMESTAMP,  -- Converted from STRING
+  col_d INT,
+  part_a_ts STRING,
+  part_b_ts STRING
+)
+USING DELTA
+PARTITIONED BY (part_a_ts, part_b_ts)
+LOCATION 'dbfs:/mnt/warehouse/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw'
+TBLPROPERTIES (
+  'delta.autoOptimize.optimizeWrite' = 'true',
+  'delta.autoOptimize.autoCompact' = 'true'
+);
+```
+
+## Installation
+
+No installation required - just use the Python files directly:
 
 ```bash
-# Run the DDL converter
-cd tools/migration
-python table_ddl_converter.py
+cd tools/schema_migration_tool
 ```
 
-This will output:
-- Delta table DDL (recommended)
-- External Parquet table DDL (minimal changes)
+## Usage
 
-### Option 2: Full Migration with Data
+### Option 1: Command Line
 
-Use the Databricks notebook for complete migration:
+```bash
+# Basic usage - file to file
+python convert_ddl.py --input hive_table.sql --output databricks_table.sql
 
-1. Upload `databricks_table_migration.py` to Databricks Workspace
-2. Open the notebook in Databricks
-3. Configure parameters in the widgets
-4. Run all cells
+# Read from stdin
+cat hive_table.sql | python convert_ddl.py > databricks_table.sql
 
-## Detailed Usage
+# Specify migration type
+python convert_ddl.py -i hive.sql -o databricks.sql --type delta
 
-### 1. DDL Converter (`table_ddl_converter.py`)
+# Choose storage target
+python convert_ddl.py -i hive.sql --storage azure
 
-#### Basic Usage
+# Disable type optimization
+python convert_ddl.py -i hive.sql --no-optimize
+```
+
+**CLI Options:**
+- `-i, --input` - Input Hive DDL file (default: stdin)
+- `-o, --output` - Output Databricks DDL file (default: stdout)
+- `-t, --type` - Migration type: `delta` or `external` (default: delta)
+- `-s, --storage` - Storage type: `dbfs`, `azure`, `aws`, `unity_catalog` (default: dbfs)
+- `--optimize` - Optimize column types (default: enabled)
+- `--no-optimize` - Disable type optimization
+
+### Option 2: Python API
 
 ```python
-from tools.migration.table_ddl_converter import generate_full_migration_ddl
+from tools.schema_migration_tool import convert_hive_to_databricks
 
-# Define your table structure
-schema = "my_schema"
-table = "my_table"
+# Your Hive DDL
+hive_ddl = """
+CREATE EXTERNAL TABLE my_schema.my_table (
+  id INT,
+  created_ts STRING,
+  name STRING
+)
+PARTITIONED BY (date STRING)
+STORED AS PARQUET
+LOCATION 'hdfs://namenode/warehouse/my_schema.db/my_table'
+"""
 
-data_columns = [
-    ("col_a", "STRING"),
-    ("col_b", "INT"),
-    ("col_c_ts", "STRING"),  # Will be converted to TIMESTAMP if optimize_types=True
-]
-
-partition_columns = [
-    ("date_partition", "STRING"),
-]
-
-hdfs_path = "hdfs://namenode:8020/user/hive/warehouse/my_schema.db/my_table"
-
-# Generate Delta table DDL
-ddl = generate_full_migration_ddl(
-    schema_name=schema,
-    table_name=table,
-    columns=data_columns,
-    partition_columns=partition_columns,
-    hdfs_location=hdfs_path,
-    target_storage="dbfs",  # or "azure", "aws", "unity_catalog"
-    migration_approach="delta"  # or "external"
+# Convert to Databricks Delta DDL
+databricks_ddl = convert_hive_to_databricks(
+    hive_ddl,
+    target_storage="dbfs",      # or "azure", "aws", "unity_catalog"
+    migration_type="delta",     # or "external"
+    optimize_types=True         # Convert STRING timestamps to TIMESTAMP
 )
 
-print(ddl)
+print(databricks_ddl)
 ```
 
-#### Path Conversion Options
+### Option 3: Interactive Python
 
 ```python
-from tools.migration.table_ddl_converter import convert_hdfs_to_databricks_path
+from tools.schema_migration_tool import HiveDDLParser, DatabricksDDLGenerator
 
-hdfs_path = "hdfs://namenode/user/hive/warehouse/schema/table"
+# Parse Hive DDL
+parser = HiveDDLParser(your_hive_ddl)
+parsed = parser.parse()
 
-# DBFS (Databricks File System)
-dbfs_path = convert_hdfs_to_databricks_path(hdfs_path, "dbfs")
-# Result: "dbfs:/mnt/warehouse/user/hive/warehouse/schema/table"
+# Show what was parsed
+print(parser.summary())
 
-# Azure Blob Storage
-azure_path = convert_hdfs_to_databricks_path(hdfs_path, "azure")
-# Result: "abfss://<container>@<storage_account>.dfs.core.windows.net/..."
-
-# AWS S3
-s3_path = convert_hdfs_to_databricks_path(hdfs_path, "s3")
-# Result: "s3://<bucket_name>/..."
-
-# Unity Catalog Volume
-uc_path = convert_hdfs_to_databricks_path(hdfs_path, "unity_catalog")
-# Result: "/Volumes/<catalog>/<schema>/<volume>/..."
+# Generate Databricks DDL
+generator = DatabricksDDLGenerator(parsed)
+delta_ddl = generator.generate_delta_ddl(target_storage="dbfs")
+print(delta_ddl)
 ```
 
-#### Type Optimization
+## Examples
 
-```python
-from tools.migration.table_ddl_converter import optimize_timestamp_columns
+### Example 1: Simple Table
 
-columns = [
-    ("id", "INT"),
-    ("created_ts", "STRING"),  # Will be converted
-    ("updated_ts", "STRING"),  # Will be converted
-    ("name", "STRING"),  # Will stay as STRING
-]
-
-optimized = optimize_timestamp_columns(columns, convert_timestamps=True)
-# Result: [("id", "INT"), ("created_ts", "TIMESTAMP"),
-#          ("updated_ts", "TIMESTAMP"), ("name", "STRING")]
-```
-
-### 2. Databricks Migration Notebook
-
-#### Parameters
-
-Configure these widgets in the notebook:
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `source_path` | Source HDFS/Hive path | `hdfs://namenode/user/hive/warehouse/schema/table` |
-| `target_path` | Target Databricks path | `dbfs:/mnt/warehouse/` |
-| `schema_name` | Target schema name | `production` |
-| `table_name` | Target table name | `my_table` |
-| `partition_columns` | Comma-separated partition columns | `date_partition,region` |
-| `convert_timestamps` | Convert _ts STRING columns to TIMESTAMP | `true` |
-
-#### Migration Steps
-
-The notebook performs these steps automatically:
-
-1. **Configuration** - Load parameters from widgets
-2. **Read Source** - Read data from HDFS/Hive
-3. **Transform** - Convert timestamp columns (optional)
-4. **Write Delta** - Write data in Delta format with partitioning
-5. **Create Table** - Register table in metastore
-6. **Verify** - Run verification queries
-7. **Optimize** - Run OPTIMIZE and optional Z-ORDER
-8. **Summary** - Display migration summary
-
-#### Example Workflow
-
-```python
-# 1. Configure widgets (done in notebook UI)
-source_path = "hdfs://namenode/warehouse/obf_schema.db/obf_table_raw"
-target_path = "dbfs:/mnt/warehouse/"
-schema_name = "obf_schema"
-table_name = "obf_table_raw"
-partition_columns = "part_a_ts,part_b_ts,part_suffix"
-convert_timestamps = "true"
-
-# 2. Run all cells
-# The notebook will:
-#   - Read ~1M rows from source
-#   - Convert 10 _ts columns to TIMESTAMP
-#   - Write Delta with 3 partition columns
-#   - Create table obf_schema.obf_table_raw
-#   - Run OPTIMIZE
-#   - Display statistics
-```
-
-## Migration Strategies
-
-### Strategy 1: Lift and Shift (External Parquet)
-
-**When to use:**
-- Quick migration needed
-- Data stays in original format
-- Minimal changes to queries
-
-**Pros:**
-- Fastest migration
-- No data movement
-- Nearly identical to Hive
-
-**Cons:**
-- No Delta benefits (ACID, time travel, etc.)
-- No type optimization
-- Limited performance improvements
-
-**DDL:**
+**Input (Hive):**
 ```sql
-CREATE EXTERNAL TABLE schema.table (...)
+CREATE EXTERNAL TABLE sales.orders (
+  order_id INT,
+  customer_id INT,
+  order_date STRING,
+  amount DOUBLE
+)
+STORED AS PARQUET
+LOCATION 'hdfs://namenode/warehouse/sales.db/orders'
+```
+
+**Command:**
+```bash
+echo "CREATE EXTERNAL TABLE ..." | python convert_ddl.py
+```
+
+**Output (Databricks Delta):**
+```sql
+CREATE SCHEMA IF NOT EXISTS sales;
+
+CREATE TABLE sales.orders (
+  order_id INT,
+  customer_id INT,
+  order_date STRING,
+  amount DOUBLE
+)
+USING DELTA
+LOCATION 'dbfs:/mnt/warehouse/warehouse/sales.db/orders'
+TBLPROPERTIES (
+  'delta.autoOptimize.optimizeWrite' = 'true',
+  'delta.autoOptimize.autoCompact' = 'true'
+);
+```
+
+### Example 2: Partitioned Table with Timestamps
+
+**Input (Hive):**
+```sql
+CREATE EXTERNAL TABLE events.user_activity (
+  user_id INT,
+  event_type STRING,
+  event_ts STRING,
+  properties STRING
+)
+PARTITIONED BY (
+  date_partition STRING,
+  hour_partition INT
+)
+STORED AS PARQUET
+LOCATION 'hdfs://namenode/warehouse/events.db/user_activity'
+```
+
+**Command:**
+```bash
+python convert_ddl.py -i hive_events.sql -o databricks_events.sql --type delta
+```
+
+**Output (Databricks Delta with optimized types):**
+```sql
+CREATE TABLE events.user_activity (
+  user_id INT,
+  event_type STRING,
+  event_ts TIMESTAMP,  -- Converted from STRING
+  properties STRING,
+  date_partition STRING,
+  hour_partition INT
+)
+USING DELTA
+PARTITIONED BY (date_partition, hour_partition)
+LOCATION 'dbfs:/mnt/warehouse/warehouse/events.db/user_activity'
+TBLPROPERTIES (
+  'delta.autoOptimize.optimizeWrite' = 'true',
+  'delta.autoOptimize.autoCompact' = 'true'
+);
+```
+
+### Example 3: Azure Storage
+
+**Command:**
+```bash
+python convert_ddl.py -i hive.sql --storage azure
+```
+
+**Output:**
+```sql
+...
+LOCATION 'abfss://<container>@<storage_account>.dfs.core.windows.net/warehouse/...'
+...
+```
+
+### Example 4: External Parquet (Minimal Migration)
+
+**Command:**
+```bash
+python convert_ddl.py -i hive.sql --type external --no-optimize
+```
+
+**Output:**
+```sql
+CREATE EXTERNAL TABLE my_schema.my_table (
+  col_a STRING,
+  col_b_ts STRING  -- Kept as STRING
+)
+PARTITIONED BY (
+  date_partition STRING
+)
 STORED AS PARQUET
 LOCATION 'dbfs:/mnt/warehouse/...';
 ```
 
-### Strategy 2: Convert to Delta (Recommended)
+## Storage Path Conversion
+
+The tool automatically converts HDFS paths to Databricks-compatible paths:
+
+| Source (HDFS) | Target Type | Result |
+|---------------|-------------|---------|
+| `hdfs://namenode/user/hive/warehouse/db/table` | `dbfs` | `dbfs:/mnt/warehouse/user/hive/warehouse/db/table` |
+| `hdfs://namenode/user/hive/warehouse/db/table` | `azure` | `abfss://<container>@<storage>.dfs.core.windows.net/user/hive/warehouse/db/table` |
+| `hdfs://namenode/user/hive/warehouse/db/table` | `aws` | `s3://<bucket>/user/hive/warehouse/db/table` |
+| `hdfs://namenode/user/hive/warehouse/db/table` | `unity_catalog` | `/Volumes/<catalog>/<schema>/<volume>/db/table` |
+
+**Note:** For Azure, AWS, and Unity Catalog, you'll need to replace the placeholders (`<container>`, `<storage_account>`, `<bucket>`, `<catalog>`, etc.) with your actual values.
+
+## Type Optimization
+
+When `--optimize` is enabled (default), the tool converts STRING columns ending with `_ts` to TIMESTAMP:
+
+| Hive Type | Column Name Pattern | Databricks Type |
+|-----------|---------------------|-----------------|
+| `STRING` | `*_ts` | `TIMESTAMP` |
+| `STRING` | Other | `STRING` |
+| `INT`, `DOUBLE`, etc. | Any | Unchanged |
+
+**Example:**
+- `created_ts STRING` → `created_ts TIMESTAMP`
+- `updated_ts STRING` → `updated_ts TIMESTAMP`
+- `name STRING` → `name STRING` (no change)
+
+## Migration Types
+
+### Delta Table (Recommended)
 
 **When to use:**
-- Long-term production use
+- Production workloads
 - Need ACID transactions
-- Want performance optimization
+- Want time travel / versioning
+- Need update/delete support
 
-**Pros:**
-- Full Delta features (ACID, time travel, schema evolution)
+**Advantages:**
+- Full ACID transactions
+- Time travel (query historical versions)
+- Schema evolution
 - Better query performance
 - Auto-optimization
-- Updates/deletes supported
+- Update/delete support
 
-**Cons:**
-- Requires data copy/conversion
-- Takes longer for large tables
-- May need type adjustments
-
-**DDL:**
-```sql
-CREATE TABLE schema.table (...)
-USING DELTA
-PARTITIONED BY (...)
-LOCATION 'dbfs:/mnt/warehouse/...';
+**Command:**
+```bash
+python convert_ddl.py -i hive.sql --type delta
 ```
 
-### Strategy 3: Delta with Type Optimization
+### External Parquet Table
 
 **When to use:**
-- Building for long-term
-- Want best practices
-- Can tolerate schema changes
+- Quick migration / testing
+- Data stays in original format
+- Read-only access
 
-**Pros:**
-- All Delta benefits
-- Proper data types (TIMESTAMP instead of STRING)
-- Better compression
-- More efficient queries
+**Advantages:**
+- Fastest migration
+- No data movement
+- Minimal changes from Hive
 
-**Cons:**
-- Longest migration time
-- Requires testing type conversions
-- May need query updates
-
-**Example Conversions:**
-```sql
--- Before (Hive)
-col_created_ts STRING  -- "2024-01-01 10:30:00"
-
--- After (Databricks optimized)
-col_created_ts TIMESTAMP  -- Proper timestamp type
+**Command:**
+```bash
+python convert_ddl.py -i hive.sql --type external
 ```
 
-## Common Migration Patterns
+## Workflow
 
-### Pattern 1: Daily Partitioned Tables
-
-```python
-# Original Hive table
-partition_columns = [("date_partition", "STRING")]  # Format: "2024-01-01"
-
-# Databricks Delta - keep as STRING or convert to DATE
-partition_columns = [("date_partition", "DATE")]  # More efficient
-```
-
-### Pattern 2: Multi-Level Partitioning
-
-```python
-# Original Hive (fine-grained partitioning)
-partition_columns = [
-    ("year", "INT"),
-    ("month", "INT"),
-    ("day", "INT"),
-    ("region", "STRING")
-]
-
-# Databricks Delta - consider simplifying
-partition_columns = [("date_partition", "DATE")]  # Simpler
-# Use Z-ORDER for secondary dimensions
-# OPTIMIZE table ZORDER BY (region)
-```
-
-### Pattern 3: Timestamp-Heavy Tables
-
-```python
-# Original Hive (all STRING timestamps)
-columns = [
-    ("event_ts", "STRING"),
-    ("created_ts", "STRING"),
-    ("updated_ts", "STRING"),
-]
-
-# Databricks Delta - convert to proper types
-columns = [
-    ("event_ts", "TIMESTAMP"),
-    ("created_ts", "TIMESTAMP"),
-    ("updated_ts", "TIMESTAMP"),
-]
-
-# In notebook, specify timestamp format
-timestamp_format = "yyyy-MM-dd HH:mm:ss"
-```
-
-## Example: Complete Migration
-
-Here's a complete example migrating the table from your DDL:
-
-### Step 1: Analyze Source Table
+### Step 1: Get Hive DDL
 
 ```sql
--- In Hive/source system
-DESCRIBE EXTENDED obf_schema.obf_table_raw;
-SHOW PARTITIONS obf_schema.obf_table_raw;
-SELECT COUNT(*) FROM obf_schema.obf_table_raw;
+-- In Hive/Impala
+SHOW CREATE TABLE my_schema.my_table;
 ```
 
-### Step 2: Generate DDL
+Copy the output to a file (e.g., `hive_table.sql`)
 
-```python
-# Run this locally or in Databricks
-from tools.migration.table_ddl_converter import generate_full_migration_ddl
+### Step 2: Convert DDL
 
-schema = "obf_schema"
-table = "obf_table_raw"
-
-data_columns = [
-    ("col_a", "STRING"),
-    ("col_b_ts", "STRING"),
-    # ... all 26 columns
-]
-
-partition_columns = [
-    ("part_a_ts", "STRING"),
-    ("part_b_ts", "STRING"),
-    ("part_suffix", "STRING"),
-]
-
-hdfs_path = "hdfs://files-dev-server-1/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw"
-
-# Generate Delta DDL
-delta_ddl = generate_full_migration_ddl(
-    schema, table, data_columns, partition_columns,
-    hdfs_path, "dbfs", "delta"
-)
-
-# Save to file
-with open("obf_table_migration.sql", "w") as f:
-    f.write(delta_ddl)
+```bash
+python convert_ddl.py -i hive_table.sql -o databricks_table.sql
 ```
 
-### Step 3: Migrate Data (Databricks Notebook)
+### Step 3: Review Generated DDL
 
-Upload `databricks_table_migration.py` to Databricks and configure:
+Open `databricks_table.sql` and review:
+- Table and schema names
+- Column types (especially timestamp conversions)
+- Storage location path
+- Partition strategy
 
+### Step 4: Execute in Databricks
+
+```sql
+-- In Databricks SQL Editor or Notebook
+%sql
+-- Copy and paste the generated DDL
+CREATE TABLE ...
 ```
-source_path: hdfs://files-dev-server-1/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw
-target_path: dbfs:/mnt/warehouse/
-schema_name: obf_schema
-table_name: obf_table_raw
-partition_columns: part_a_ts,part_b_ts,part_suffix
-convert_timestamps: true
-```
 
-### Step 4: Verify Migration
+### Step 5: Migrate Data
+
+If you need to copy data (not just create table structure):
 
 ```sql
 -- In Databricks
-SELECT COUNT(*) FROM obf_schema.obf_table_raw;
-
-SELECT part_a_ts, part_b_ts, COUNT(*) as row_count
-FROM obf_schema.obf_table_raw
-GROUP BY part_a_ts, part_b_ts
-ORDER BY part_a_ts, part_b_ts;
-
--- Compare with source
--- Source count: X rows
--- Target count: X rows (should match)
+INSERT INTO target_schema.target_table
+SELECT * FROM source_schema.source_table;
 ```
 
-### Step 5: Optimize
-
-```sql
--- Run optimization
-OPTIMIZE obf_schema.obf_table_raw;
-
--- Optional: Z-order by frequently filtered columns
-OPTIMIZE obf_schema.obf_table_raw ZORDER BY (col_a, part_suffix);
-
--- Check table statistics
-DESCRIBE DETAIL obf_schema.obf_table_raw;
-```
-
-### Step 6: Update Applications
-
-1. Update NiFi flows to write to new Delta location
-2. Update downstream queries to use new table
-3. Test end-to-end
-4. Monitor performance
+Or use the data migration notebook (to be created).
 
 ## Troubleshooting
 
-### Issue: "Path does not exist"
+### Issue: "Could not extract table name"
 
-**Problem:** Source HDFS path is not accessible from Databricks
+**Problem:** DDL format not recognized
+
+**Solution:** Ensure your DDL starts with `CREATE EXTERNAL TABLE` or `CREATE TABLE`
+
+### Issue: Columns missing from output
+
+**Problem:** Complex DDL with nested types or comments
+
+**Solution:** Simplify the DDL or report the issue with an example
+
+### Issue: Wrong storage path
+
+**Problem:** Path conversion didn't work as expected
+
+**Solution:** Manually edit the `LOCATION` clause in the generated DDL
+
+### Issue: Timestamp columns not converted
+
+**Problem:** Columns don't end with `_ts`
 
 **Solution:**
-1. Verify HDFS connectivity from Databricks
-2. Or copy data to Databricks-accessible storage first:
-   ```python
-   # Copy from HDFS to DBFS
-   dbutils.fs.cp("hdfs://...", "dbfs:/tmp/migration/", recurse=True)
-   ```
+1. Use `--no-optimize` and manually edit the DDL, or
+2. Rename columns to follow the `*_ts` convention
 
-### Issue: "Cannot parse timestamp"
+## Advanced Usage
 
-**Problem:** Timestamp format doesn't match expected format
+### Custom Type Conversions
 
-**Solution:**
-Modify the `convert_timestamp_columns` function with your format:
 ```python
-# In notebook cell
-timestamp_format = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"  # ISO format
-# or
-timestamp_format = "MM/dd/yyyy HH:mm:ss"  # US format
+from tools.schema_migration_tool import HiveDDLParser, DatabricksDDLGenerator
+
+parser = HiveDDLParser(hive_ddl)
+parsed = parser.parse()
+
+# Custom column type modification
+custom_columns = []
+for col_name, col_type in parsed['columns']:
+    if col_name == 'special_column':
+        custom_columns.append((col_name, 'DECIMAL(10,2)'))
+    else:
+        custom_columns.append((col_name, col_type))
+
+parsed['columns'] = custom_columns
+
+generator = DatabricksDDLGenerator(parsed)
+ddl = generator.generate_delta_ddl()
+print(ddl)
 ```
 
-### Issue: "Too many partitions"
+### Batch Processing
 
-**Problem:** Fine-grained partitioning creates millions of partitions
-
-**Solution:**
-Simplify partitioning strategy:
-```python
-# Instead of: year, month, day, hour
-partition_columns = ["date_partition"]  # Just date
-
-# Use Z-ORDER for hour-level filtering
-OPTIMIZE table ZORDER BY (hour_column)
+```bash
+# Convert all DDL files in a directory
+for file in hive_tables/*.sql; do
+    output="databricks_tables/$(basename $file)"
+    python convert_ddl.py -i "$file" -o "$output"
+done
 ```
 
-### Issue: "Schema mismatch"
+### Integration with CI/CD
 
-**Problem:** Column types don't match between source and target
-
-**Solution:**
-```python
-# Explicitly cast in migration:
-transformed_df = source_df.select(
-    F.col("col_a").cast("string"),
-    F.col("col_b").cast("int"),
-    # ... etc
-)
+```yaml
+# Example GitHub Actions workflow
+- name: Convert Hive DDL to Databricks
+  run: |
+    python tools/schema_migration_tool/convert_ddl.py \
+      -i schemas/hive/my_table.sql \
+      -o schemas/databricks/my_table.sql \
+      --type delta \
+      --storage dbfs
 ```
+
+## Limitations
+
+- Only supports `CREATE EXTERNAL TABLE` statements
+- Complex nested types (STRUCT, ARRAY, MAP) are passed through as-is
+- Comments in DDL might not be preserved
+- Table properties (TBLPROPERTIES) from Hive are not migrated
+- SerDe properties are not converted
 
 ## Best Practices
 
-1. **Test with subset first** - Migrate a single partition for testing
-2. **Verify row counts** - Always compare source vs target counts
-3. **Monitor performance** - Compare query times before/after
-4. **Keep source data** - Don't delete source until fully validated
-5. **Document changes** - Track schema changes and transformations
-6. **Use Delta** - Prefer Delta over external tables for production
-7. **Optimize regularly** - Run OPTIMIZE on schedule
-8. **Enable auto-optimization** - Set table properties for auto-compaction
+1. **Review Generated DDL** - Always review before executing
+2. **Test with Small Tables** - Test the process with non-critical tables first
+3. **Verify Data Types** - Check timestamp conversions are correct
+4. **Update Storage Paths** - Replace placeholder storage account names
+5. **Consider Partitioning** - Review if the partition strategy still makes sense
+6. **Use Delta Format** - Prefer Delta tables for production workloads
+7. **Document Changes** - Keep track of schema changes made during migration
 
-## Performance Considerations
+## FAQ
 
-### Partitioning
+**Q: Does this tool migrate data?**
+A: No, it only converts DDL (table structure). Use Databricks notebooks or `INSERT INTO` for data migration.
 
-```python
-# Good: Daily partitions for time-series data
-partition_columns = ["date"]
+**Q: Can I convert Managed tables?**
+A: Yes, the tool works with both `CREATE EXTERNAL TABLE` and `CREATE TABLE` statements.
 
-# Avoid: Too many partitions
-# partition_columns = ["year", "month", "day", "hour", "region"]
+**Q: Will this work with Impala DDL?**
+A: Yes, Hive and Impala DDL syntax is very similar and should work.
 
-# Use Z-ORDER instead:
-OPTIMIZE table ZORDER BY (hour, region)
-```
+**Q: Can I use this in production?**
+A: The tool generates standard SQL DDL. Always review the output before executing in production.
 
-### File Size
-
-```python
-# Configure optimal file size (128MB-1GB)
-spark.conf.set("spark.sql.files.maxPartitionBytes", "134217728")  # 128MB
-```
-
-### Write Performance
-
-```python
-# Enable adaptive query execution
-spark.conf.set("spark.sql.adaptive.enabled", "true")
-
-# Enable auto-optimization
-ALTER TABLE table_name SET TBLPROPERTIES (
-  'delta.autoOptimize.optimizeWrite' = 'true',
-  'delta.autoOptimize.autoCompact' = 'true'
-)
-```
-
-## Resources
-
-- [Databricks Delta Lake Documentation](https://docs.databricks.com/delta/index.html)
-- [Table Migration Best Practices](https://docs.databricks.com/migration/index.html)
-- [Partitioning Strategies](https://docs.databricks.com/delta/best-practices.html#partitioning)
-- [OPTIMIZE and Z-ORDER](https://docs.databricks.com/delta/optimize.html)
+**Q: How do I handle complex types?**
+A: Complex types (STRUCT, ARRAY, MAP) are preserved as-is. Review and adjust manually if needed.
 
 ## Support
 
-For issues or questions about these migration tools, please refer to the main project documentation or create an issue in the repository.
+For issues or questions:
+1. Check the examples in this README
+2. Review the generated DDL for obvious issues
+3. Report bugs with sample DDL (anonymized if needed)
+
+## Version
+
+Current version: 1.0.0
+
+## License
+
+Part of the nifi_to_databricks migration toolkit.
