@@ -32,7 +32,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [types-requests]
-        exclude: scripts/databricks_batch_table_extraction\.py
+        exclude: scripts/databricks_batch_(table|script)_extraction\.py
 
   # - repo: local
   #   hooks:
