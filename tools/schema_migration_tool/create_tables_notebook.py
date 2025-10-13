@@ -113,18 +113,27 @@ def create_table_in_databricks_notebook(
         print(f"Creating table: {full_table_name}")
 
         # Split by semicolons and execute each statement
-        statements = [
-            s.strip()
-            for s in updated_ddl.split(";")
-            if s.strip() and not s.strip().startswith("--")
-        ]
+        raw_statements = updated_ddl.split(";")
+
+        # Filter out comment-only blocks and extract SQL statements
+        statements = []
+        for raw_stmt in raw_statements:
+            # Remove comment lines and get actual SQL
+            lines = [
+                line
+                for line in raw_stmt.split("\n")
+                if line.strip() and not line.strip().startswith("--")
+            ]
+            sql = "\n".join(lines).strip()
+            if sql:
+                statements.append(sql)
 
         print(f"DEBUG: Found {len(statements)} statements to execute")
 
         for i, statement in enumerate(statements):
-            # Skip comment-only lines
-            if statement.startswith("--") or not statement.strip():
-                print(f"DEBUG: Skipping statement {i+1} (comment or empty)")
+            # Additional safety check
+            if not statement.strip():
+                print(f"DEBUG: Skipping statement {i+1} (empty)")
                 continue
 
             try:
