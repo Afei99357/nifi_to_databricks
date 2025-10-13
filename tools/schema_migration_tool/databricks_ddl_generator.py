@@ -7,7 +7,7 @@ Databricks-compatible DDL statements.
 
 from typing import Dict, List, Optional, Tuple
 
-from .hive_ddl_parser import HiveDDLParser, parse_hive_ddl
+from hive_ddl_parser import HiveDDLParser, parse_hive_ddl
 
 
 class DatabricksDDLGenerator:
@@ -78,15 +78,14 @@ class DatabricksDDLGenerator:
 
     def generate_delta_ddl(
         self,
-        target_storage: str = "dbfs",
         optimize_types: bool = True,
         include_comments: bool = True,
     ) -> str:
         """
         Generate Delta table DDL (recommended for Databricks).
+        Creates a managed table without LOCATION clause.
 
         Args:
-            target_storage: Target storage type
             optimize_types: Whether to optimize column types
             include_comments: Whether to include comments and documentation
 
@@ -97,10 +96,6 @@ class DatabricksDDLGenerator:
         table_name = self.table_info["table_name"]
         columns = self.table_info["columns"]
         partition_columns = self.table_info["partition_columns"]
-        location = self.table_info.get("location")
-
-        # Convert location
-        databricks_location = self.convert_hdfs_path(location or "", target_storage)
 
         # Optimize column types if requested
         if optimize_types:
@@ -158,7 +153,6 @@ class DatabricksDDLGenerator:
         ddl_parts.append("USING DELTA")
         if partition_clause:
             ddl_parts.append(partition_clause)
-        ddl_parts.append(f"LOCATION '{databricks_location}'")
         ddl_parts.append("TBLPROPERTIES (")
         ddl_parts.append("  'delta.autoOptimize.optimizeWrite' = 'true',")
         ddl_parts.append("  'delta.autoOptimize.autoCompact' = 'true'")
@@ -174,10 +168,6 @@ class DatabricksDDLGenerator:
 
             ddl_parts.append(f"\n-- Step 5: Optimize table")
             ddl_parts.append(f"OPTIMIZE {schema_name}.{table_name};")
-
-            if location:
-                ddl_parts.append(f"\n-- Original location: {location}")
-                ddl_parts.append(f"-- New location: {databricks_location}")
 
         return "\n".join(ddl_parts)
 
@@ -250,21 +240,18 @@ class DatabricksDDLGenerator:
 
 def convert_hive_to_databricks(
     hive_ddl: str,
-    target_storage: str = "dbfs",
-    migration_type: str = "delta",
     optimize_types: bool = True,
 ) -> str:
     """
-    Convert Hive DDL to Databricks DDL.
+    Convert Hive DDL to Databricks managed Delta table DDL.
+    Creates empty table structure without data or location.
 
     Args:
         hive_ddl: The Hive CREATE EXTERNAL TABLE DDL
-        target_storage: Target storage type ('dbfs', 'azure', 'aws', 'unity_catalog')
-        migration_type: 'delta' or 'external'
-        optimize_types: Whether to optimize column types (e.g., STRING to TIMESTAMP)
+        optimize_types: Whether to optimize column types (e.g., STRING ending with _ts to TIMESTAMP)
 
     Returns:
-        Databricks DDL string
+        Databricks DDL string for managed Delta table
 
     Example:
         >>> hive_ddl = '''
@@ -282,15 +269,9 @@ def convert_hive_to_databricks(
     # Parse Hive DDL
     parsed = parse_hive_ddl(hive_ddl)
 
-    # Generate Databricks DDL
+    # Generate Databricks DDL (managed table, no location)
     generator = DatabricksDDLGenerator(parsed)
-
-    if migration_type.lower() == "delta":
-        return generator.generate_delta_ddl(target_storage, optimize_types)
-    elif migration_type.lower() == "external":
-        return generator.generate_external_parquet_ddl(target_storage)
-    else:
-        raise ValueError(f"Unknown migration type: {migration_type}")
+    return generator.generate_delta_ddl(optimize_types)
 
 
 if __name__ == "__main__":
@@ -334,16 +315,7 @@ if __name__ == "__main__":
     """
 
     print("=" * 80)
-    print("DELTA TABLE DDL (RECOMMENDED)")
+    print("DATABRICKS MANAGED DELTA TABLE DDL")
+    print("(Creates empty table structure, no data or location)")
     print("=" * 80)
-    print(convert_hive_to_databricks(example_ddl, migration_type="delta"))
-
-    print("\n\n")
-    print("=" * 80)
-    print("EXTERNAL PARQUET TABLE DDL (MINIMAL CHANGES)")
-    print("=" * 80)
-    print(
-        convert_hive_to_databricks(
-            example_ddl, migration_type="external", optimize_types=False
-        )
-    )
+    print(convert_hive_to_databricks(example_ddl))
