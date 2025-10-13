@@ -76,7 +76,11 @@ class DatabricksDDLGenerator:
 
         # Generate column definitions
         col_defs = []
-        for col_name, col_type in all_columns:
+        for i, (col_name, col_type) in enumerate(all_columns):
+            # Add comma for all except the last column
+            comma = "," if i < len(all_columns) - 1 else ""
+
+            # Add inline comment for converted timestamp columns
             comment = ""
             if (
                 include_comments
@@ -84,9 +88,10 @@ class DatabricksDDLGenerator:
                 and "TIMESTAMP" in col_type
             ):
                 comment = "  -- Converted from STRING"
-            col_defs.append(f"  {col_name} {col_type}{comment}")
 
-        columns_str = ",\n".join(col_defs)
+            col_defs.append(f"  {col_name} {col_type}{comma}{comment}")
+
+        columns_str = "\n".join(col_defs)
 
         # Generate partition clause
         if partition_columns:
