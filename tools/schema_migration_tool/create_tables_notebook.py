@@ -119,26 +119,35 @@ def create_table_in_databricks_notebook(
             if s.strip() and not s.strip().startswith("--")
         ]
 
-        for statement in statements:
+        print(f"DEBUG: Found {len(statements)} statements to execute")
+
+        for i, statement in enumerate(statements):
             # Skip comment-only lines
             if statement.startswith("--") or not statement.strip():
+                print(f"DEBUG: Skipping statement {i+1} (comment or empty)")
                 continue
 
             try:
                 # Show what type of statement we're executing
+                print(f"DEBUG: Statement {i+1} type check...")
                 if "CREATE SCHEMA" in statement:
                     print(f"  → Creating schema {catalog}.{schema}...")
                 elif "CREATE TABLE" in statement:
                     print(f"  → Creating table {full_table_name}...")
                 elif "OPTIMIZE" in statement:
                     print(f"  → Optimizing table...")
+                elif "DESCRIBE" in statement:
+                    print(f"  → Describing table...")
                 else:
                     print(f"  → Executing: {statement[:60]}...")
 
-                spark_session.sql(statement)
+                print(f"DEBUG: Executing SQL...")
+                result = spark_session.sql(statement)
+                print(f"DEBUG: SQL executed, result type: {type(result)}")
                 print("    ✓ Success")
             except Exception as e:
                 # Some statements like DESCRIBE might fail if table doesn't exist yet
+                print(f"DEBUG: Exception occurred: {type(e).__name__}: {str(e)[:200]}")
                 if (
                     "DESCRIBE" in statement
                     or "SHOW PARTITIONS" in statement
@@ -146,6 +155,7 @@ def create_table_in_databricks_notebook(
                 ):
                     print(f"    ⚠ Skipped (optional): {str(e)[:100]}")
                 else:
+                    print(f"ERROR: Fatal exception, re-raising")
                     raise
 
         print(f"\n✓ Table created successfully: {full_table_name}")
