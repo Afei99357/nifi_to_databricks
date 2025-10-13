@@ -67,15 +67,16 @@ def create_table_in_databricks_notebook(
                 line = f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};"
 
             # Update CREATE TABLE line
-            elif "CREATE TABLE" in line and "(" not in line:
-                # Extract table name from "CREATE TABLE schema.table_name ("
+            elif "CREATE TABLE" in line:
+                # Extract table name from "CREATE TABLE schema.table_name (" or "CREATE TABLE schema.table_name"
                 parts = line.split("CREATE TABLE")[1].strip().split("(")[0].strip()
                 if "." in parts:
-                    table_name = parts.split(".")[1]
+                    # Extract just the table name from schema.table
+                    table_name = parts.split(".")[-1]
                 else:
                     table_name = parts
+                # Replace the old schema.table reference with catalog.schema.table
                 line = line.replace(parts, f"{catalog}.{schema}.{table_name}")
-                # Store for later use in output messages
 
             # Update DESCRIBE, SHOW PARTITIONS, OPTIMIZE commands
             elif any(
