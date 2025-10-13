@@ -59,6 +59,7 @@ def create_table_in_databricks_notebook(
         # Update DDL to use specified catalog and schema
         lines = ddl.split("\n")
         updated_lines = []
+        table_name = None
 
         for line in lines:
             # Update CREATE SCHEMA line
@@ -74,6 +75,7 @@ def create_table_in_databricks_notebook(
                 else:
                     table_name = parts
                 line = line.replace(parts, f"{catalog}.{schema}.{table_name}")
+                # Store for later use in output messages
 
             # Update DESCRIBE, SHOW PARTITIONS, OPTIMIZE commands
             elif any(
@@ -104,7 +106,10 @@ def create_table_in_databricks_notebook(
             return True
 
         # Execute DDL statements
-        print(f"Creating table in {catalog}.{schema}...")
+        full_table_name = (
+            f"{catalog}.{schema}.{table_name}" if table_name else f"{catalog}.{schema}"
+        )
+        print(f"Creating table: {full_table_name}")
 
         # Split by semicolons and execute each statement
         statements = [
@@ -119,9 +124,18 @@ def create_table_in_databricks_notebook(
                 continue
 
             try:
-                print(f"Executing: {statement[:80]}...")
+                # Show what type of statement we're executing
+                if "CREATE SCHEMA" in statement:
+                    print(f"  → Creating schema {catalog}.{schema}...")
+                elif "CREATE TABLE" in statement:
+                    print(f"  → Creating table {full_table_name}...")
+                elif "OPTIMIZE" in statement:
+                    print(f"  → Optimizing table...")
+                else:
+                    print(f"  → Executing: {statement[:60]}...")
+
                 spark_session.sql(statement)
-                print("✓ Success")
+                print("    ✓ Success")
             except Exception as e:
                 # Some statements like DESCRIBE might fail if table doesn't exist yet
                 if (
@@ -129,11 +143,11 @@ def create_table_in_databricks_notebook(
                     or "SHOW PARTITIONS" in statement
                     or "OPTIMIZE" in statement
                 ):
-                    print(f"⚠ Skipped (optional): {str(e)[:100]}")
+                    print(f"    ⚠ Skipped (optional): {str(e)[:100]}")
                 else:
                     raise
 
-        print(f"✓ Table created successfully in {catalog}.{schema}")
+        print(f"\n✓ Table created successfully: {full_table_name}")
         return True
 
     except Exception as e:
