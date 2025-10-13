@@ -120,7 +120,7 @@ class DatabricksDDLGenerator:
 
         # Create table
         ddl_parts.append("-- Step 2: Create Delta table")
-        ddl_parts.append(f"CREATE TABLE {schema_name}.{table_name} (")
+        ddl_parts.append(f"CREATE TABLE IF NOT EXISTS {schema_name}.{table_name} (")
         ddl_parts.append(columns_str)
         ddl_parts.append(")")
         ddl_parts.append("USING DELTA")
