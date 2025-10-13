@@ -180,7 +180,7 @@ def create_tables_from_hive_ddl(
     input_dir: Optional[str] = None,
     catalog: str = None,
     schema: str = None,
-    optimize_types: bool = True,
+    optimize_types: bool = False,
     dry_run: bool = False,
 ) -> dict:
     """
@@ -191,7 +191,11 @@ def create_tables_from_hive_ddl(
         input_dir: Directory containing Hive DDL files (.sql)
         catalog: Target Databricks catalog name
         schema: Target Databricks schema name
-        optimize_types: Whether to optimize column types (STRING _ts → TIMESTAMP)
+        optimize_types: Whether to optimize column types (STRING columns ending with _ts → TIMESTAMP).
+                       Default: False (keeps original types). Only set to True if you're certain
+                       your naming convention uses _ts suffix exclusively for timestamps.
+                       WARNING: This is risky - column names like "counts", "status_ts" would be
+                       incorrectly converted.
         dry_run: If True, only print DDL without creating tables
 
     Returns:
