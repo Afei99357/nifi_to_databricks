@@ -1,7 +1,7 @@
 """
 Hive/Impala DDL Parser
 
-Parses CREATE EXTERNAL TABLE DDL statements from Hive/Impala
+Parses CREATE TABLE DDL statements from Hive/Impala
 and extracts table structure information.
 """
 
@@ -10,14 +10,14 @@ from typing import Dict, List, Optional, Tuple
 
 
 class HiveDDLParser:
-    """Parser for Hive/Impala CREATE EXTERNAL TABLE statements."""
+    """Parser for Hive/Impala CREATE TABLE statements."""
 
     def __init__(self, ddl: str):
         """
         Initialize parser with DDL statement.
 
         Args:
-            ddl: The CREATE EXTERNAL TABLE DDL string
+            ddl: The CREATE TABLE DDL string
         """
         self.ddl = ddl.strip()
         self.parsed_data: Dict = {}
@@ -34,20 +34,13 @@ class HiveDDLParser:
             "table_name": self._extract_table_name(),
             "columns": self._extract_columns(),
             "partition_columns": self._extract_partition_columns(),
-            "storage_format": self._extract_storage_format(),
-            "location": self._extract_location(),
-            "is_external": self._is_external_table(),
         }
 
         return self.parsed_data
 
-    def _is_external_table(self) -> bool:
-        """Check if table is external."""
-        return "CREATE EXTERNAL TABLE" in self.ddl.upper()
-
     def _extract_schema_name(self) -> Optional[str]:
         """Extract schema/database name."""
-        # Pattern: CREATE EXTERNAL TABLE schema.table
+        # Pattern: CREATE TABLE schema.table
         pattern = r"CREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)"
         match = re.search(pattern, self.ddl, re.IGNORECASE)
         if match:
@@ -56,7 +49,7 @@ class HiveDDLParser:
 
     def _extract_table_name(self) -> str:
         """Extract table name."""
-        # Pattern: CREATE EXTERNAL TABLE [schema.]table
+        # Pattern: CREATE TABLE [schema.]table
         pattern = r"CREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_][a-zA-Z0-9_]*\.)?([a-zA-Z_][a-zA-Z0-9_]*)"
         match = re.search(pattern, self.ddl, re.IGNORECASE)
         if match:
@@ -71,7 +64,6 @@ class HiveDDLParser:
             List of (column_name, column_type) tuples
         """
         # Find the section between CREATE TABLE (...) and PARTITIONED BY
-        # Pattern: ( ... ) before PARTITIONED BY or STORED AS
         pattern = (
             r"\(([^)]+(?:\([^)]*\)[^)]*)*)\)\s*(?:PARTITIONED BY|STORED AS|LOCATION|$)"
         )
@@ -92,7 +84,6 @@ class HiveDDLParser:
                 continue
 
             # Parse: column_name TYPE [COMMENT 'comment']
-            # Handle types with parameters: DECIMAL(10,2), VARCHAR(100), etc.
             parts = col_def.split(None, 1)
             if len(parts) >= 2:
                 col_name = parts[0].strip()
@@ -103,7 +94,7 @@ class HiveDDLParser:
                 else:
                     col_type = remaining.strip()
 
-                # Clean up type (remove quotes, extra spaces)
+                # Clean up type
                 col_type = col_type.strip("'\"")
 
                 columns.append((col_name, col_type))
@@ -147,24 +138,6 @@ class HiveDDLParser:
                 partition_columns.append((col_name, col_type))
 
         return partition_columns
-
-    def _extract_storage_format(self) -> Optional[str]:
-        """Extract storage format (PARQUET, ORC, etc.)."""
-        # Pattern: STORED AS format
-        pattern = r"STORED\s+AS\s+([A-Za-z]+)"
-        match = re.search(pattern, self.ddl, re.IGNORECASE)
-        if match:
-            return match.group(1).upper()
-        return None
-
-    def _extract_location(self) -> Optional[str]:
-        """Extract LOCATION path."""
-        # Pattern: LOCATION 'path' or LOCATION "path"
-        pattern = r"LOCATION\s+['\"]([^'\"]+)['\"]"
-        match = re.search(pattern, self.ddl, re.IGNORECASE)
-        if match:
-            return match.group(1)
-        return None
 
     def _split_by_comma(self, text: str) -> List[str]:
         """
@@ -215,9 +188,6 @@ class HiveDDLParser:
             "Parsed Table Information",
             "=" * 60,
             f"Table: {self.get_full_table_name()}",
-            f"External: {self.parsed_data['is_external']}",
-            f"Storage Format: {self.parsed_data['storage_format']}",
-            f"Location: {self.parsed_data['location']}",
             f"\nColumns ({len(self.parsed_data['columns'])}):",
         ]
 
@@ -241,10 +211,14 @@ def parse_hive_ddl(ddl: str) -> Dict:
     Parse Hive/Impala DDL statement.
 
     Args:
-        ddl: The CREATE EXTERNAL TABLE DDL string
+        ddl: The CREATE TABLE DDL string
 
     Returns:
-        Dictionary with parsed table information
+        Dictionary with parsed table information:
+        - schema_name: Schema/database name (optional)
+        - table_name: Table name
+        - columns: List of (column_name, column_type) tuples
+        - partition_columns: List of (partition_column_name, column_type) tuples
 
     Example:
         >>> ddl = '''
@@ -271,34 +245,11 @@ if __name__ == "__main__":
       col_a STRING,
       col_b_ts STRING,
       col_c_ts STRING,
-      col_d INT,
-      col_e STRING,
-      col_f INT,
-      col_g STRING,
-      col_h DOUBLE,
-      col_i DOUBLE,
-      col_j DOUBLE,
-      col_k DOUBLE,
-      col_l_ts STRING,
-      col_m INT,
-      col_n STRING,
-      col_o STRING,
-      col_p_ts STRING,
-      col_q_ts STRING,
-      col_r STRING,
-      col_s STRING,
-      col_t DOUBLE,
-      col_u DOUBLE,
-      col_v DOUBLE,
-      col_w STRING,
-      col_x_ts STRING,
-      col_y INT,
-      col_z_ts STRING
+      col_d INT
     )
     PARTITIONED BY (
       part_a_ts STRING,
-      part_b_ts STRING,
-      part_suffix STRING
+      part_b_ts STRING
     )
     STORED AS PARQUET
     LOCATION 'hdfs://files-dev-server-1/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw'

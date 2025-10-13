@@ -2,12 +2,12 @@
 Databricks DDL Generator
 
 Takes parsed Hive/Impala table information and generates
-Databricks-compatible DDL statements.
+Databricks Delta table DDL statements.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-from hive_ddl_parser import HiveDDLParser, parse_hive_ddl
+from hive_ddl_parser import parse_hive_ddl
 
 
 class DatabricksDDLGenerator:
@@ -21,35 +21,6 @@ class DatabricksDDLGenerator:
             parsed_table: Dictionary from HiveDDLParser.parse()
         """
         self.table_info = parsed_table
-
-    def convert_hdfs_path(self, hdfs_path: str, target_type: str = "dbfs") -> str:
-        """
-        Convert HDFS path to Databricks-compatible path.
-
-        Args:
-            hdfs_path: Original HDFS path
-            target_type: Target storage type
-
-        Returns:
-            Converted path
-        """
-        if not hdfs_path:
-            return "dbfs:/mnt/warehouse/default_location"
-
-        # Remove hdfs:// prefix and server
-        base_path = hdfs_path.replace("hdfs://", "").split("/", 1)[-1]
-
-        if target_type == "dbfs":
-            return f"dbfs:/mnt/warehouse/{base_path}"
-        elif target_type == "azure":
-            return f"abfss://<container>@<storage_account>.dfs.core.windows.net/{base_path}"
-        elif target_type in ["aws", "s3"]:
-            return f"s3://<bucket>/{base_path}"
-        elif target_type == "unity_catalog":
-            parts = base_path.split("/")
-            return f"/Volumes/<catalog>/<schema>/<volume>/{'/'.join(parts[-2:])}"
-        else:
-            return f"dbfs:/mnt/warehouse/{base_path}"
 
     def optimize_column_types(
         self, columns: List[Tuple[str, str]], convert_timestamps: bool = True
@@ -82,8 +53,7 @@ class DatabricksDDLGenerator:
         include_comments: bool = True,
     ) -> str:
         """
-        Generate Delta table DDL (recommended for Databricks).
-        Creates a managed table without LOCATION clause.
+        Generate managed Delta table DDL for Databricks.
 
         Args:
             optimize_types: Whether to optimize column types
@@ -133,20 +103,18 @@ class DatabricksDDLGenerator:
                 "-- ============================================================"
             )
             ddl_parts.append(f"-- Delta Table: {schema_name}.{table_name}")
-            ddl_parts.append(
-                f"-- Source: {self.table_info.get('storage_format', 'UNKNOWN')} external table"
-            )
-            ddl_parts.append("-- Target: Databricks Delta Lake")
+            ddl_parts.append("-- Source: Hive table")
+            ddl_parts.append("-- Target: Databricks Delta Lake (managed table)")
             ddl_parts.append(
                 "-- ============================================================\n"
             )
 
         # Create schema
-        ddl_parts.append(f"-- Step 1: Create schema")
+        ddl_parts.append("-- Step 1: Create schema")
         ddl_parts.append(f"CREATE SCHEMA IF NOT EXISTS {schema_name};\n")
 
         # Create table
-        ddl_parts.append(f"-- Step 2: Create Delta table")
+        ddl_parts.append("-- Step 2: Create Delta table")
         ddl_parts.append(f"CREATE TABLE {schema_name}.{table_name} (")
         ddl_parts.append(columns_str)
         ddl_parts.append(")")
@@ -159,81 +127,15 @@ class DatabricksDDLGenerator:
         ddl_parts.append(");")
 
         if include_comments:
-            ddl_parts.append(f"\n-- Step 3: Verify table")
+            ddl_parts.append("\n-- Step 3: Verify table")
             ddl_parts.append(f"DESCRIBE EXTENDED {schema_name}.{table_name};")
 
             if partition_columns:
-                ddl_parts.append(f"\n-- Step 4: Check partitions (after data load)")
+                ddl_parts.append("\n-- Step 4: Check partitions (after data load)")
                 ddl_parts.append(f"-- SHOW PARTITIONS {schema_name}.{table_name};")
 
-            ddl_parts.append(f"\n-- Step 5: Optimize table")
+            ddl_parts.append("\n-- Step 5: Optimize table")
             ddl_parts.append(f"OPTIMIZE {schema_name}.{table_name};")
-
-        return "\n".join(ddl_parts)
-
-    def generate_external_parquet_ddl(
-        self,
-        target_storage: str = "dbfs",
-        include_comments: bool = True,
-    ) -> str:
-        """
-        Generate external Parquet table DDL (minimal migration).
-
-        Args:
-            target_storage: Target storage type
-            include_comments: Whether to include comments
-
-        Returns:
-            Complete DDL string
-        """
-        schema_name = self.table_info.get("schema_name") or "default"
-        table_name = self.table_info["table_name"]
-        columns = self.table_info["columns"]
-        partition_columns = self.table_info["partition_columns"]
-        location = self.table_info.get("location")
-
-        # Convert location
-        databricks_location = self.convert_hdfs_path(location or "", target_storage)
-
-        # Generate column definitions
-        col_defs = [f"  {col_name} {col_type}" for col_name, col_type in columns]
-        columns_str = ",\n".join(col_defs)
-
-        # Generate partition definitions
-        if partition_columns:
-            part_defs = [
-                f"  {col_name} {col_type}" for col_name, col_type in partition_columns
-            ]
-            partitions_str = ",\n".join(part_defs)
-            partition_clause = f"PARTITIONED BY (\n{partitions_str}\n)"
-        else:
-            partition_clause = ""
-
-        # Build DDL
-        ddl_parts = []
-
-        if include_comments:
-            ddl_parts.append(
-                "-- ============================================================"
-            )
-            ddl_parts.append(f"-- External Parquet Table: {schema_name}.{table_name}")
-            ddl_parts.append("-- Minimal migration - keeps original format")
-            ddl_parts.append(
-                "-- ============================================================\n"
-            )
-
-        ddl_parts.append(f"CREATE SCHEMA IF NOT EXISTS {schema_name};\n")
-        ddl_parts.append(f"CREATE EXTERNAL TABLE {schema_name}.{table_name} (")
-        ddl_parts.append(columns_str)
-        ddl_parts.append(")")
-        if partition_clause:
-            ddl_parts.append(partition_clause)
-        ddl_parts.append("STORED AS PARQUET")
-        ddl_parts.append(f"LOCATION '{databricks_location}';")
-
-        if include_comments:
-            ddl_parts.append(f"\n-- Repair partitions")
-            ddl_parts.append(f"MSCK REPAIR TABLE {schema_name}.{table_name};")
 
         return "\n".join(ddl_parts)
 
@@ -247,8 +149,8 @@ def convert_hive_to_databricks(
     Creates empty table structure without data or location.
 
     Args:
-        hive_ddl: The Hive CREATE EXTERNAL TABLE DDL
-        optimize_types: Whether to optimize column types (e.g., STRING ending with _ts to TIMESTAMP)
+        hive_ddl: The Hive CREATE TABLE DDL
+        optimize_types: Whether to optimize column types (STRING ending with _ts → TIMESTAMP)
 
     Returns:
         Databricks DDL string for managed Delta table
@@ -281,34 +183,11 @@ if __name__ == "__main__":
       col_a STRING,
       col_b_ts STRING,
       col_c_ts STRING,
-      col_d INT,
-      col_e STRING,
-      col_f INT,
-      col_g STRING,
-      col_h DOUBLE,
-      col_i DOUBLE,
-      col_j DOUBLE,
-      col_k DOUBLE,
-      col_l_ts STRING,
-      col_m INT,
-      col_n STRING,
-      col_o STRING,
-      col_p_ts STRING,
-      col_q_ts STRING,
-      col_r STRING,
-      col_s STRING,
-      col_t DOUBLE,
-      col_u DOUBLE,
-      col_v DOUBLE,
-      col_w STRING,
-      col_x_ts STRING,
-      col_y INT,
-      col_z_ts STRING
+      col_d INT
     )
     PARTITIONED BY (
       part_a_ts STRING,
-      part_b_ts STRING,
-      part_suffix STRING
+      part_b_ts STRING
     )
     STORED AS PARQUET
     LOCATION 'hdfs://files-dev-server-1/user/hive/warehouse/obf_tables/obf_schema/obf_table_name_raw'
