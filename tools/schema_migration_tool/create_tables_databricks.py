@@ -4,21 +4,36 @@ Create Databricks Tables Directly from Hive DDL
 
 Reads Hive DDL and creates tables directly in Databricks catalog.
 
-Usage:
-    # Create tables in specified catalog and schema
-    python create_tables_databricks.py --input hive.sql --catalog my_catalog --schema my_schema
+⚠️  IMPORTANT: This script MUST be run in a Databricks environment (notebook or job).
+    It will NOT work on your local machine because it requires:
+    - Databricks Runtime with PySpark
+    - Access to Databricks catalogs and schemas
+    - spark.sql() for table creation
+
+Usage in Databricks Notebook:
+    %sh
+    python3 /Workspace/path/to/create_tables_databricks.py \\
+      --input /Volumes/catalog/schema/files/hive.sql \\
+      --catalog my_catalog \\
+      --schema my_schema
 
     # Process multiple DDL files
-    python create_tables_databricks.py --input-dir hive_ddls/ --catalog my_catalog --schema my_schema
+    python3 /Workspace/path/to/create_tables_databricks.py \\
+      --input-dir /Volumes/catalog/schema/hive_ddls/ \\
+      --catalog my_catalog \\
+      --schema my_schema
 
     # Dry run (show DDL without creating)
-    python create_tables_databricks.py --input hive.sql --catalog my_catalog --schema my_schema --dry-run
+    python3 /Workspace/path/to/create_tables_databricks.py \\
+      --input /Volumes/catalog/schema/files/hive.sql \\
+      --catalog my_catalog \\
+      --schema my_schema \\
+      --dry-run
 """
 
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
 
 from databricks_ddl_generator import convert_hive_to_databricks
 
@@ -52,9 +67,6 @@ def create_table_in_databricks(
         for line in lines:
             # Update CREATE SCHEMA line
             if "CREATE SCHEMA IF NOT EXISTS" in line:
-                old_schema = (
-                    line.split("CREATE SCHEMA IF NOT EXISTS")[1].strip().rstrip(";")
-                )
                 line = f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};"
 
             # Update CREATE TABLE line
@@ -140,24 +152,52 @@ def create_table_in_databricks(
 
 
 def main():
+    # Early check: Verify PySpark is available (indicates Databricks environment)
+    try:
+        from pyspark.sql import SparkSession  # noqa: F401
+    except ImportError:
+        print("=" * 80, file=sys.stderr)
+        print(
+            "ERROR: This script must be run in a Databricks environment!",
+            file=sys.stderr,
+        )
+        print("=" * 80, file=sys.stderr)
+        print("", file=sys.stderr)
+        print("This script requires:", file=sys.stderr)
+        print("  • Databricks Runtime with PySpark", file=sys.stderr)
+        print("  • Access to Databricks catalogs and schemas", file=sys.stderr)
+        print("  • spark.sql() for table creation", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("How to run in Databricks Notebook:", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  %sh", file=sys.stderr)
+        print(
+            "  python3 /Workspace/path/to/create_tables_databricks.py \\",
+            file=sys.stderr,
+        )
+        print("    --input /Volumes/catalog/schema/files/hive.sql \\", file=sys.stderr)
+        print("    --catalog my_catalog \\", file=sys.stderr)
+        print("    --schema my_schema", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(
         description="Create Databricks tables directly from Hive DDL",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+Examples (run in Databricks notebook with %sh):
   # Create single table
-  python create_tables_databricks.py -i hive.sql --catalog dev --schema bronze
+  python3 create_tables_databricks.py -i hive.sql --catalog dev --schema bronze
 
   # Process directory of DDL files
-  python create_tables_databricks.py --input-dir hive_ddls/ --catalog prod --schema silver
+  python3 create_tables_databricks.py --input-dir hive_ddls/ --catalog prod --schema silver
 
   # Dry run (show what would be created)
-  python create_tables_databricks.py -i hive.sql --catalog dev --schema bronze --dry-run
+  python3 create_tables_databricks.py -i hive.sql --catalog dev --schema bronze --dry-run
 
   # Disable type optimization
-  python create_tables_databricks.py -i hive.sql --catalog dev --schema bronze --no-optimize
-
-Note: Must be run in Databricks environment (notebook or job).
+  python3 create_tables_databricks.py -i hive.sql --catalog dev --schema bronze --no-optimize
         """,
     )
 
