@@ -24,7 +24,7 @@ SCRIPTY_PROCESSOR_HINTS = [
     "scriptedrecordsetwriter",
     "jolttransformjson",
     "executegroovyscript",
-    "updateattribute",
+    # Note: updateattribute removed - it sets attributes/variables, not executable scripts
 ]
 
 # Property name patterns that likely contain inline code
@@ -271,9 +271,14 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     if re.match(r"query_\d+", prop_name.lower()):
         return True
 
-    # Empty but named like script
+    # Very short values (< 2 chars) are never scripts, regardless of property name
     if len(v.strip()) < 2:
-        return any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
+        return False
+
+    # If value looks like an external file path (ends with script extension and has /),
+    # it should be handled as external script, NOT inline script
+    if "/" in value and any(value.endswith(ext) for ext in SCRIPT_EXTENSIONS):
+        return False
 
     # ExecuteStreamCommand: Skip configuration properties, not actual script content
     if "executestreamcommand" in processor_type.lower():
@@ -290,6 +295,12 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
         if any(config_prop in prop_name.lower() for config_prop in config_properties):
             return False
 
+    # LogMessage: "log-message" property contains prose text, not executable scripts
+    # Even if it mentions SQL keywords like "query" or "insert", it's just log output
+    if "logmessage" in processor_type.lower():
+        if "log-message" in prop_name.lower() or "log message" in prop_name.lower():
+            return False
+
     # Check for code patterns
     longish = len(v) >= 40 or "\n" in v
     token_hits = sum(
@@ -297,7 +308,7 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
         for p in [
             r"\b(def|function|class)\b",
             r"[{};]",
-            r"\b(import|from)\b",
+            r"^\s*(import|from)\s+",  # Python imports at start of line (not path segments)
             r"#!/",
             r"\bSELECT\b",
             r"\bINSERT\b",
@@ -311,7 +322,8 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     name_hint = any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
     type_hint = any(h in processor_type.lower() for h in SCRIPTY_PROCESSOR_HINTS)
 
-    return (longish and (token_hits >= 1 or name_hint or type_hint)) or name_hint
+    # Property name hints alone are not enough - content must also be substantial (longish)
+    return longish and (token_hits >= 1 or name_hint or type_hint)
 
 
 def _is_script_false_positive(value: str) -> bool:
