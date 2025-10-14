@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import sys
 from collections import Counter
@@ -15,14 +14,13 @@ from typing import Any, Dict, List
 import json_repair
 import pandas as pd
 import streamlit as st
-from requests import HTTPError
 
 # Ensure repository root on path for shared utilities
 CURRENT_DIR = Path(__file__).resolve()
 REPO_ROOT = CURRENT_DIR.parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from model_serving_utils import is_endpoint_supported, query_endpoint  # type: ignore
+from model_serving_utils import query_endpoint  # type: ignore
 from tools.classification.processor_payloads import (
     build_payloads,
     format_payloads_for_prompt,
@@ -48,7 +46,7 @@ Rules:
 - Code style: Emit plain Python (no notebook magics or %sql). Use spark.sql(...) for SQL. Keep snippets ≤ 200 lines each, runnable in a notebook cell.
 - Parameters: Accept runtime inputs via a top config block or widgets (dates, identifiers, catalog/schema/tables/paths, connection names).
 - Idempotency and writes: Prefer MERGE for upserts; use INSERT OVERWRITE only for full partition refresh. No ORDER BY in inserts.
-- Validation and logging: Add basic row-count checks and log meaningful messages. Raise on failures (don’t swallow exceptions).
+- Validation and logging: Add basic row-count checks and log meaningful messages. Raise on failures (don't swallow exceptions).
 - Performance: Repartition before writes if needed; apply OPTIMIZE/ANALYZE only when beneficial and targeted.
 - Secrets: Never inline credentials. Use dbutils.secrets.get(scope, key). If unknown, add a TODO line.
 - Be conservative: If something is unclear, mark "unknown" and add a minimal TODO—do not invent schemas, endpoints, or business rules.
@@ -69,39 +67,279 @@ Rules:
 ]
 """
 
-COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Python notebook script.
+COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Databricks notebook.
+
+Context:
+- Each processor has:
+  - has_code: true if there's databricks_code, false if retired/infrastructure-only
+  - recommended_target: shows intended Databricks pattern (or "retire" if not migrated)
+  - upstream_processors and downstream_processors: NiFi data flow relationships
+  - migration_category, implementation_hint, rationale: context about the processor
+- Processors with has_code=false were marked as "retire" or infrastructure-only (schedulers, logging, routing)
+- Use relationships to determine execution order and maintain data flow
 
 Rules:
-- Trim first: Drop processors not needed post-migration (pure logging, infrastructure-only, orchestration that Databricks Jobs natively covers). List each removal with reason in the summary.
-- Output format: Plain Python only (no magics). Use spark.sql(...) for SQL. Begin with imports + config (widgets or dict), then functions by stage (ingest, transform, write, validate, cleanup), then main().
-- Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling. Keep idempotency (MERGE or targeted overwrite).
-- External scripts: Prefer native equivalents; if kept as shell tasks, emit clear TODOs with exact script paths and expected behavior.
-- Validation: Include row-count checks and minimal DQ assertions for the composed flow.
-- Summary: Describe what was kept/trimmed, open TODOs, and assumptions. Keep actionable.
-- Response format only: Return ONLY JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
+- Handle processors with has_code=false:
+  - Don't include their (empty) code in the notebook
+  - DO extract and document their metadata in a "Migration Notes" markdown section:
+    - Scheduling information (e.g., "Trigger daily - 08:00" → document as "Run this notebook daily at 08:00 via Databricks Jobs")
+    - Retry logic, error handling, routing rules
+    - Logging and monitoring patterns
+  - List each retired processor with its name, type, and reason for retirement
+- Handle processors with has_code=true:
+  - Include their databricks_code in the notebook
+  - Use upstream_processors and downstream_processors to determine execution order
+  - Respect data flow dependencies
+- Notebook structure:
+  1. Title/overview markdown cell
+  2. "Migration Notes" markdown cell (document retired processors, scheduling, infrastructure patterns)
+  3. Imports + config (widgets or dict)
+  4. Functions by stage (ingest, transform, write, validate, cleanup)
+  5. main() function
+  - Use plain Python (no %magic commands). Use spark.sql(...) for SQL.
+- Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling.
+- Summary: Describe what was kept/trimmed, extracted scheduling/infrastructure info, open TODOs, and assumptions.
+- Response format: Return ONLY JSON with these fields:
+  - group_name: string
+  - summary: string (markdown)
+  - notebook_cells: array of cell objects, each with:
+    - cell_type: "markdown" or "code"
+    - source: string (cell content)
+  - next_actions: array of strings
+
+Example notebook_cells structure:
+[
+  {"cell_type": "markdown", "source": "# Workflow Migration\\n\\nMigrated from NiFi workflow"},
+  {"cell_type": "markdown", "source": "## Migration Notes\\n\\n**Scheduling**: Run daily at 08:00 (from 'Trigger daily - 08:00' processor)\\n\\n**Retired Processors**:\\n- LogMessage (infrastructure-only logging)\\n- RouteOnAttribute (orchestration handled by Databricks Jobs)"},
+  {"cell_type": "code", "source": "import pandas as pd\\nfrom pyspark.sql import SparkSession"},
+  {"cell_type": "markdown", "source": "## Configuration"},
+  {"cell_type": "code", "source": "catalog = 'main'\\nschema = 'default'"}
+]
 """
 
 
-ENDPOINT_OUTPUT_LIMITS = {
-    "databricks-meta-llama-3-3-70b-instruct": 8192,
-}
+def _build_processor_id_mapping(df: pd.DataFrame) -> Dict[str, Dict[str, str]]:
+    """Build mapping from processor ID to name and type."""
+    return {
+        str(row.get("processor_id")): {
+            "name": row.get("name"),
+            "short_type": row.get("short_type"),
+        }
+        for _, row in df.iterrows()
+    }
 
-SESSION_RESULTS_KEY = "ai_migration_planner_results_records"
-LEGACY_RESULTS_KEY = "triage_result"
+
+def _resolve_processor_relationships(
+    incoming_ids: List[str],
+    outgoing_ids: List[str],
+    id_to_info: Dict[str, Dict[str, str]],
+) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    """Resolve processor IDs to names and types."""
+    incoming_info = [
+        {
+            "processor_id": pid,
+            "name": id_to_info[pid]["name"],
+            "short_type": id_to_info[pid]["short_type"],
+        }
+        for pid in incoming_ids
+        if pid in id_to_info
+    ]
+
+    outgoing_info = [
+        {
+            "processor_id": pid,
+            "name": id_to_info[pid]["name"],
+            "short_type": id_to_info[pid]["short_type"],
+        }
+        for pid in outgoing_ids
+        if pid in id_to_info
+    ]
+
+    return incoming_info, outgoing_info
+
+
+def _build_compose_records(compose_df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Build composition records with resolved relationships.
+
+    Includes ALL processors (even those without code) so the composition LLM can:
+    - Document retired/infrastructure processors
+    - Extract scheduling and orchestration metadata
+    - Explain what was removed and why
+    """
+    id_to_info = _build_processor_id_mapping(compose_df)
+    compose_records = []
+
+    for _, row in compose_df.iterrows():
+        code = str(row.get("databricks_code") or "").strip()
+        has_code = bool(code)
+
+        incoming_ids = row.get("incoming_processor_ids", []) or []
+        outgoing_ids = row.get("outgoing_processor_ids", []) or []
+        incoming_info, outgoing_info = _resolve_processor_relationships(
+            incoming_ids, outgoing_ids, id_to_info
+        )
+
+        compose_records.append(
+            {
+                "processor_id": row.get("processor_id"),
+                "name": row.get("name"),
+                "short_type": row.get("short_type"),
+                "migration_category": row.get("migration_category"),
+                "databricks_target": row.get("databricks_target"),
+                "recommended_target": row.get("recommended_target"),
+                "implementation_hint": row.get("implementation_hint"),
+                "databricks_code": code if has_code else "",
+                "has_code": has_code,
+                "blockers": row.get("blockers"),
+                "next_step": row.get("next_step"),
+                "rationale": row.get("rationale"),
+                "upstream_processors": incoming_info,
+                "downstream_processors": outgoing_info,
+            }
+        )
+
+    return compose_records
+
+
+def _parse_composition_response(raw_content: str) -> Dict[str, Any] | None:
+    """Parse and clean LLM composition response."""
+    cleaned = raw_content.strip().strip("`")
+    if cleaned.startswith("json"):
+        cleaned = cleaned[4:].lstrip()
+
+    if not cleaned:
+        return None
+
+    try:
+        payload = json_repair.loads(cleaned)
+    except Exception:
+        return None
+
+    # Handle list responses by taking first element
+    if isinstance(payload, list):
+        return payload[0] if payload else None
+
+    return payload if isinstance(payload, dict) else None
+
+
+def _display_notebook_cells(notebook_cells: List[Dict[str, str]]) -> str:
+    """Display notebook cells and return notebook JSON string."""
+    for idx, cell in enumerate(notebook_cells):
+        cell_type = cell.get("cell_type", "code")
+        source = cell.get("source", "")
+
+        if cell_type == "markdown":
+            st.markdown(f"**Cell {idx + 1} (Markdown)**")
+            st.markdown(source)
+        else:
+            st.markdown(f"**Cell {idx + 1} (Code)**")
+            st.code(source, language="python")
+
+    # Format cells for Jupyter notebook structure
+    formatted_cells = []
+    for cell in notebook_cells:
+        cell_type = cell.get("cell_type", "code")
+        source = cell.get("source", "")
+
+        # Split source into lines and add newline characters
+        # Jupyter format requires each line (except last) to end with \n
+        lines = source.split("\n")
+        if lines:
+            # Add \n to all lines except the last one
+            source_lines = [line + "\n" for line in lines[:-1]]
+            # Last line doesn't get \n (unless original source ended with \n)
+            if source.endswith("\n"):
+                source_lines.append(lines[-1] + "\n")
+            else:
+                source_lines.append(lines[-1])
+        else:
+            source_lines = [""]
+
+        formatted_cell = {
+            "cell_type": cell_type,
+            "metadata": {},
+            "source": source_lines,
+        }
+
+        # Add required fields for code cells
+        if cell_type == "code":
+            formatted_cell["execution_count"] = None
+            formatted_cell["outputs"] = []
+
+        formatted_cells.append(formatted_cell)
+
+    # Create proper Jupyter notebook structure
+    notebook_json = {
+        "cells": formatted_cells,
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {
+                "name": "python",
+                "version": "3.10.0",
+                "mimetype": "text/x-python",
+                "codemirror_mode": {"name": "ipython", "version": 3},
+                "pygments_lexer": "ipython3",
+                "nbconvert_exporter": "python",
+                "file_extension": ".py",
+            },
+        },
+        "nbformat": 4,
+        "nbformat_minor": 4,
+    }
+    return json.dumps(notebook_json, ensure_ascii=False, indent=2)
+
+
+def _display_composition_result(
+    result_payload: Dict[str, Any], group_label: str
+) -> None:
+    """Display composition result with notebook cells or fallback code."""
+    notebook_cells = result_payload.get("notebook_cells", [])
+    notebook_code = result_payload.get("notebook_code", "")
+    summary = result_payload.get("summary")
+    next_actions = result_payload.get("next_actions", [])
+
+    st.subheader(f"Composed notebook · {result_payload.get('group_name', group_label)}")
+
+    if summary:
+        st.markdown(summary)
+
+    if notebook_cells:
+        notebook_str = _display_notebook_cells(notebook_cells)
+        st.download_button(
+            "Download Databricks notebook (.ipynb)",
+            data=notebook_str,
+            file_name="composed_notebook.ipynb",
+            mime="application/x-ipynb+json",
+            use_container_width=True,
+        )
+    elif notebook_code:
+        st.code(notebook_code, language="python")
+        st.download_button(
+            "Download composed code (.py)",
+            data=notebook_code,
+            file_name="composed_notebook.py",
+            mime="text/x-python",
+            use_container_width=True,
+        )
+
+    if next_actions:
+        st.markdown("**Next actions**")
+        for item in next_actions:
+            st.write(f"- {item}")
 
 
 def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
+    """Convert classification records to dataframe."""
     rows = []
     for record in records:
         processor_id = record.get("processor_id") or record.get("id")
         if not processor_id:
             continue
-        parent_group = record.get("parent_group") or record.get("parentGroupName")
-        parent_group_path = (
-            record.get("parent_group_path")
-            or record.get("parentGroupPath")
-            or parent_group
-        )
+
         rows.append(
             {
                 "processor_id": str(processor_id),
@@ -117,10 +355,19 @@ def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
                 "classification_source": str(record.get("classification_source") or ""),
                 "rule": str(record.get("rule") or ""),
                 "confidence": float(record.get("confidence") or 0.0),
-                "parent_group": str(parent_group or ""),
-                "parent_group_path": str(parent_group_path or ""),
+                "parent_group": str(
+                    record.get("parent_group") or record.get("parentGroupName") or ""
+                ),
+                "parent_group_path": str(
+                    record.get("parent_group_path")
+                    or record.get("parentGroupPath")
+                    or record.get("parent_group")
+                    or record.get("parentGroupName")
+                    or ""
+                ),
             }
         )
+
     if not rows:
         return pd.DataFrame(
             columns=[
@@ -137,49 +384,27 @@ def _records_to_dataframe(records: List[dict]) -> pd.DataFrame:
                 "parent_group_path",
             ]
         )
+
     df = pd.DataFrame(rows)
-    df = df.drop_duplicates(subset=["processor_id"]).reset_index(drop=True)
-    return df
-
-
-def _prepare_user_payload(
-    payload_json: str, workflows: List[str], filtered_df: pd.DataFrame
-) -> str:
-    payload = json.loads(payload_json)
-    category_counts = Counter(filtered_df["migration_category"].tolist())
-    payload["selection_summary"] = {
-        "workflow_files": workflows,
-        "category_counts": dict(category_counts),
-    }
-    return json.dumps(payload, ensure_ascii=False, indent=2)
-
-
-def _normalise_blockers(value):
-    if value is None:
-        return ""
-    if isinstance(value, float) and math.isnan(value):
-        return ""
-    if isinstance(value, list):
-        return ", ".join(str(item) for item in value)
-    return value
+    return df.drop_duplicates(subset=["processor_id"]).reset_index(drop=True)
 
 
 def _collect_session_classifications() -> (
     tuple[List[Dict[str, object]], Dict[str, Dict[str, object]]]
 ):
+    """Collect classification results from session state."""
     records: List[Dict[str, object]] = []
     templates: Dict[str, Dict[str, object]] = {}
 
-    prefix = "classification_results_"
     for key, payload in st.session_state.items():
-        if not isinstance(key, str) or not key.startswith(prefix):
+        if not isinstance(key, str) or not key.startswith("classification_results_"):
             continue
         if not isinstance(payload, dict):
             continue
-        template_name = (
-            payload.get("workflow", {}).get("filename") or key[len(prefix) :]
-        )
+
+        template_name = payload.get("workflow", {}).get("filename") or key[24:]
         templates[template_name] = payload
+
         for record in payload.get("classifications", []) or []:
             cloned = dict(record)
             cloned["template"] = template_name
@@ -189,18 +414,15 @@ def _collect_session_classifications() -> (
 
 
 def _collect_script_lookup() -> Dict[str, Dict[str, object]]:
+    """Collect script details from session state."""
     script_entries: List[Dict[str, object]] = []
-    prefix = "script_results_"
     for key, payload in st.session_state.items():
-        if not isinstance(key, str) or not key.startswith(prefix):
+        if not isinstance(key, str) or not key.startswith("script_results_"):
             continue
         if isinstance(payload, list):
-            for entry in payload:
-                if isinstance(entry, dict):
-                    script_entries.append(entry)
-    if not script_entries:
-        return {}
-    return build_script_lookup(script_entries)
+            script_entries.extend([e for e in payload if isinstance(e, dict)])
+
+    return build_script_lookup(script_entries) if script_entries else {}
 
 
 def main() -> None:
@@ -210,22 +432,20 @@ def main() -> None:
         "Prioritise NiFi processors for Databricks migration using the existing classification evidence."
     )
 
-    default_endpoint = os.getenv("SERVING_ENDPOINT", "")
+    # === Endpoint selection ===
+    default_endpoint = os.getenv("SERVING_ENDPOINT", "databricks-claude-sonnet-4")
     endpoint_choices = [
         "databricks-meta-llama-3-3-70b-instruct",
         "databricks-claude-sonnet-4",
         "Custom…",
     ]
-    default_target = "databricks-claude-sonnet-4"
-    if not default_endpoint:
-        default_endpoint = default_target
 
-    if default_endpoint in endpoint_choices[:-1]:
-        default_index = endpoint_choices.index(default_endpoint)
-        preset_value = ""
-    else:
-        default_index = len(endpoint_choices) - 1
-        preset_value = default_endpoint
+    default_index = (
+        endpoint_choices.index(default_endpoint)
+        if default_endpoint in endpoint_choices[:-1]
+        else len(endpoint_choices) - 1
+    )
+    preset_value = "" if default_index < len(endpoint_choices) - 1 else default_endpoint
 
     chosen_option = st.selectbox(
         "AI models",
@@ -233,21 +453,24 @@ def main() -> None:
         index=default_index,
         help="Select the Databricks serving endpoint used for the AI Migration Planner.",
     )
-    if chosen_option == "Custom…":
-        endpoint_name = st.text_input("Custom endpoint name", value=preset_value)
-    else:
-        endpoint_name = chosen_option
+    endpoint_name = (
+        st.text_input("Custom endpoint name", value=preset_value)
+        if chosen_option == "Custom…"
+        else chosen_option
+    )
 
-    char_budget = DEFAULT_MAX_CHARS
-    max_tokens = min(60000, ENDPOINT_OUTPUT_LIMITS.get(endpoint_name, 60000))
+    max_tokens = 60000
 
+    # === Load data ===
     records, template_payloads = _collect_session_classifications()
     script_lookup = _collect_script_lookup()
-    if script_lookup:
-        for record in records:
-            processor_id = str(record.get("processor_id") or record.get("id") or "")
-            if processor_id and processor_id in script_lookup:
-                record["scripts_detail"] = script_lookup[processor_id]
+
+    # Attach script details to records
+    for record in records:
+        processor_id = str(record.get("processor_id") or record.get("id") or "")
+        if processor_id in script_lookup:
+            record["scripts_detail"] = script_lookup[processor_id]
+
     if not records:
         st.warning(
             "No processor classifications available. Run Start Analysis on the Dashboard first."
@@ -257,31 +480,26 @@ def main() -> None:
         return
 
     snippet_store = load_snippet_store()
-
     template_names = sorted(template_payloads.keys())
+
     st.subheader("Analysis scope")
     st.caption(
-        "Templates: " + ", ".join(template_names)
-        if template_names
-        else "(template names unavailable)"
+        f"Templates: {', '.join(template_names) if template_names else '(unknown)'}"
     )
 
     df = _records_to_dataframe(records)
-    if df.empty:
-        st.warning("Classification results are empty.")
-        return
-
     st.caption(f"{len(df)} processors across {len(template_names)} template(s)")
 
     record_lookup = {
         str(rec.get("processor_id")): rec for rec in records if rec.get("processor_id")
     }
 
+    # === Filter processors ===
     st.subheader("1. Filter processors")
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        categories = sorted(cat for cat in df["migration_category"].dropna().unique())
+        categories = sorted(df["migration_category"].dropna().unique())
         category_filter = st.multiselect(
             "Migration categories",
             options=categories,
@@ -289,13 +507,9 @@ def main() -> None:
             help="Deselect categories to exclude them from the AI Migration Planner.",
         )
     with col2:
-        source_options = sorted(
-            src for src in df["classification_source"].dropna().unique()
-        )
+        source_options = sorted(df["classification_source"].dropna().unique())
         source_filter = st.multiselect(
-            "Classification sources",
-            options=source_options,
-            default=source_options,
+            "Classification sources", options=source_options, default=source_options
         )
     with col3:
         processors_per_call = st.number_input(
@@ -308,6 +522,7 @@ def main() -> None:
 
     search_name = st.text_input("Search by processor name or short type", "")
 
+    # Apply filters
     filtered_df = df.copy()
     if category_filter:
         filtered_df = filtered_df[
@@ -331,123 +546,160 @@ def main() -> None:
     filtered_df = filtered_df.sort_values(
         ["migration_category", "template", "name"]
     ).reset_index(drop=True)
-
     st.caption(f"Showing {len(filtered_df)} processors after filtering.")
-    st.dataframe(
-        filtered_df.head(200).set_index(
-            pd.Index(range(1, min(len(filtered_df), 200) + 1))
-        ),
-        use_container_width=True,
+
+    # === Checkbox selection ===
+    if "selected_for_llm" not in st.session_state:
+        st.session_state.selected_for_llm = set(filtered_df["processor_id"].tolist())
+
+    current_ids = set(filtered_df["processor_id"].tolist())
+    st.session_state.selected_for_llm = st.session_state.selected_for_llm.intersection(
+        current_ids
     )
 
+    col_select_all, col_select_none = st.columns(2)
+    with col_select_all:
+        if st.button("Select All", use_container_width=True):
+            st.session_state.selected_for_llm = current_ids
+            st.rerun()
+    with col_select_none:
+        if st.button("Deselect All", use_container_width=True):
+            st.session_state.selected_for_llm = set()
+            st.rerun()
+
+    filtered_df["selected"] = filtered_df["processor_id"].apply(
+        lambda pid: pid in st.session_state.selected_for_llm
+    )
+
+    display_df = filtered_df[
+        [
+            "selected",
+            "processor_id",
+            "template",
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "classification_source",
+        ]
+    ].head(200)
+
+    edited_df = st.data_editor(
+        display_df.set_index(pd.Index(range(1, min(len(filtered_df), 200) + 1))),
+        column_config={
+            "selected": st.column_config.CheckboxColumn(
+                "Include in LLM",
+                help="Select to include this processor in the AI Migration Planner",
+                default=True,
+            )
+        },
+        disabled=[
+            "processor_id",
+            "template",
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "classification_source",
+        ],
+        use_container_width=True,
+        key="processor_selection_editor",
+    )
+
+    # Update selection state
+    for _, row in edited_df.iterrows():
+        pid = row["processor_id"]
+        if row["selected"]:
+            st.session_state.selected_for_llm.add(pid)
+        else:
+            st.session_state.selected_for_llm.discard(pid)
+
+    st.caption(
+        f"✓ {len(st.session_state.selected_for_llm)} processor(s) selected for LLM call"
+    )
+
+    # === Additional context ===
     st.subheader("2. Provide additional context (optional)")
     additional_notes = st.text_area(
         "Notes for the model",
         placeholder="Add migration constraints, priority groups, or architectural decisions to apply across this batch.",
     )
 
+    # === Run AI Migration Planner ===
     st.subheader("3. Run AI Migration Planner")
     if st.button("Run AI Migration Planner on selection", use_container_width=True):
-        if not endpoint_name:
-            st.error("Specify a serving endpoint name to continue.")
-            return
-        if not is_endpoint_supported(endpoint_name):
-            st.error(f"Endpoint `{endpoint_name}` is not chat-completions compatible.")
-            return
-
-        selected_df = filtered_df.copy()
-        if selected_df.empty:
+        selected_processor_ids = list(st.session_state.selected_for_llm)
+        if not selected_processor_ids:
             st.warning(
-                "No processors selected for the AI Migration Planner after filtering."
+                "No processors selected for the AI Migration Planner. Use checkboxes to select processors."
             )
             return
-        if "processor_id" not in selected_df.columns:
-            st.error("Processor identifiers are required for the AI Migration Planner.")
-            return
 
-        selected_ids = selected_df["processor_id"].astype(str).tolist()
+        selected_df = filtered_df[
+            filtered_df["processor_id"].isin(selected_processor_ids)
+        ].copy()
         selected_records = [
-            record_lookup.get(pid) for pid in selected_ids if pid in record_lookup
+            record_lookup[pid]
+            for pid in selected_df["processor_id"]
+            if pid in record_lookup
         ]
-        selected_records = [rec for rec in selected_records if rec]
-        if not selected_records:
-            st.error("Unable to locate processor records for the current selection.")
-            return
 
         batches = build_batches_from_records(
             selected_records,
             max_processors=int(processors_per_call),
-            max_chars=int(char_budget),
+            max_chars=DEFAULT_MAX_CHARS,
             script_lookup=script_lookup,
         )
-        if not batches:
-            st.warning("No processors available for batching.")
-            return
 
-        batch_summaries = []
-        for payload in batches:
-            batch_summaries.append(
-                {
-                    "batch": payload.get("batch_index"),
-                    "processors": len(payload.get("processor_ids", [])),
-                    "est_chars": payload.get("prompt_char_count", 0),
-                }
-            )
-
-        if batch_summaries:
-            summary_df = pd.DataFrame(batch_summaries)
-            summary_df = summary_df.sort_values("batch").reset_index(drop=True)
-            st.caption(
-                "Batch plan (processor count vs. estimated prompt characters)."
-            )
-            st.dataframe(
-                summary_df,
-                use_container_width=True,
-            )
-
-        selected_templates = (
-            sorted(selected_df["template"].dropna().unique().tolist())
-            if "template" in selected_df.columns
-            else template_names
+        # Show batch plan
+        batch_summaries = [
+            {
+                "batch": p.get("batch_index"),
+                "processors": len(p.get("processor_ids", [])),
+                "est_chars": p.get("prompt_char_count", 0),
+            }
+            for p in batches
+        ]
+        st.caption("Batch plan (processor count vs. estimated prompt characters).")
+        st.dataframe(
+            pd.DataFrame(batch_summaries).sort_values("batch").reset_index(drop=True),
+            use_container_width=True,
         )
 
+        selected_templates = sorted(selected_df["template"].dropna().unique().tolist())
         all_results: List[pd.DataFrame] = []
-        raw_responses: List[Dict[str, Any]] = []
-        saved_processor_ids: List[str] = []
         snippet_store_modified = False
 
+        # Process each batch
         for batch_index, batch_payload in enumerate(batches, start=1):
             batch_ids = batch_payload["processor_ids"]
             batch_records = [
-                record_lookup.get(pid) for pid in batch_ids if pid in record_lookup
+                record_lookup[pid] for pid in batch_ids if pid in record_lookup
             ]
-            batch_records = [rec for rec in batch_records if rec]
-            if not batch_records:
-                continue
-
             batch_df = selected_df[selected_df["processor_id"].isin(batch_ids)]
+
             st.caption(
-                f"Batch {batch_index}: {len(batch_ids)} processors, "
-                f"≈{batch_payload.get('prompt_char_count', 0):,} chars"
+                f"Batch {batch_index}: {len(batch_ids)} processors, ≈{batch_payload.get('prompt_char_count', 0):,} chars"
             )
+
+            # Build payload
             payloads = build_payloads(batch_records)
             payload_json = format_payloads_for_prompt(payloads)
-            user_payload = _prepare_user_payload(
-                payload_json,
-                selected_templates,
-                batch_df,
-            )
+            user_payload_dict = json.loads(payload_json)
+            user_payload_dict["selection_summary"] = {
+                "workflow_files": selected_templates,
+                "category_counts": dict(
+                    Counter(batch_df["migration_category"].tolist())
+                ),
+            }
+            user_payload = json.dumps(user_payload_dict, ensure_ascii=False, indent=2)
 
-            user_message = (
-                f"INPUT_PROCESSORS:\n{user_payload}\n"
-                "If additional notes are provided, apply them across all processors."
-            )
+            user_message = f"INPUT_PROCESSORS:\n{user_payload}\nIf additional notes are provided, apply them across all processors."
             if additional_notes.strip():
                 user_message += f"\nADDITIONAL_NOTES:\n{additional_notes.strip()}"
 
             with st.expander(
-                f"Preview payload sent to LLM (batch {batch_index})",
-                expanded=False,
+                f"Preview payload sent to LLM (batch {batch_index})", expanded=False
             ):
                 st.code(user_payload, language="json")
 
@@ -456,104 +708,61 @@ def main() -> None:
                 {"role": "user", "content": user_message},
             ]
 
+            # Call LLM
             with st.spinner(
                 f"Calling serving endpoint (batch {batch_index}/{len(batches)})..."
             ):
-                try:
-                    reply = query_endpoint(endpoint_name, messages, int(max_tokens))
-                except HTTPError as exc:  # pragma: no cover
-                    st.error("LLM call failed on batch " f"{batch_index}: {exc}")
-                    response = getattr(exc, "response", None)
-                    detail = ""
-                    if response is not None:
-                        detail = getattr(response, "text", "") or str(response)
-                    if detail:
-                        st.caption("Endpoint response")
-                        st.code(detail.strip())
-                    return
-                except Exception as exc:  # pragma: no cover
-                    st.error(f"LLM call failed on batch {batch_index}: {exc}")
-                    return
+                reply = query_endpoint(endpoint_name, messages, int(max_tokens))
 
             raw_content = reply.get("content", "")
-
-            def _clean_response(text: str) -> str:
-                cleaned = text.strip()
-                if cleaned.startswith("```") and cleaned.endswith("```"):
-                    cleaned = cleaned[3:-3].strip()
-                if cleaned.startswith("json"):
-                    cleaned = cleaned[4:].lstrip()
-                return cleaned
-
-            cleaned_content = _clean_response(raw_content)
+            cleaned_content = raw_content.strip()
+            if cleaned_content.startswith("```") and cleaned_content.endswith("```"):
+                cleaned_content = cleaned_content[3:-3].strip()
+            if cleaned_content.startswith("json"):
+                cleaned_content = cleaned_content[4:].lstrip()
 
             if not cleaned_content:
                 st.warning(f"Response was empty for batch {batch_index}.")
                 continue
 
-            try:
-                parsed = json_repair.loads(cleaned_content)
-            except Exception:
-                st.error(
-                    "Response was not valid JSON; adjust the prompt or reduce batch size."
-                )
-                return
-
+            # Parse response
+            parsed = json_repair.loads(cleaned_content)
             if isinstance(parsed, dict):
                 results = parsed.get("ai_migration_planner_result") or parsed.get(
-                    LEGACY_RESULTS_KEY
+                    "triage_result"
                 )
-                if isinstance(results, list):
-                    parsed = results
-                else:
-                    parsed = [parsed]
-
-            if not isinstance(parsed, list):
-                st.error(
-                    "Model response was not a JSON array; review the output above."
-                )
-                return
+                parsed = results if isinstance(results, list) else [parsed]
 
             parsed = [item for item in parsed if isinstance(item, dict)]
             if not parsed:
                 st.warning(f"Batch {batch_index} returned no result objects.")
                 continue
 
+            # Convert to dataframe and merge
             result_df = pd.DataFrame(parsed)
-            raw_responses.extend(parsed)
-            if "blockers" in result_df.columns:
-                result_df["blockers"] = result_df["blockers"].apply(_normalise_blockers)
-            else:
-                result_df["blockers"] = ""
-
-            if "databricks_code" not in result_df.columns:
-                result_df["databricks_code"] = ""
-            result_df["databricks_code"] = result_df["databricks_code"].fillna("")
-
-            if "code_language" not in result_df.columns:
-                result_df["code_language"] = "unknown"
-            result_df["code_language"] = result_df["code_language"].fillna("unknown")
+            result_df["blockers"] = result_df.get(
+                "blockers", pd.Series([""] * len(result_df))
+            ).apply(lambda v: ", ".join(v) if isinstance(v, list) else str(v or ""))
+            result_df["databricks_code"] = result_df.get(
+                "databricks_code", pd.Series([""] * len(result_df))
+            ).fillna("")
+            result_df["code_language"] = result_df.get(
+                "code_language", pd.Series(["unknown"] * len(result_df))
+            ).fillna("unknown")
 
             merged_df = batch_df.merge(result_df, on="processor_id", how="left")
             merged_df["batch_index"] = batch_index
             all_results.append(merged_df)
 
-            records_payload = merged_df.to_dict("records")
+            # Update snippet store
             update_snippet_store(
                 snippet_store,
-                records_payload,
+                merged_df.to_dict("records"),
                 endpoint=endpoint_name,
                 max_tokens=int(max_tokens),
                 batch_index=batch_index,
             )
             snippet_store_modified = True
-            saved_processor_ids.extend(
-                [
-                    str(row.get("processor_id"))
-                    for row in records_payload
-                    if str(row.get("databricks_code") or "").strip()
-                ]
-            )
 
         if not all_results:
             st.info("No results were produced.")
@@ -561,271 +770,190 @@ def main() -> None:
 
         combined_df = pd.concat(all_results, ignore_index=True).fillna("")
 
-        # Normalise confidence columns from merge
-        if "confidence" not in combined_df.columns:
-            if "confidence_y" in combined_df.columns:
-                combined_df["confidence"] = combined_df["confidence_y"]
-            elif "confidence_x" in combined_df.columns:
-                combined_df["confidence"] = combined_df["confidence_x"]
-        combined_df = combined_df.fillna("")
+        # Normalize confidence columns from merge
+        if "confidence_y" in combined_df.columns:
+            combined_df["confidence"] = combined_df["confidence_y"]
+        elif (
+            "confidence_x" in combined_df.columns
+            and "confidence" not in combined_df.columns
+        ):
+            combined_df["confidence"] = combined_df["confidence_x"]
+        combined_df = combined_df.drop(
+            columns=["confidence_x", "confidence_y"], errors="ignore"
+        )
 
-        for redundant in ("confidence_x", "confidence_y"):
-            if redundant in combined_df.columns:
-                combined_df = combined_df.drop(columns=[redundant])
-
-        st.session_state[SESSION_RESULTS_KEY] = combined_df.to_dict("records")
+        st.session_state["ai_migration_planner_results_records"] = combined_df.to_dict(
+            "records"
+        )
 
         if snippet_store_modified:
             save_snippet_store(snippet_store)
-            saved_unique = len({pid for pid in saved_processor_ids if pid})
-            if saved_unique:
-                st.success(f"Stored snippets for {saved_unique} processor(s).")
-                st.info(
-                    "Review cached snippets below to inspect code or compose grouped notebooks."
-                )
+            st.success(f"Stored snippets for {len(combined_df)} processor(s).")
+            st.info(
+                "Review cached snippets below to inspect code or compose grouped notebooks."
+            )
             snippet_store = load_snippet_store()
 
-    # Display persisted AI Migration Planner results when available
-    stored_records = st.session_state.get(SESSION_RESULTS_KEY)
+    # === Display persisted results ===
+    stored_records = st.session_state.get("ai_migration_planner_results_records")
     if stored_records:
         stored_df = pd.DataFrame(stored_records).fillna("")
-        if not stored_df.empty:
-            summary_cols = [
-                "processor_id",
-                "template",
-                "name",
-                "parent_group_path",
-                "migration_category",
-                "recommended_target",
-                "migration_needed",
-                "next_step",
-                "blockers",
-                "confidence",
-                "batch_index",
-            ]
-            available_cols = [col for col in summary_cols if col in stored_df.columns]
-            st.subheader("AI Migration Planner results")
-            st.dataframe(
-                stored_df[available_cols].set_index(
-                    pd.Index(range(1, len(stored_df[available_cols]) + 1))
-                ),
-                use_container_width=True,
-            )
+        summary_cols = [
+            "processor_id",
+            "template",
+            "name",
+            "parent_group_path",
+            "migration_category",
+            "recommended_target",
+            "migration_needed",
+            "next_step",
+            "blockers",
+            "confidence",
+            "batch_index",
+        ]
+        available_cols = [col for col in summary_cols if col in stored_df.columns]
 
-            st.download_button(
-                "Download AI Migration Planner results CSV",
-                data=stored_df.to_csv(index=False).encode("utf-8"),
-                file_name="ai_migration_planner_results.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+        st.subheader("AI Migration Planner results")
+        st.dataframe(
+            stored_df[available_cols].set_index(pd.Index(range(1, len(stored_df) + 1))),
+            use_container_width=True,
+        )
+        st.download_button(
+            "Download AI Migration Planner results CSV",
+            data=stored_df.to_csv(index=False).encode("utf-8"),
+            file_name="ai_migration_planner_results.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
-    # --- Cached snippet review & composition ---
+    # === Cached snippet review & composition ===
     snippet_entries = list(snippet_store.get("snippets", {}).values())
     if snippet_entries:
         st.subheader("Cached processor snippets")
-        snippet_df = pd.DataFrame(snippet_entries)
-        if not snippet_df.empty:
-            snippet_df = snippet_df.fillna("")
-            snippet_df = snippet_df.sort_values(
-                ["parent_group_path", "processor_id"],
-                kind="stable",
-            ).reset_index(drop=True)
+        snippet_df = (
+            pd.DataFrame(snippet_entries)
+            .fillna("")
+            .sort_values(["parent_group_path", "processor_id"], kind="stable")
+            .reset_index(drop=True)
+        )
 
-            group_options = ["All"] + sorted(
-                {
-                    str(value) or "(unknown)"
-                    for value in snippet_df.get("parent_group_path", "")
-                }
-            )
-            selected_snippet_group = st.selectbox(
-                "Snippet group",
-                group_options,
-                index=0,
-                help="Filter cached snippets by NiFi group path.",
-                key="snippet_group_select",
-            )
+        group_options = ["All"] + sorted(
+            {str(v) or "(unknown)" for v in snippet_df.get("parent_group_path", "")}
+        )
+        selected_snippet_group = st.selectbox(
+            "Snippet group",
+            group_options,
+            index=0,
+            help="Filter cached snippets by NiFi group path.",
+            key="snippet_group_select",
+        )
 
-            if selected_snippet_group == "All":
-                snippet_view = snippet_df
-            else:
-                snippet_view = snippet_df[
-                    snippet_df["parent_group_path"].fillna("") == selected_snippet_group
-                ]
-
-            display_cols = [
-                "processor_id",
-                "template",
-                "name",
-                "short_type",
-                "parent_group_path",
-                "migration_category",
-                "code_language",
-                "batch_index",
-                "cached_at",
+        snippet_view = (
+            snippet_df
+            if selected_snippet_group == "All"
+            else snippet_df[
+                snippet_df["parent_group_path"].fillna("") == selected_snippet_group
             ]
-            available_cols = [
-                col for col in display_cols if col in snippet_view.columns
-            ]
-            st.dataframe(snippet_view[available_cols], use_container_width=True)
+        )
 
-            for _, row in snippet_view.iterrows():
-                code = str(row.get("databricks_code", "") or "")
-                if not code.strip():
-                    continue
+        display_cols = [
+            "processor_id",
+            "template",
+            "name",
+            "short_type",
+            "parent_group_path",
+            "migration_category",
+            "code_language",
+            "batch_index",
+            "cached_at",
+        ]
+        available_cols = [col for col in display_cols if col in snippet_view.columns]
+        st.dataframe(snippet_view[available_cols], use_container_width=True)
+
+        for _, row in snippet_view.iterrows():
+            code = str(row.get("databricks_code", "") or "").strip()
+            if code:
                 processor_label = (
                     f"{row.get('processor_id')} · {row.get('name', '')}".strip()
                 )
                 with st.expander(f"Snippet · {processor_label}"):
                     st.code(code, language=row.get("code_language", "text"))
 
-            download_snippets = json.dumps(
-                snippet_entries, ensure_ascii=False, indent=2
-            )
-            st.download_button(
-                "Download cached snippets JSON",
-                data=download_snippets,
-                file_name="processor_snippets.json",
-                mime="application/json",
-                use_container_width=True,
-            )
+        st.download_button(
+            "Download cached snippets JSON",
+            data=json.dumps(snippet_entries, ensure_ascii=False, indent=2),
+            file_name="processor_snippets.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
-            compose_options = [
-                option
-                for option in group_options
-                if option != "(unknown)" or option == "All"
+        # === Composition ===
+        compose_options = [o for o in group_options if o != "(unknown)" or o == "All"]
+        compose_group = st.selectbox(
+            "Compose group",
+            compose_options,
+            help="Select which group to merge into a single notebook.",
+            key="compose_group_select",
+        )
+        compose_notes = st.text_area(
+            "Additional notes for composition",
+            key="compose_notes",
+            placeholder="Optional context or constraints for the composed notebook.",
+        )
+
+        if st.button("Compose notebook for group", key="compose_button"):
+            compose_df = (
+                snippet_df
+                if compose_group == "All"
+                else snippet_df[
+                    snippet_df["parent_group_path"].fillna("") == compose_group
+                ]
+            )
+            group_label = "All processors" if compose_group == "All" else compose_group
+
+            compose_records = _build_compose_records(compose_df)
+            if not compose_records:
+                st.warning("No processors available for the selected group.")
+                return
+
+            # Count how many have code vs metadata only
+            with_code = sum(1 for r in compose_records if r.get("has_code"))
+            without_code = len(compose_records) - with_code
+            if without_code > 0:
+                st.info(
+                    f"Composition includes {with_code} processor(s) with code and "
+                    f"{without_code} processor(s) with metadata only (retired/infrastructure). "
+                    f"The LLM will document the retired processors in a 'Migration Notes' section."
+                )
+
+            group_payload = {
+                "group_name": group_label,
+                "processor_count": len(compose_records),
+                "processors": compose_records,
+            }
+            if compose_notes.strip():
+                group_payload["notes"] = compose_notes.strip()
+
+            messages = [
+                {"role": "system", "content": COMPOSE_SYSTEM_PROMPT.strip()},
+                {
+                    "role": "user",
+                    "content": f"GROUP_INPUT:\n{json.dumps(group_payload, ensure_ascii=False, indent=2)}",
+                },
             ]
-            compose_group = st.selectbox(
-                "Compose group",
-                compose_options,
-                help="Select which group to merge into a single notebook.",
-                key="compose_group_select",
-            )
-            compose_notes = st.text_area(
-                "Additional notes for composition",
-                key="compose_notes",
-                placeholder="Optional context or constraints for the composed notebook.",
-            )
 
-            if st.button("Compose notebook for group", key="compose_button"):
-                if not endpoint_name:
-                    st.error("Specify a serving endpoint name before composing.")
-                else:
-                    if compose_group == "All":
-                        compose_df = snippet_df
-                        group_label = "All processors"
-                    else:
-                        compose_df = snippet_df[
-                            snippet_df["parent_group_path"].fillna("") == compose_group
-                        ]
-                        group_label = compose_group
+            with st.spinner("Composing notebook from cached snippets..."):
+                reply = query_endpoint(endpoint_name, messages, int(max_tokens))
 
-                    compose_records = [
-                        {
-                            "processor_id": row.get("processor_id"),
-                            "name": row.get("name"),
-                            "short_type": row.get("short_type"),
-                            "migration_category": row.get("migration_category"),
-                            "implementation_hint": row.get("implementation_hint"),
-                            "databricks_code": row.get("databricks_code"),
-                            "blockers": row.get("blockers"),
-                            "next_step": row.get("next_step"),
-                        }
-                        for _, row in compose_df.iterrows()
-                        if str(row.get("databricks_code") or "").strip()
-                    ]
+            raw_content = reply.get("content", "")
+            st.subheader("Composition response")
+            st.code(raw_content or "(no content)")
 
-                    if not compose_records:
-                        st.warning(
-                            "No cached snippets with code available for the selected group."
-                        )
-                    else:
-                        group_payload = {
-                            "group_name": group_label,
-                            "processor_count": len(compose_records),
-                            "processors": compose_records,
-                        }
-                        if compose_notes.strip():
-                            group_payload["notes"] = compose_notes.strip()
-
-                        messages = [
-                            {
-                                "role": "system",
-                                "content": COMPOSE_SYSTEM_PROMPT.strip(),
-                            },
-                            {
-                                "role": "user",
-                                "content": "GROUP_INPUT:\n"
-                                + json.dumps(
-                                    group_payload, ensure_ascii=False, indent=2
-                                ),
-                            },
-                        ]
-
-                        with st.spinner("Composing notebook from cached snippets..."):
-                            try:
-                                reply = query_endpoint(
-                                    endpoint_name,
-                                    messages,
-                                    int(max_tokens),
-                                )
-                            except Exception as exc:  # pragma: no cover
-                                st.error(f"LLM composition failed: {exc}")
-                            else:
-                                raw_content = reply.get("content", "")
-                                st.subheader("Composition response")
-                                st.code(raw_content or "(no content)")
-
-                                cleaned = raw_content.strip().strip("`")
-                                if cleaned.startswith("json"):
-                                    cleaned = cleaned[4:].lstrip()
-                                if cleaned:
-                                    try:
-                                        payload = json_repair.loads(cleaned)
-                                    except Exception:
-                                        st.warning(
-                                            "Unable to parse composition output as JSON."
-                                        )
-                                    else:
-                                        if isinstance(payload, list) and payload:
-                                            payload = payload[0]
-                                        if isinstance(payload, dict):
-                                            notebook_code = payload.get(
-                                                "notebook_code", ""
-                                            )
-                                            summary = payload.get("summary")
-                                            next_actions = payload.get(
-                                                "next_actions", []
-                                            )
-
-                                            st.subheader(
-                                                f"Composed notebook · {payload.get('group_name', group_label)}"
-                                            )
-                                            if summary:
-                                                st.markdown(summary)
-                                            if notebook_code:
-                                                st.code(
-                                                    notebook_code,
-                                                    language="python",
-                                                )
-                                                st.download_button(
-                                                    "Download composed notebook",
-                                                    data=notebook_code,
-                                                    file_name="composed_notebook.py",
-                                                    mime="text/x-python",
-                                                    use_container_width=True,
-                                                )
-                                            if (
-                                                isinstance(next_actions, list)
-                                                and next_actions
-                                            ):
-                                                st.markdown("**Next actions**")
-                                                for item in next_actions:
-                                                    st.write(f"- {item}")
-                                        else:
-                                            st.warning(
-                                                "Composition output was not a JSON object."
-                                            )
+            result_payload = _parse_composition_response(raw_content)
+            if result_payload:
+                _display_composition_result(result_payload, group_label)
+            else:
+                st.warning("Unable to parse composition output as JSON.")
 
 
 if __name__ == "__main__":

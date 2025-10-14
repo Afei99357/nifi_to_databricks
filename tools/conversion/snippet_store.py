@@ -51,6 +51,12 @@ def update_snippet_store(
         code = record.get("databricks_code")
         if not code or not str(code).strip():
             continue
+        # Extract lineage information from feature_evidence if available
+        feature_evidence = record.get("feature_evidence", {}) or {}
+        connections = feature_evidence.get("connections", {}) or {}
+        incoming_ids = connections.get("incoming", []) or []
+        outgoing_ids = connections.get("outgoing", []) or []
+
         snippets[processor_id] = {
             "processor_id": processor_id,
             "template": record.get("template"),
@@ -74,6 +80,9 @@ def update_snippet_store(
             "endpoint": endpoint,
             "max_tokens": max_tokens,
             "cached_at": timestamp,
+            # Lineage information
+            "incoming_processor_ids": incoming_ids,
+            "outgoing_processor_ids": outgoing_ids,
         }
 
 
