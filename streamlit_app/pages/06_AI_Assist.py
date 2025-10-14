@@ -906,6 +906,13 @@ def main() -> None:
             placeholder="Optional context or constraints for the composed notebook.",
         )
 
+        # Display cached composition result if available
+        cached_composition = st.session_state.get("composed_notebook_result")
+        if cached_composition:
+            st.info(
+                "📝 A composed notebook is available below. Generate a new one to replace it."
+            )
+
         if st.button("Compose notebook for group", key="compose_button"):
             compose_df = (
                 snippet_df
@@ -956,9 +963,23 @@ def main() -> None:
 
             result_payload = _parse_composition_response(raw_content)
             if result_payload:
+                # Cache the composition result in session state
+                st.session_state["composed_notebook_result"] = {
+                    "result_payload": result_payload,
+                    "group_label": group_label,
+                }
                 _display_composition_result(result_payload, group_label)
             else:
                 st.warning("Unable to parse composition output as JSON.")
+
+        # Always display cached composition if available (even after page refresh)
+        if cached_composition:
+            st.markdown("---")
+            st.subheader("📥 Cached Composed Notebook")
+            _display_composition_result(
+                cached_composition["result_payload"],
+                cached_composition["group_label"],
+            )
 
 
 if __name__ == "__main__":
