@@ -354,12 +354,80 @@ def main() -> None:
     ).reset_index(drop=True)
 
     st.caption(f"Showing {len(filtered_df)} processors after filtering.")
-    st.dataframe(
-        filtered_df.head(200).set_index(
-            pd.Index(range(1, min(len(filtered_df), 200) + 1))
-        ),
-        use_container_width=True,
+
+    # Add checkbox column for manual selection
+    if "selected_for_llm" not in st.session_state:
+        st.session_state.selected_for_llm = set(filtered_df["processor_id"].tolist())
+
+    # Sync session state with current filtered view
+    current_ids = set(filtered_df["processor_id"].tolist())
+    st.session_state.selected_for_llm = st.session_state.selected_for_llm.intersection(
+        current_ids
     )
+
+    # Add selection controls
+    col_select_all, col_select_none = st.columns(2)
+    with col_select_all:
+        if st.button("Select All", use_container_width=True):
+            st.session_state.selected_for_llm = current_ids
+            st.rerun()
+    with col_select_none:
+        if st.button("Deselect All", use_container_width=True):
+            st.session_state.selected_for_llm = set()
+            st.rerun()
+
+    # Add "Selected" column to dataframe
+    filtered_df["selected"] = filtered_df["processor_id"].apply(
+        lambda pid: pid in st.session_state.selected_for_llm
+    )
+
+    # Display with checkboxes using data_editor
+    display_df = filtered_df[
+        [
+            "selected",
+            "processor_id",
+            "template",
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "classification_source",
+        ]
+    ].head(200)
+
+    edited_df = st.data_editor(
+        display_df.set_index(pd.Index(range(1, min(len(filtered_df), 200) + 1))),
+        column_config={
+            "selected": st.column_config.CheckboxColumn(
+                "Include in LLM",
+                help="Select to include this processor in the AI Migration Planner",
+                default=True,
+            ),
+        },
+        disabled=[
+            "processor_id",
+            "template",
+            "name",
+            "short_type",
+            "migration_category",
+            "databricks_target",
+            "classification_source",
+        ],
+        use_container_width=True,
+        key="processor_selection_editor",
+    )
+
+    # Update session state based on checkbox changes
+    for idx, row in edited_df.iterrows():
+        pid = row["processor_id"]
+        is_selected = row["selected"]
+        if is_selected and pid not in st.session_state.selected_for_llm:
+            st.session_state.selected_for_llm.add(pid)
+        elif not is_selected and pid in st.session_state.selected_for_llm:
+            st.session_state.selected_for_llm.discard(pid)
+
+    selected_count = len(st.session_state.selected_for_llm)
+    st.caption(f"✓ {selected_count} processor(s) selected for LLM call")
 
     st.subheader("2. Provide additional context (optional)")
     additional_notes = st.text_area(
@@ -376,7 +444,17 @@ def main() -> None:
             st.error(f"Endpoint `{endpoint_name}` is not chat-completions compatible.")
             return
 
-        selected_df = filtered_df.copy()
+        # Filter by manually selected processors only
+        selected_processor_ids = list(st.session_state.selected_for_llm)
+        if not selected_processor_ids:
+            st.warning(
+                "No processors selected for the AI Migration Planner. Use checkboxes to select processors."
+            )
+            return
+
+        selected_df = filtered_df[
+            filtered_df["processor_id"].isin(selected_processor_ids)
+        ].copy()
         if selected_df.empty:
             st.warning(
                 "No processors selected for the AI Migration Planner after filtering."
