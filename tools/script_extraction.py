@@ -280,6 +280,29 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     if "/" in value and any(value.endswith(ext) for ext in SCRIPT_EXTENSIONS):
         return False
 
+    # Filter pure NiFi EL expressions (routing conditions, not executable code)
+    # If entire value is one ${...} expression, it's configuration, not a script
+    # Only check if it STARTS with ${ (commands like "/bin/mv ${file}" are scripts)
+    if value.strip().startswith("${"):
+        # Extract the outermost ${...} with nested brace handling
+        text = value.strip()
+        depth = 0
+        i = 2  # Start after ${
+        while i < len(text):
+            if text[i : i + 2] == "${":
+                depth += 1
+                i += 1
+            elif text[i] == "}":
+                if depth == 0:
+                    # Found matching close brace for outermost ${
+                    outermost_end = i + 1
+                    # Check if this is the entire value (pure EL expression)
+                    if outermost_end == len(text):
+                        return False  # Pure EL expression, not executable code
+                    break
+                depth -= 1
+            i += 1
+
     # ExecuteStreamCommand: Skip configuration properties, not actual script content
     if "executestreamcommand" in processor_type.lower():
         # These are configuration properties, NOT scripts
