@@ -938,13 +938,69 @@ def main() -> None:
                     f"The LLM will document the retired processors in a 'Migration Notes' section."
                 )
 
+            # Simplify retired processor records to reduce payload size
+            optimized_records = []
+            for record in compose_records:
+                if not record.get("has_code"):
+                    # Only send essential metadata for retired processors
+                    optimized_records.append(
+                        {
+                            "processor_id": record["processor_id"],
+                            "name": record["name"],
+                            "short_type": record["short_type"],
+                            "migration_category": record["migration_category"],
+                            "databricks_target": record["databricks_target"],
+                            "recommended_target": record.get(
+                                "recommended_target", "retire"
+                            ),
+                            "has_code": False,
+                            "databricks_code": "",
+                        }
+                    )
+                else:
+                    # Send full record for processors with code
+                    optimized_records.append(record)
+
             group_payload = {
                 "group_name": group_label,
-                "processor_count": len(compose_records),
-                "processors": compose_records,
+                "processor_count": len(optimized_records),
+                "processors": optimized_records,
             }
             if compose_notes.strip():
                 group_payload["notes"] = compose_notes.strip()
+
+            # Estimate payload size and warn if too large
+            payload_str = json.dumps(group_payload, ensure_ascii=False)
+            payload_chars = len(payload_str)
+
+            # Rough estimate: 1 token ≈ 3-4 characters
+            estimated_input_tokens = payload_chars // 3
+            system_prompt_tokens = len(COMPOSE_SYSTEM_PROMPT) // 3
+
+            total_input_tokens = estimated_input_tokens + system_prompt_tokens
+
+            # Context limits: Claude 3.5 Sonnet = 200K, Llama 3.3 = 128K
+            if total_input_tokens > 150000:
+                st.error(
+                    f"⚠️ **Payload too large**: ~{total_input_tokens:,} tokens "
+                    f"({payload_chars:,} chars payload + {system_prompt_tokens:,} chars system prompt). "
+                    f"This exceeds typical context limits (128K-200K tokens). "
+                    f"**Please select a smaller group or sub-group.**"
+                )
+                st.caption(
+                    "💡 Tip: Use the 'Compose group' dropdown to select a specific NiFi process group instead of 'All'."
+                )
+                return
+            elif total_input_tokens > 100000:
+                st.warning(
+                    f"⚠️ **Large payload**: ~{total_input_tokens:,} tokens. "
+                    f"This may approach context limits for some models (Llama 3.3: 128K). "
+                    f"If composition fails, select a smaller group."
+                )
+            elif total_input_tokens > 50000:
+                st.info(
+                    f"ℹ️ Moderate payload: ~{total_input_tokens:,} tokens. Should work fine."
+                )
 
             messages = [
                 {"role": "system", "content": COMPOSE_SYSTEM_PROMPT.strip()},
