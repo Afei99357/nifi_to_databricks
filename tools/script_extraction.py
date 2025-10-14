@@ -280,6 +280,46 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     if "/" in value and any(value.endswith(ext) for ext in SCRIPT_EXTENSIONS):
         return False
 
+    # Detect pure NiFi Expression Language (EL) expressions - these are routing conditions, not scripts
+    # Examples: ${filename:endsWith('.trg'):and(${alternative_load_script:isEmpty()})}
+    # After removing ${...}, if only NiFi EL function calls remain (:func()), it's not a script
+    if "${" in value and value.strip().startswith("${"):
+        # Only check if value STARTS with ${ (pure EL expression)
+        # Values like "/bin/mv ${filename}" are commands, not pure EL
+        el_matches = re.findall(r"\$\{[^}]+\}", value)
+        if el_matches:
+            # Remove all ${...} and whitespace to see what's left
+            remaining = value
+            for match in el_matches:
+                remaining = remaining.replace(match, "")
+            remaining = remaining.strip()
+
+            # If what remains is ONLY NiFi EL function calls (starting with :) or whitespace/parens,
+            # this is a pure EL expression, not executable code
+            # Common NiFi EL functions: :and(), :or(), :not(), :isEmpty(), :endsWith(), :replaceAll(), etc.
+            if remaining:
+                # Check if remaining content is only EL function syntax
+                # Pattern: optional whitespace, colon, function name, parentheses
+                el_function_pattern = r"^[\s:()]*(?::[a-zA-Z]+\([^)]*\)[\s:()]*)*$"
+                if re.match(el_function_pattern, remaining):
+                    return False
+            else:
+                # If nothing remains after removing ${...}, it's just variable references
+                return False
+
+    # ExecuteStreamCommand: Recognize common shell commands even if short (< 40 chars)
+    # Commands like "/bin/mv /source /dest" should be detected as scripts
+    if "executestreamcommand" in processor_type.lower():
+        # Commands starting with /bin/, /usr/bin/, /usr/sbin/, or common shell executables
+        shell_executable_pattern = r"^/(usr/)?(s)?bin/\w+"
+        if re.match(shell_executable_pattern, value.strip()):
+            return True
+        # Also recognize common commands without full path
+        common_commands = ["hdfs", "impala-shell", "beeline", "hive", "spark-submit"]
+        first_token = value.strip().split()[0] if value.strip() else ""
+        if first_token in common_commands:
+            return True
+
     # ExecuteStreamCommand: Skip configuration properties, not actual script content
     if "executestreamcommand" in processor_type.lower():
         # These are configuration properties, NOT scripts
