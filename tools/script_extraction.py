@@ -687,6 +687,18 @@ def extract_scripts_from_processor(
                 }
             )
 
+            # Extract external script paths from the combined command
+            # This catches .sh/.py/.jar files in ExecuteStreamCommand that would otherwise be missed
+            script_paths = _extract_scripts_from_command(combined)
+            for script_path in script_paths:
+                external_scripts.append(
+                    {
+                        "path": script_path,
+                        "type": _classify_script_type(script_path),
+                        "property_source": "Command+Args",
+                    }
+                )
+
             # Mark these properties as already processed
             exec_stream_processed_props.add("Command Path")
             exec_stream_processed_props.add("Command Arguments")
