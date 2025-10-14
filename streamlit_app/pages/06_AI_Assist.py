@@ -235,7 +235,50 @@ def _display_notebook_cells(notebook_cells: List[Dict[str, str]]) -> str:
             st.markdown(f"**Cell {idx + 1} (Code)**")
             st.code(source, language="python")
 
-    notebook_json = {"cells": notebook_cells}
+    # Format cells for Jupyter notebook structure
+    formatted_cells = []
+    for cell in notebook_cells:
+        cell_type = cell.get("cell_type", "code")
+        source = cell.get("source", "")
+
+        # Split source into lines for proper Jupyter format
+        source_lines = source.split("\n")
+
+        formatted_cell = {
+            "cell_type": cell_type,
+            "metadata": {},
+            "source": source_lines,
+        }
+
+        # Add required fields for code cells
+        if cell_type == "code":
+            formatted_cell["execution_count"] = None
+            formatted_cell["outputs"] = []
+
+        formatted_cells.append(formatted_cell)
+
+    # Create proper Jupyter notebook structure
+    notebook_json = {
+        "cells": formatted_cells,
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {
+                "name": "python",
+                "version": "3.10.0",
+                "mimetype": "text/x-python",
+                "codemirror_mode": {"name": "ipython", "version": 3},
+                "pygments_lexer": "ipython3",
+                "nbconvert_exporter": "python",
+                "file_extension": ".py",
+            },
+        },
+        "nbformat": 4,
+        "nbformat_minor": 4,
+    }
     return json.dumps(notebook_json, ensure_ascii=False, indent=2)
 
 
