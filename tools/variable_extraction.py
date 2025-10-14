@@ -4,7 +4,6 @@ Analyzes variable definitions, modifications, and usage across processors.
 """
 
 import re
-import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Any, Dict, List, Set, Tuple
 
@@ -15,7 +14,6 @@ __all__ = [
     "find_variable_definitions",
     "find_variable_usage",
     "trace_variable_flows",
-    "extract_process_group_variables",
 ]
 
 
@@ -39,39 +37,21 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
     input_ports = template_data.get("input_ports", [])
     output_ports = template_data.get("output_ports", [])
 
-    # Extract process group variables from XML
-    process_group_variables = extract_process_group_variables(xml_path)
-
-    # Extract variable patterns from processors
+    # Extract variable patterns
     variable_definitions = find_variable_definitions(processors)
     variable_usage = find_variable_usage(processors)
     variable_flows = trace_variable_flows(
         processors, connections, input_ports, output_ports
     )
 
-    # Build comprehensive mapping including process group variables
-    all_variables = (
-        set(variable_definitions.keys())
-        | set(variable_usage.keys())
-        | set(process_group_variables.keys())
-    )
+    # Build comprehensive mapping
+    all_variables = set(variable_definitions.keys()) | set(variable_usage.keys())
     variable_analysis = {}
 
     for var_name in all_variables:
         definitions = variable_definitions.get(var_name, [])
         usages = variable_usage.get(var_name, [])
         flows = variable_flows.get(var_name, [])
-
-        # Check if this is a process group variable
-        pg_var = process_group_variables.get(var_name)
-        if pg_var:
-            # Add process group variable as a definition
-            definitions = definitions + [pg_var]
-
-        # Determine source type
-        has_processor_definition = len(variable_definitions.get(var_name, [])) > 0
-        has_pg_definition = pg_var is not None
-        is_defined = has_processor_definition or has_pg_definition
 
         variable_analysis[var_name] = {
             "variable_name": var_name,
@@ -82,17 +62,12 @@ def extract_variable_dependencies(xml_path: str) -> Dict[str, Any]:
             "usage_count": len(usages),
             "processor_count": len(
                 set(
-                    [d["processor_id"] for d in definitions if "processor_id" in d]
+                    [d["processor_id"] for d in definitions]
                     + [u["processor_id"] for u in usages]
                 )
             ),
-            "is_defined": is_defined,
-            "is_external": not is_defined,
-            "source_type": (
-                "Process Group"
-                if has_pg_definition and not has_processor_definition
-                else "Processor" if has_processor_definition else "Unknown"
-            ),
+            "is_defined": len(definitions) > 0,
+            "is_external": len(definitions) == 0,
         }
 
     return {
@@ -469,54 +444,3 @@ def trace_processor_flow(
 
     dfs(start_proc_id, [], [])
     return flow_chains
-
-
-def extract_process_group_variables(xml_path: str) -> Dict[str, Dict[str, Any]]:
-    """
-    Extract process group variables from NiFi XML template.
-
-    Process group variables are defined in the <variables> section of the XML
-    and are available to all processors within the process group.
-
-    Args:
-        xml_path: Path to NiFi XML template file
-
-    Returns:
-        Dictionary mapping variable names to their definitions
-    """
-    process_group_variables = {}
-
-    try:
-        tree = ET.parse(xml_path)
-        root = tree.getroot()
-
-        # Find all <variables> elements in the XML
-        # Variables can be at the template level or within process groups
-        for variables_element in root.iter("variables"):
-            # Each variables element contains <entry> elements with <key> and <value>
-            for entry in variables_element.findall("entry"):
-                key_element = entry.find("key")
-                value_element = entry.find("value")
-
-                if key_element is not None and value_element is not None:
-                    var_name = key_element.text
-                    var_value = value_element.text or ""
-
-                    # Store in the same format as processor definitions for consistency
-                    process_group_variables[var_name] = {
-                        "processor_id": "process_group",
-                        "processor_name": "Process Group Variables",
-                        "processor_type": "ProcessGroup",
-                        "parent_group_name": "Root",
-                        "property_name": var_name,
-                        "property_value": var_value,
-                        "definition_type": "process_group",
-                    }
-
-    except ET.ParseError as e:
-        # If XML parsing fails, return empty dict
-        print(f"Warning: Could not parse XML for process group variables: {e}")
-    except FileNotFoundError:
-        print(f"Warning: XML file not found: {xml_path}")
-
-    return process_group_variables
