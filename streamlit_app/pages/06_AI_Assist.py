@@ -241,8 +241,19 @@ def _display_notebook_cells(notebook_cells: List[Dict[str, str]]) -> str:
         cell_type = cell.get("cell_type", "code")
         source = cell.get("source", "")
 
-        # Split source into lines for proper Jupyter format
-        source_lines = source.split("\n")
+        # Split source into lines and add newline characters
+        # Jupyter format requires each line (except last) to end with \n
+        lines = source.split("\n")
+        if lines:
+            # Add \n to all lines except the last one
+            source_lines = [line + "\n" for line in lines[:-1]]
+            # Last line doesn't get \n (unless original source ended with \n)
+            if source.endswith("\n"):
+                source_lines.append(lines[-1] + "\n")
+            else:
+                source_lines.append(lines[-1])
+        else:
+            source_lines = [""]
 
         formatted_cell = {
             "cell_type": cell_type,
