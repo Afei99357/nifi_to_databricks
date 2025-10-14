@@ -70,19 +70,35 @@ Rules:
 COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Databricks notebook.
 
 Context:
-- Each processor includes upstream_processors and downstream_processors showing the NiFi data flow relationships
-- Use these relationships to determine correct execution order and data dependencies
-- If a processor has upstream_processors, its code should run AFTER those upstream processors
-- If processors were removed/trimmed, check if their upstream processors connect to their downstream processors to maintain flow
+- Each processor has:
+  - has_code: true if there's databricks_code, false if retired/infrastructure-only
+  - recommended_target: shows intended Databricks pattern (or "retire" if not migrated)
+  - upstream_processors and downstream_processors: NiFi data flow relationships
+  - migration_category, implementation_hint, rationale: context about the processor
+- Processors with has_code=false were marked as "retire" or infrastructure-only (schedulers, logging, routing)
+- Use relationships to determine execution order and maintain data flow
 
 Rules:
-- Trim first: Drop processors not needed post-migration (pure logging, infrastructure-only, orchestration that Databricks Jobs natively covers). List each removal with reason in the summary.
-- Execution order: Use upstream_processors and downstream_processors to determine the correct sequence. Respect data flow dependencies.
-- Notebook structure: Organize as Databricks notebook with markdown and code cells. Start with title/overview markdown, then sections with markdown headers and code cells. Use plain Python (no %magic commands in code cells). Use spark.sql(...) for SQL. Organize: imports + config (widgets or dict), then functions by stage (ingest, transform, write, validate, cleanup), then main().
-- Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling. Keep idempotency (MERGE or targeted overwrite).
-- External scripts: Prefer native equivalents; if kept as shell tasks, emit clear TODOs with exact script paths and expected behavior.
-- Validation: Include row-count checks and minimal DQ assertions for the composed flow.
-- Summary: Describe what was kept/trimmed, open TODOs, and assumptions. Include a brief data flow description showing execution order.
+- Handle processors with has_code=false:
+  - Don't include their (empty) code in the notebook
+  - DO extract and document their metadata in a "Migration Notes" markdown section:
+    - Scheduling information (e.g., "Trigger daily - 08:00" → document as "Run this notebook daily at 08:00 via Databricks Jobs")
+    - Retry logic, error handling, routing rules
+    - Logging and monitoring patterns
+  - List each retired processor with its name, type, and reason for retirement
+- Handle processors with has_code=true:
+  - Include their databricks_code in the notebook
+  - Use upstream_processors and downstream_processors to determine execution order
+  - Respect data flow dependencies
+- Notebook structure:
+  1. Title/overview markdown cell
+  2. "Migration Notes" markdown cell (document retired processors, scheduling, infrastructure patterns)
+  3. Imports + config (widgets or dict)
+  4. Functions by stage (ingest, transform, write, validate, cleanup)
+  5. main() function
+  - Use plain Python (no %magic commands). Use spark.sql(...) for SQL.
+- Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling.
+- Summary: Describe what was kept/trimmed, extracted scheduling/infrastructure info, open TODOs, and assumptions.
 - Response format: Return ONLY JSON with these fields:
   - group_name: string
   - summary: string (markdown)
@@ -93,7 +109,8 @@ Rules:
 
 Example notebook_cells structure:
 [
-  {"cell_type": "markdown", "source": "# Title\\n\\nDescription"},
+  {"cell_type": "markdown", "source": "# Workflow Migration\\n\\nMigrated from NiFi workflow"},
+  {"cell_type": "markdown", "source": "## Migration Notes\\n\\n**Scheduling**: Run daily at 08:00 (from 'Trigger daily - 08:00' processor)\\n\\n**Retired Processors**:\\n- LogMessage (infrastructure-only logging)\\n- RouteOnAttribute (orchestration handled by Databricks Jobs)"},
   {"cell_type": "code", "source": "import pandas as pd\\nfrom pyspark.sql import SparkSession"},
   {"cell_type": "markdown", "source": "## Configuration"},
   {"cell_type": "code", "source": "catalog = 'main'\\nschema = 'default'"}
@@ -142,14 +159,19 @@ def _resolve_processor_relationships(
 
 
 def _build_compose_records(compose_df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Build composition records with resolved relationships."""
+    """Build composition records with resolved relationships.
+
+    Includes ALL processors (even those without code) so the composition LLM can:
+    - Document retired/infrastructure processors
+    - Extract scheduling and orchestration metadata
+    - Explain what was removed and why
+    """
     id_to_info = _build_processor_id_mapping(compose_df)
     compose_records = []
 
     for _, row in compose_df.iterrows():
         code = str(row.get("databricks_code") or "").strip()
-        if not code:
-            continue
+        has_code = bool(code)
 
         incoming_ids = row.get("incoming_processor_ids", []) or []
         outgoing_ids = row.get("outgoing_processor_ids", []) or []
@@ -163,10 +185,14 @@ def _build_compose_records(compose_df: pd.DataFrame) -> List[Dict[str, Any]]:
                 "name": row.get("name"),
                 "short_type": row.get("short_type"),
                 "migration_category": row.get("migration_category"),
+                "databricks_target": row.get("databricks_target"),
+                "recommended_target": row.get("recommended_target"),
                 "implementation_hint": row.get("implementation_hint"),
-                "databricks_code": code,
+                "databricks_code": code if has_code else "",
+                "has_code": has_code,
                 "blockers": row.get("blockers"),
                 "next_step": row.get("next_step"),
+                "rationale": row.get("rationale"),
                 "upstream_processors": incoming_info,
                 "downstream_processors": outgoing_info,
             }
@@ -833,10 +859,18 @@ def main() -> None:
 
             compose_records = _build_compose_records(compose_df)
             if not compose_records:
-                st.warning(
-                    "No cached snippets with code available for the selected group."
-                )
+                st.warning("No processors available for the selected group.")
                 return
+
+            # Count how many have code vs metadata only
+            with_code = sum(1 for r in compose_records if r.get("has_code"))
+            without_code = len(compose_records) - with_code
+            if without_code > 0:
+                st.info(
+                    f"Composition includes {with_code} processor(s) with code and "
+                    f"{without_code} processor(s) with metadata only (retired/infrastructure). "
+                    f"The LLM will document the retired processors in a 'Migration Notes' section."
+                )
 
             group_payload = {
                 "group_name": group_label,
