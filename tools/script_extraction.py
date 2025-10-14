@@ -275,6 +275,21 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     if len(v.strip()) < 2:
         return any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
 
+    # ExecuteStreamCommand: Skip configuration properties, not actual script content
+    if "executestreamcommand" in processor_type.lower():
+        # These are configuration properties, NOT scripts
+        config_properties = [
+            "ignore stdin",
+            "output destination attribute",
+            "max attribute length",
+            "argumentsstrategy",
+            "argument delimiter",
+            "working directory",
+            "command path",  # Just the executable path
+        ]
+        if any(config_prop in prop_name.lower() for config_prop in config_properties):
+            return False
+
     # Check for code patterns
     longish = len(v) >= 40 or "\n" in v
     token_hits = sum(
@@ -296,14 +311,7 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     name_hint = any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
     type_hint = any(h in processor_type.lower() for h in SCRIPTY_PROCESSOR_HINTS)
 
-    # ExecuteStreamCommand special case
-    is_exec_stream = "executestreamcommand" in processor_type.lower()
-
-    return (
-        (longish and (token_hits >= 1 or name_hint or type_hint))
-        or is_exec_stream
-        or name_hint
-    )
+    return (longish and (token_hits >= 1 or name_hint or type_hint)) or name_hint
 
 
 def _is_script_false_positive(value: str) -> bool:
@@ -617,6 +625,9 @@ def extract_scripts_from_processor(
     external_scripts = []
 
     # Special ExecuteStreamCommand handling
+    exec_stream_processed_props = (
+        set()
+    )  # Track which properties we've already processed
     if "executestreamcommand" in processor_type.lower():
         cmd = properties.get("Command Path", "")
         args = properties.get("Command Arguments", "")
@@ -664,8 +675,16 @@ def extract_scripts_from_processor(
                 }
             )
 
+            # Mark these properties as already processed
+            exec_stream_processed_props.add("Command Path")
+            exec_stream_processed_props.add("Command Arguments")
+
     # Process all properties (including query_* properties)
     for prop_name, prop_value in properties.items():
+        # Skip properties already processed by ExecuteStreamCommand handler
+        if prop_name in exec_stream_processed_props:
+            continue
+
         # Handle empty query properties
         if re.match(r"query_\d+", prop_name.lower()):
             if not prop_value or len(str(prop_value).strip()) <= 1:
