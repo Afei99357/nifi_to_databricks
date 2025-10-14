@@ -86,6 +86,9 @@ def display_variable_results(result, uploaded_file=None):
             for var_name, var_data in variables.items():
                 clean_var_name = var_name.strip()
 
+                # Get source type from variable analysis
+                source_type = var_data.get("source_type", "Unknown")
+
                 # Get all definitions (processors that extract/create this variable)
                 definitions = var_data.get("definitions", [])
 
@@ -99,7 +102,7 @@ def display_variable_results(result, uploaded_file=None):
                                 "Processor ID": defn["processor_id"],
                                 "Processor Type": defn["processor_type"].split(".")[-1],
                                 "Group Name": defn.get("parent_group_name", "Root"),
-                                "Source": "Known",
+                                "Source": source_type,
                                 "Property": defn["property_name"],
                                 "Value": defn["property_value"],
                             }
@@ -117,7 +120,7 @@ def display_variable_results(result, uploaded_file=None):
                                     -1
                                 ],
                                 "Group Name": usage.get("parent_group_name", "Root"),
-                                "Source": "Unknown Source",
+                                "Source": source_type,
                                 "Property": usage["property_name"],
                                 "Value": f"Usage: {usage['variable_expression']} in {usage['processor_name']}",
                             }
@@ -292,9 +295,7 @@ def display_variable_results(result, uploaded_file=None):
                         "Defines": var_data["definition_count"],
                         "Uses": var_data["usage_count"],
                         "Total Processors": var_data["processor_count"],
-                        "Status": (
-                            "Unknown Source" if var_data["is_external"] else "Known"
-                        ),
+                        "Source Type": var_data.get("source_type", "Unknown"),
                     }
                 )
 
@@ -304,9 +305,12 @@ def display_variable_results(result, uploaded_file=None):
                 # Filter controls
                 col1, col2 = st.columns(2)
                 with col1:
-                    status_filter = st.selectbox(
-                        "Filter by Status:",
-                        ["All", "Known", "Unknown Source"],
+                    source_type_options = ["All"] + sorted(
+                        action_df["Source Type"].unique().tolist()
+                    )
+                    source_type_filter = st.selectbox(
+                        "Filter by Source Type:",
+                        source_type_options,
                     )
 
                 with col2:
@@ -321,8 +325,10 @@ def display_variable_results(result, uploaded_file=None):
 
                 # Apply filters
                 filtered_df = action_df.copy()
-                if status_filter != "All":
-                    filtered_df = filtered_df[filtered_df["Status"] == status_filter]
+                if source_type_filter != "All":
+                    filtered_df = filtered_df[
+                        filtered_df["Source Type"] == source_type_filter
+                    ]
                 if min_usage > 0:
                     filtered_df = filtered_df[filtered_df["Uses"] >= min_usage]
 
@@ -350,8 +356,8 @@ def display_variable_results(result, uploaded_file=None):
                             "Total Processors": st.column_config.NumberColumn(
                                 "Total Processors", width="small"
                             ),
-                            "Status": st.column_config.TextColumn(
-                                "Status", width="small"
+                            "Source Type": st.column_config.TextColumn(
+                                "Source Type", width="small"
                             ),
                         },
                     )
@@ -451,8 +457,9 @@ def display_variable_results(result, uploaded_file=None):
                                 },
                             )
                         else:
+                            source_type = var_detail.get("source_type", "Unknown")
                             st.warning(
-                                "🔍 **Unknown Source Variable** - No definitions found (source unknown)"
+                                f"🔍 **{source_type} Source Variable** - No definitions found in processors"
                             )
 
                         # Usages Table
