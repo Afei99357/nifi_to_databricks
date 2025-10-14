@@ -69,16 +69,37 @@ Rules:
 ]
 """
 
-COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Python notebook script.
+COMPOSE_SYSTEM_PROMPT = """You are a Databricks solutions engineer. Merge multiple processor snippets into one runnable Databricks notebook.
+
+Context:
+- Each processor includes upstream_processors and downstream_processors showing the NiFi data flow relationships
+- Use these relationships to determine correct execution order and data dependencies
+- If a processor has upstream_processors, its code should run AFTER those upstream processors
+- If processors were removed/trimmed, check if their upstream processors connect to their downstream processors to maintain flow
 
 Rules:
 - Trim first: Drop processors not needed post-migration (pure logging, infrastructure-only, orchestration that Databricks Jobs natively covers). List each removal with reason in the summary.
-- Output format: Plain Python only (no magics). Use spark.sql(...) for SQL. Begin with imports + config (widgets or dict), then functions by stage (ingest, transform, write, validate, cleanup), then main().
+- Execution order: Use upstream_processors and downstream_processors to determine the correct sequence. Respect data flow dependencies.
+- Notebook structure: Organize as Databricks notebook with markdown and code cells. Start with title/overview markdown, then sections with markdown headers and code cells. Use plain Python (no %magic commands in code cells). Use spark.sql(...) for SQL. Organize: imports + config (widgets or dict), then functions by stage (ingest, transform, write, validate, cleanup), then main().
 - Deduplicate: Hoist shared imports/config/secrets. Apply consistent logging and error handling. Keep idempotency (MERGE or targeted overwrite).
 - External scripts: Prefer native equivalents; if kept as shell tasks, emit clear TODOs with exact script paths and expected behavior.
 - Validation: Include row-count checks and minimal DQ assertions for the composed flow.
-- Summary: Describe what was kept/trimmed, open TODOs, and assumptions. Keep actionable.
-- Response format only: Return ONLY JSON with fields: group_name, summary, notebook_code, next_actions (list of strings).
+- Summary: Describe what was kept/trimmed, open TODOs, and assumptions. Include a brief data flow description showing execution order.
+- Response format: Return ONLY JSON with these fields:
+  - group_name: string
+  - summary: string (markdown)
+  - notebook_cells: array of cell objects, each with:
+    - cell_type: "markdown" or "code"
+    - source: string (cell content)
+  - next_actions: array of strings
+
+Example notebook_cells structure:
+[
+  {"cell_type": "markdown", "source": "# Title\n\nDescription"},
+  {"cell_type": "code", "source": "import pandas as pd\nfrom pyspark.sql import SparkSession"},
+  {"cell_type": "markdown", "source": "## Configuration"},
+  {"cell_type": "code", "source": "catalog = 'main'\nschema = 'default'"}
+]
 """
 
 
@@ -397,9 +418,7 @@ def main() -> None:
         if batch_summaries:
             summary_df = pd.DataFrame(batch_summaries)
             summary_df = summary_df.sort_values("batch").reset_index(drop=True)
-            st.caption(
-                "Batch plan (processor count vs. estimated prompt characters)."
-            )
+            st.caption("Batch plan (processor count vs. estimated prompt characters).")
             st.dataframe(
                 summary_df,
                 use_container_width=True,
@@ -720,20 +739,60 @@ def main() -> None:
                         ]
                         group_label = compose_group
 
-                    compose_records = [
-                        {
-                            "processor_id": row.get("processor_id"),
+                    # Build processor ID to name mapping for resolving relationships
+                    id_to_info = {
+                        str(row.get("processor_id")): {
                             "name": row.get("name"),
                             "short_type": row.get("short_type"),
-                            "migration_category": row.get("migration_category"),
-                            "implementation_hint": row.get("implementation_hint"),
-                            "databricks_code": row.get("databricks_code"),
-                            "blockers": row.get("blockers"),
-                            "next_step": row.get("next_step"),
                         }
                         for _, row in compose_df.iterrows()
-                        if str(row.get("databricks_code") or "").strip()
-                    ]
+                    }
+
+                    compose_records = []
+                    for _, row in compose_df.iterrows():
+                        if not str(row.get("databricks_code") or "").strip():
+                            continue
+
+                        # Resolve incoming/outgoing processor IDs to names
+                        incoming_ids = row.get("incoming_processor_ids", []) or []
+                        outgoing_ids = row.get("outgoing_processor_ids", []) or []
+
+                        incoming_info = []
+                        for pid in incoming_ids:
+                            if pid in id_to_info:
+                                incoming_info.append(
+                                    {
+                                        "processor_id": pid,
+                                        "name": id_to_info[pid]["name"],
+                                        "short_type": id_to_info[pid]["short_type"],
+                                    }
+                                )
+
+                        outgoing_info = []
+                        for pid in outgoing_ids:
+                            if pid in id_to_info:
+                                outgoing_info.append(
+                                    {
+                                        "processor_id": pid,
+                                        "name": id_to_info[pid]["name"],
+                                        "short_type": id_to_info[pid]["short_type"],
+                                    }
+                                )
+
+                        compose_records.append(
+                            {
+                                "processor_id": row.get("processor_id"),
+                                "name": row.get("name"),
+                                "short_type": row.get("short_type"),
+                                "migration_category": row.get("migration_category"),
+                                "implementation_hint": row.get("implementation_hint"),
+                                "databricks_code": row.get("databricks_code"),
+                                "blockers": row.get("blockers"),
+                                "next_step": row.get("next_step"),
+                                "upstream_processors": incoming_info,
+                                "downstream_processors": outgoing_info,
+                            }
+                        )
 
                     if not compose_records:
                         st.warning(
@@ -787,34 +846,92 @@ def main() -> None:
                                             "Unable to parse composition output as JSON."
                                         )
                                     else:
-                                        if isinstance(payload, list) and payload:
-                                            payload = payload[0]
-                                        if isinstance(payload, dict):
-                                            notebook_code = payload.get(
-                                                "notebook_code", ""
+                                        # Handle list responses by taking first element
+                                        result_payload: Any = None
+                                        if isinstance(payload, list):
+                                            if payload:
+                                                result_payload = payload[0]  # type: ignore[unreachable]
+                                            else:
+                                                st.warning(
+                                                    "Composition returned empty list."
+                                                )
+                                        else:
+                                            result_payload = payload
+
+                                        if result_payload and isinstance(
+                                            result_payload, dict
+                                        ):
+                                            notebook_cells = result_payload.get(
+                                                "notebook_cells", []
                                             )
-                                            summary = payload.get("summary")
-                                            next_actions = payload.get(
+                                            notebook_code = result_payload.get(
+                                                "notebook_code", ""
+                                            )  # Fallback for old format
+                                            summary = result_payload.get("summary")
+                                            next_actions = result_payload.get(
                                                 "next_actions", []
                                             )
 
                                             st.subheader(
-                                                f"Composed notebook · {payload.get('group_name', group_label)}"
+                                                f"Composed notebook · {result_payload.get('group_name', group_label)}"
                                             )
                                             if summary:
                                                 st.markdown(summary)
-                                            if notebook_code:
+
+                                            # Display notebook cells if available
+                                            if notebook_cells:
+                                                # Preview cells
+                                                for idx, cell in enumerate(
+                                                    notebook_cells
+                                                ):
+                                                    cell_type = cell.get(
+                                                        "cell_type", "code"
+                                                    )
+                                                    source = cell.get("source", "")
+                                                    if cell_type == "markdown":
+                                                        st.markdown(
+                                                            f"**Cell {idx + 1} (Markdown)**"
+                                                        )
+                                                        st.markdown(source)
+                                                    else:
+                                                        st.markdown(
+                                                            f"**Cell {idx + 1} (Code)**"
+                                                        )
+                                                        st.code(
+                                                            source, language="python"
+                                                        )
+
+                                                # Create Databricks notebook JSON
+                                                notebook_json = {
+                                                    "cells": notebook_cells
+                                                }
+                                                notebook_str = json.dumps(
+                                                    notebook_json,
+                                                    ensure_ascii=False,
+                                                    indent=2,
+                                                )
+
+                                                st.download_button(
+                                                    "Download Databricks notebook (.ipynb)",
+                                                    data=notebook_str,
+                                                    file_name="composed_notebook.ipynb",
+                                                    mime="application/x-ipynb+json",
+                                                    use_container_width=True,
+                                                )
+                                            elif notebook_code:
+                                                # Fallback: old format with single code block
                                                 st.code(
                                                     notebook_code,
                                                     language="python",
                                                 )
                                                 st.download_button(
-                                                    "Download composed notebook",
+                                                    "Download composed code (.py)",
                                                     data=notebook_code,
                                                     file_name="composed_notebook.py",
                                                     mime="text/x-python",
                                                     use_container_width=True,
                                                 )
+
                                             if (
                                                 isinstance(next_actions, list)
                                                 and next_actions
