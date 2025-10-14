@@ -38,6 +38,11 @@ from tools.conversion import (
 TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
+- Classification guidance: Processors are pre-classified with a migration_category:
+  - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries.
+  - "Orchestration / Monitoring": Usually mark as "retire" unless they contain essential routing/branching logic.
+  - "Business Logic", "Source Adapter", "Sink Adapter": Generate migration code.
+  - "Ambiguous": Evaluate and decide based on processor details.
 - Scope and mapping: Map NiFi processors to Databricks patterns:
   - Sources/Sinks: files (HDFS/S3/ADLS), JDBC, Kafka, HTTP → Auto Loader, COPY INTO, spark.read/write, Structured Streaming.
   - SQL processors: inline SQL → spark.sql(...) or DBSQL compatible statements.

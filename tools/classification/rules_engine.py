@@ -86,12 +86,19 @@ class Rule:
     confidence: float
     notes: str = ""
     processor_types: Optional[List[str]] = None
+    processor_short_types: Optional[List[str]] = None
     conditions: List[Condition] = field(default_factory=list)
 
     def matches(self, feature: Dict[str, Any]) -> bool:
+        # Check fully-qualified processor types
         if self.processor_types:
             proc_type = feature.get("processor_type")
             if proc_type not in self.processor_types:
+                return False
+        # Check short processor types (e.g., "PutHDFS" instead of "org.apache.nifi.processors.hadoop.PutHDFS")
+        if self.processor_short_types:
+            short_type = feature.get("short_type")
+            if short_type not in self.processor_short_types:
                 return False
         return all(condition.evaluate(feature) for condition in self.conditions)
 
@@ -112,6 +119,9 @@ def _normalise_rule(raw_rule: Dict[str, Any]) -> Rule:
     processor_types = raw_rule.get("processor_types")
     if processor_types and not isinstance(processor_types, list):
         processor_types = [processor_types]
+    processor_short_types = raw_rule.get("processor_short_types")
+    if processor_short_types and not isinstance(processor_short_types, list):
+        processor_short_types = [processor_short_types]
     return Rule(
         name=raw_rule.get("name", "Unnamed Rule"),
         migration_category=raw_rule.get("migration_category", "Infrastructure Only"),
@@ -119,6 +129,7 @@ def _normalise_rule(raw_rule: Dict[str, Any]) -> Rule:
         confidence=float(raw_rule.get("confidence", 0.0)),
         notes=raw_rule.get("notes", ""),
         processor_types=processor_types,
+        processor_short_types=processor_short_types,
         conditions=conditions,
     )
 
