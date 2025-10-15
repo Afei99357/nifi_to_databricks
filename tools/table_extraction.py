@@ -169,6 +169,7 @@ def extract_all_tables_from_nifi_xml(xml_path: str) -> List[Dict[str, Any]]:
             incoming_map=incoming_map,
             literal_assignments=literal_assignments,
             resolver_cache=resolver_cache,
+            variable_definitions=variable_definitions,
         )
         for entry in tables:
             key = (
@@ -337,12 +338,14 @@ def extract_table_references_from_processor(
     incoming_map: Dict[str, List[str]] | None = None,
     literal_assignments: Dict[str, Dict[str, str]] | None = None,
     resolver_cache: Dict[str, Dict[str, str]] | None = None,
+    variable_definitions: Dict[str, List[Dict[str, Any]]] | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Extract all table references from a single processor.
 
     Args:
         processor: Processor dictionary from XML parsing
+        variable_definitions: All variable definitions across workflow (for multiplexed resolution)
 
     Returns:
         List of table dictionaries
@@ -365,6 +368,7 @@ def extract_table_references_from_processor(
     resolver_cache = resolver_cache or {}
     incoming_map = incoming_map or {}
     literal_assignments = literal_assignments or {}
+    variable_definitions = variable_definitions or {}
 
     var_values = _resolve_variables_for_processor(
         processor_id, incoming_map, literal_assignments, resolver_cache
@@ -397,9 +401,32 @@ def extract_table_references_from_processor(
             processor_id,
             controller_service_info,
         )
+        # Strip unresolved EL prefixes from regular SQL extraction
+        for table in sql_tables:
+            table["table_name"] = re.sub(r"\$\{[^}]+\}\.", "", table["table_name"])
         tables.extend(sql_tables)
 
-        # 3. Extract from Hive warehouse paths
+        # 3. Handle multiplexed workflows: extract from ORIGINAL unresolved SQL
+        # to capture all possible variable values
+        if resolved_value != prop_value:  # If any variables were resolved
+            unresolved_sql_tables = _extract_tables_from_sql_property(
+                prop_name,
+                prop_value,  # Use ORIGINAL unresolved value
+                processor_type,
+                processor_name,
+                processor_id,
+                controller_service_info,
+            )
+            expanded_tables = _expand_multiplexed_tables(
+                unresolved_sql_tables,
+                variable_definitions,
+                processor_name,
+                processor_id,
+                processor_type,
+            )
+            tables.extend(expanded_tables)
+
+        # 4. Extract from Hive warehouse paths
         hive_table = _extract_hive_table_from_path_property(
             prop_name,
             resolved_value,
@@ -412,6 +439,105 @@ def extract_table_references_from_processor(
             tables.append(hive_table)
 
     return tables
+
+
+def _expand_multiplexed_tables(
+    sql_tables: List[Dict[str, Any]],
+    variable_definitions: Dict[str, List[Dict[str, Any]]],
+    processor_name: str,
+    processor_id: str,
+    processor_type: str,
+) -> List[Dict[str, Any]]:
+    """Expand tables with unresolved EL variables by trying ALL possible values.
+
+    This handles multiplexed workflows where multiple branches with different variable
+    values converge to a single processor (e.g., Set SQL processor).
+
+    Args:
+        sql_tables: Tables extracted from SQL (may contain ${var} in names)
+        variable_definitions: All variable definitions across the workflow
+        processor_name, processor_id, processor_type: Processor metadata
+
+    Returns:
+        Additional table entries with variables expanded to all possible values
+    """
+    expanded = []
+
+    for table_entry in sql_tables:
+        table_name = table_entry.get("table_name", "")
+
+        # Check if table name contains unresolved EL variables
+        if "${" not in table_name:
+            continue
+
+        # Extract all variable names from the table name
+        unresolved_vars = EL_PATTERN.findall(table_name)
+        if not unresolved_vars:
+            continue
+
+        # Build a list of (var_name, possible_values) tuples
+        variable_expansions = []
+        for var_expr in unresolved_vars:
+            var_name = var_expr.split(":")[0]  # Strip EL functions
+
+            # Look up all static values for this variable
+            var_definitions = variable_definitions.get(var_name, [])
+            static_values = [
+                entry.get("property_value")
+                for entry in var_definitions
+                if entry.get("definition_type") == "static"
+                and entry.get("property_value")
+            ]
+
+            # Remove duplicates
+            static_values = list(set(static_values))
+
+            if static_values:
+                variable_expansions.append((var_name, static_values))
+
+        if not variable_expansions:
+            continue
+
+        # Generate all combinations by expanding one variable at a time
+        # Start with the original table name
+        candidates = [(table_name, [])]  # (current_name, resolved_vars)
+
+        for var_name, possible_values in variable_expansions:
+            new_candidates = []
+            for current_name, resolved_vars in candidates:
+                # If this variable is in the current name, expand it
+                if f"${{{var_name}}}" in current_name:
+                    for value in possible_values:
+                        # Substitute this variable
+                        new_name = current_name.replace(f"${{{var_name}}}", value)
+                        new_resolved = resolved_vars + [f"{var_name}={value}"]
+                        new_candidates.append((new_name, new_resolved))
+                else:
+                    # Variable already resolved or not in this name
+                    new_candidates.append((current_name, resolved_vars))
+
+            candidates = new_candidates
+
+        # Create table entries for all expanded combinations
+        for expanded_name, resolved_vars in candidates:
+            # Strip any remaining unresolved EL prefixes (like ${db_schema}.)
+            # We only expand variables that have static definitions
+            final_name = re.sub(r"\$\{[^}]+\}\.", "", expanded_name)
+
+            # Skip if still contains EL variables (couldn't fully resolve)
+            if "${" in final_name:
+                continue
+
+            # Create a new table entry with the expanded name
+            expanded_entry = dict(table_entry)
+            expanded_entry["table_name"] = final_name
+            expanded_entry["source"] = "sql_multiplexed"
+            expanded_entry["original_table_pattern"] = table_name
+            expanded_entry["resolved_variables"] = ", ".join(resolved_vars)
+
+            expanded.append(expanded_entry)
+
+    return expanded
 
 
 def _find_controller_service_for_processor(
@@ -702,8 +828,9 @@ def _get_context_aware_sql_patterns() -> List[Dict[str, Any]]:
     two capturing groups: (${var}.)? for optional EL prefix and (table_name) for the actual table.
     """
     # Common pattern suffix for table names with optional EL variable prefix
-    # Captures: (${var}.)? (table_name)
-    table_pattern = r"(\$\{[^}]+\}\.)?([a-zA-Z_][a-zA-Z0-9_.]*)"
+    # Captures: (${var}.)? (table_name or ${var})
+    # Allow ${var}.${var} or ${var}.tablename or just tablename
+    table_pattern = r"(\$\{[^}]+\}\.)?(\$\{[^}]+\}|[a-zA-Z_][a-zA-Z0-9_.]*)"
 
     return [
         {
@@ -821,7 +948,7 @@ def _calculate_table_name_score(table_name: str, context: Dict[str, Any]) -> flo
     score = 0.0
 
     # Basic format validation (required)
-    if not _passes_basic_format_checks(table_name):
+    if not _passes_basic_format_checks(table_name, context):
         return 0.0
 
     # Pattern recognition scoring
@@ -833,8 +960,12 @@ def _calculate_table_name_score(table_name: str, context: Dict[str, Any]) -> flo
     return min(score, 1.0)
 
 
-def _passes_basic_format_checks(table_name: str) -> bool:
+def _passes_basic_format_checks(
+    table_name: str, context: Dict[str, Any] = None
+) -> bool:
     """Basic format validation that must pass for any table name."""
+    if context is None:
+        context = {}
 
     # Skip obvious non-tables
     invalid_chars = ["*", "?", ";", " ", "\n", "\t", "(", ")", "[", "]"]
@@ -857,8 +988,11 @@ def _passes_basic_format_checks(table_name: str) -> bool:
     # Strip ${...} patterns temporarily for validation
     clean_name = re.sub(r"\$\{[^}]+\}\.?", "", table_name)
 
-    # If everything was EL variables, that's invalid
+    # If everything was EL variables, allow it ONLY if from SQL
+    # (these will be expanded in multiplexed workflows)
     if not clean_name:
+        if context.get("from_sql"):
+            return True  # Allow pure EL patterns like ${db_schema}.${tblout} from SQL
         return False
 
     # Allow leading digits if qualified name or previously quoted/EL
@@ -880,6 +1014,9 @@ def _score_table_name_patterns(table_name: str) -> float:
         actual_table = re.sub(r"\$\{[^}]+\}\.?", "", name_lower)
         if len(actual_table) >= 3:
             score += 0.5  # High confidence - came from SQL with EL variables
+        elif not actual_table:
+            # Pure EL pattern like ${db_schema}.${tblout} - HIGH confidence for multiplexed workflows
+            score += 0.8
         return min(score, 1.0)
 
     # Common table name patterns (positive indicators)
