@@ -173,6 +173,8 @@ def process_single_file(xml_path: str) -> List[Dict[str, Any]]:
         for ext_script in processor_result.get("external_scripts", []):
             all_scripts.append(
                 {
+                    "source_file": file_name,
+                    "processor_name": processor_name,
                     "processor_id": processor_id,
                     "script_type": ext_script.get("type", "unknown"),
                     "source": "external",
@@ -186,6 +188,8 @@ def process_single_file(xml_path: str) -> List[Dict[str, Any]]:
 
             all_scripts.append(
                 {
+                    "source_file": file_name,
+                    "processor_name": processor_name,
                     "processor_id": processor_id,
                     "script_type": inline_script.get("script_type", "unknown"),
                     "source": "inline",
@@ -257,8 +261,15 @@ else:
     # Create DataFrame
     df = pd.DataFrame(all_scripts)
 
-    # Ensure column order: processor_id, script_type, source, property_name
-    column_order = ["processor_id", "script_type", "source", "property_name"]
+    # Ensure column order: source_file, processor_name, processor_id, script_type, source, property_name
+    column_order = [
+        "source_file",
+        "processor_name",
+        "processor_id",
+        "script_type",
+        "source",
+        "property_name",
+    ]
     df = df[column_order]
 
     # Handle different path types in Databricks (DBFS, Workspace, Unity Catalog Volumes)
@@ -396,8 +407,10 @@ if all_scripts:
 # MAGIC The results have been saved to the configured output path.
 # MAGIC
 # MAGIC **CSV Columns:**
+# MAGIC - `source_file` - NiFi XML filename
+# MAGIC - `processor_name` - Name of the processor
 # MAGIC - `processor_id` - Unique processor identifier
-# MAGIC - `script_type` - Script language (sql, bash, python, unknown, etc.)
+# MAGIC - `script_type` - Script language (sql, bash, python, shell_script, etc.)
 # MAGIC - `source` - Script source ("inline" or "external")
 # MAGIC - `property_name` - Property name containing the script
 
