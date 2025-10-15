@@ -659,7 +659,7 @@ def extract_scripts_from_processor(
     external_hosts = []
     external_scripts = []
 
-    # Special ExecuteStreamCommand handling
+    # Special ExecuteStreamCommand handling - extract external scripts from command
     exec_stream_processed_props = (
         set()
     )  # Track which properties we've already processed
@@ -669,56 +669,16 @@ def extract_scripts_from_processor(
 
         if cmd or args:
             combined = f"{cmd} {args}".strip()
-            tokens = split_command_args(cmd, args)
-
-            # Extract query references
-            refs = extract_query_refs(combined)
-            resolved_queries = []
-
-            # Resolve query references if index provided
-            if query_index and refs:
-                group_idx = query_index.get(processor_group, {})
-                for ref in refs:
-                    if ref in group_idx:
-                        proc_id, proc_name, prop_name, value = group_idx[ref]
-                        resolved_queries.append(
-                            {
-                                "name": ref,
-                                "processor": proc_name,
-                                "value": value[:200] if value else "(empty)",
-                            }
-                        )
-
-            # Detect language
-            normalized = _normalize_el(combined)
-            lang, conf = guess_script_type(normalized)
-
-            # Override if referencing SQL queries
-            if refs:
-                lang = "sql"
-                conf = 0.85
-
-            inline_scripts.append(
-                {
-                    "property_name": "Command+Args",
-                    "script_type": lang,
-                    "content": combined,  # Original with variables
-                    "content_preview": redact_secrets(combined[:800]),
-                    "line_count": combined.count("\n") + 1,
-                    "referenced_queries": refs,
-                    "resolved_queries": resolved_queries,
-                }
-            )
 
             # Extract external script paths from the combined command
-            # This catches .sh/.py/.jar files in ExecuteStreamCommand that would otherwise be missed
+            # This catches .sh/.py/.jar files in ExecuteStreamCommand
             script_paths = _extract_scripts_from_command(combined)
             for script_path in script_paths:
                 external_scripts.append(
                     {
                         "path": script_path,
                         "type": _classify_script_type(script_path),
-                        "property_source": "Command+Args",
+                        "property_source": "Command Path",
                     }
                 )
 
