@@ -27,6 +27,8 @@ class ProcessorPayload:
     controller_services: List[str]
     notes: str
     scripts: Dict[str, object]
+    scheduling_strategy: str
+    scheduling_period: str
 
     def to_payload(self) -> Dict[str, object]:
         return {
@@ -47,6 +49,8 @@ class ProcessorPayload:
             "controller_services": self.controller_services,
             "notes": self.notes,
             "scripts": self.scripts,
+            "scheduling_strategy": self.scheduling_strategy,
+            "scheduling_period": self.scheduling_period,
         }
 
 
@@ -227,6 +231,8 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
             controller_services=controller_services,
             notes=str(rec.get("notes") or ""),
             scripts=scripts,
+            scheduling_strategy=str(rec.get("schedulingStrategy") or ""),
+            scheduling_period=str(rec.get("schedulingPeriod") or ""),
         )
         payloads.append(payload)
     return payloads

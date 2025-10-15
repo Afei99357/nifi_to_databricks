@@ -39,7 +39,10 @@ TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating pro
 
 Rules:
 - Classification guidance: Processors are pre-classified with a migration_category:
-  - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries. IMPORTANT: For scheduling processors (GenerateFlowFile, Timer, Cron), extract the scheduling information (CRON expression, timer period, processor name with time) into implementation_hint field (e.g., "Runs daily at 3:30 AM via CRON: 0 30 03 ? * * *" or "Triggers every 5 minutes").
+  - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries. IMPORTANT: Extract scheduling metadata into implementation_hint:
+    * Check scheduling_strategy field: if "CRON_DRIVEN", extract the CRON expression from scheduling_period (e.g., "Runs daily at 3:30 AM via CRON: 0 30 03 ? * * *")
+    * If "TIMER_DRIVEN", extract timer period from scheduling_period (e.g., "Triggers every 5 minutes")
+    * Include processor name if it contains time information (e.g., "Daily Trigger - 3:30")
   - "Orchestration / Monitoring": Usually mark as "retire" unless they contain essential routing/branching logic. Document routing rules and retry logic in implementation_hint.
   - "Business Logic", "Source Adapter", "Sink Adapter": Generate migration code.
   - "Ambiguous": Evaluate and decide based on processor details.

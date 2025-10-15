@@ -89,6 +89,12 @@ def parse_nifi_template_impl(xml_content: str) -> Dict[str, Any]:
             "parentGroupId": parent_group_id,
             "parentGroupName": parent_group_name,
             "parentGroupPath": parent_group_path,
+            "schedulingStrategy": _trim(
+                processor.findtext(".//config/schedulingStrategy") or ""
+            ),
+            "schedulingPeriod": _trim(
+                processor.findtext(".//config/schedulingPeriod") or ""
+            ),
         }
 
         props_node = processor.find(".//properties")
