@@ -60,7 +60,7 @@ LANG_SIGS = [
         "sql",
         [
             r"\bSELECT\b.*\bFROM\b",
-            r"\bINSERT\s+INTO\b",
+            r"\bINSERT\s+(INTO|OVERWRITE)\b",
             r"\bUPDATE\s+.*\bSET\b",
             r"\bCREATE\s+(TABLE|DATABASE|SCHEMA|VIEW|INDEX|EXTERNAL\s+TABLE)\b",
             r"\bALTER\s+(TABLE|DATABASE|SCHEMA|VIEW)\b",
