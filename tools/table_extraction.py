@@ -11,12 +11,24 @@ from tools.variable_extraction import find_variable_definitions, find_variable_u
 from tools.xml_tools import parse_nifi_template_impl
 
 # NiFi Expression Language pattern
-EL_PATTERN = re.compile(r"\$\{[^}]+\}")
+EL_PATTERN = re.compile(r"\$\{([^}]+)\}")  # Capturing group for variable name
 
 
 def _normalize_el(value: str, replacement: str = "elvar") -> str:
-    """Replace NiFi Expression Language ${...} with safe tokens."""
-    return EL_PATTERN.sub(replacement, value)
+    """Replace NiFi Expression Language ${...} with safe tokens.
+
+    Preserves variable names by keeping them as ${var_name} format but with
+    sanitized characters for pattern matching.
+    """
+
+    def replace_with_varname(match):
+        # Extract variable name from ${var_name}
+        var_expr = match.group(1)  # e.g., "db_schema" or "tblout:equals('foo')"
+        var_name = var_expr.split(":")[0]  # Strip EL functions
+        # Return sanitized format that preserves identity
+        return f"${{{var_name}}}"
+
+    return EL_PATTERN.sub(replace_with_varname, value)
 
 
 def _canonical_type(name: str) -> str:
@@ -603,13 +615,21 @@ def _extract_tables_from_sql(
 
         matches = re.findall(pattern, sql_clean, re.IGNORECASE | re.MULTILINE)
         for match in matches:
-            table_name = (
-                next((m for m in match if m), "") if isinstance(match, tuple) else match
-            ).strip()
-            if not table_name:
+            # Patterns now return tuples with (EL_prefix, table_name)
+            # EL_prefix may be None or empty string if no EL variable present
+            if isinstance(match, tuple) and len(match) >= 2:
+                el_prefix = match[0] or ""  # Optional ${var}. prefix
+                table_name = match[1] or ""  # Actual table name
+                # Combine them to preserve ${var}.table_name format
+                candidate = el_prefix + table_name
+            else:
+                # Fallback for patterns without EL support (shouldn't happen with new patterns)
+                candidate = match if isinstance(match, str) else str(match)
+
+            candidate = candidate.strip().strip(",")
+            if not candidate:
                 continue
 
-            candidate = table_name.strip().strip(",")
             if candidate.startswith("(") or candidate.endswith(")"):
                 continue
 
@@ -676,65 +696,73 @@ def _preprocess_sql_for_parsing(sql_content: str) -> str:
 
 
 def _get_context_aware_sql_patterns() -> List[Dict[str, Any]]:
-    """Get SQL patterns with priority and context information."""
+    """Get SQL patterns with priority and context information.
+
+    Patterns support EL-prefixed table names like ${db_schema}.table_name by using
+    two capturing groups: (${var}.)? for optional EL prefix and (table_name) for the actual table.
+    """
+    # Common pattern suffix for table names with optional EL variable prefix
+    # Captures: (${var}.)? (table_name)
+    table_pattern = r"(\$\{[^}]+\}\.)?([a-zA-Z_][a-zA-Z0-9_.]*)"
+
     return [
         {
-            "pattern": r"\bFROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bFROM\s+{table_pattern}",
             "priority": "high",
             "context": {"clause": "from", "confidence": 0.9},
         },
         {
-            "pattern": r"\b(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+|CROSS\s+)?JOIN\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\b(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+|CROSS\s+)?JOIN\s+{table_pattern}",
             "priority": "high",
             "context": {"clause": "join", "confidence": 0.9},
         },
         {
-            "pattern": r"\bINSERT\s+INTO\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bINSERT\s+(?:INTO|OVERWRITE)\s+(?:TABLE\s+)?{table_pattern}",
             "priority": "high",
             "context": {"clause": "insert", "confidence": 0.95},
         },
         {
-            "pattern": r"\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bUPDATE\s+{table_pattern}",
             "priority": "high",
             "context": {"clause": "update", "confidence": 0.95},
         },
         {
-            "pattern": r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+IF\s+NOT\s+EXISTS\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+IF\s+NOT\s+EXISTS\s+{table_pattern}",
             "priority": "high",
             "context": {"clause": "create", "confidence": 0.98},
         },
         {
-            "pattern": r"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?!IF\s+NOT\s+EXISTS)([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bCREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?!IF\s+NOT\s+EXISTS){table_pattern}",
             "priority": "high",
             "context": {"clause": "create", "confidence": 0.98},
         },
         {
-            "pattern": r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?{table_pattern}",
             "priority": "medium",
             "context": {"clause": "drop", "confidence": 0.8},
         },
         {
-            "pattern": r"\bALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bALTER\s+TABLE\s+{table_pattern}",
             "priority": "medium",
             "context": {"clause": "alter", "confidence": 0.8},
         },
         {
-            "pattern": r"\bTRUNCATE\s+(?:TABLE\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bTRUNCATE\s+(?:TABLE\s+)?{table_pattern}",
             "priority": "medium",
             "context": {"clause": "truncate", "confidence": 0.8},
         },
         {
-            "pattern": r"\bDELETE\s+FROM\s+([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bDELETE\s+FROM\s+{table_pattern}",
             "priority": "high",
             "context": {"clause": "delete", "confidence": 0.9},
         },
         {
-            "pattern": r"\bMERGE\s+(?:INTO\s+)?([a-zA-Z_][a-zA-Z0-9_.]*)",
+            "pattern": rf"\bMERGE\s+(?:INTO\s+)?{table_pattern}",
             "priority": "medium",
             "context": {"clause": "merge", "confidence": 0.8},
         },
         {
-            "pattern": r"\bWITH\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+AS",
+            "pattern": rf"\bWITH\s+{table_pattern}\s+AS",
             "priority": "low",
             "context": {
                 "clause": "with",
@@ -825,8 +853,16 @@ def _passes_basic_format_checks(table_name: str) -> bool:
     if len(table_name) < 2:
         return False
 
+    # Allow EL variables in table names: ${var}.table or table with ${var} anywhere
+    # Strip ${...} patterns temporarily for validation
+    clean_name = re.sub(r"\$\{[^}]+\}\.?", "", table_name)
+
+    # If everything was EL variables, that's invalid
+    if not clean_name:
+        return False
+
     # Allow leading digits if qualified name or previously quoted/EL
-    if not re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_.]*$", table_name):
+    if not re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_.]*$", clean_name):
         return False
 
     return True
@@ -836,6 +872,15 @@ def _score_table_name_patterns(table_name: str) -> float:
     """Score based on common table name patterns."""
     score = 0.0
     name_lower = table_name.lower()
+
+    # Special handling for EL-normalized table names (${var}.table_name or ${var})
+    # These come from unresolved ${var}.table_name patterns
+    if "${" in name_lower:
+        # Strip EL variables and score the actual table name
+        actual_table = re.sub(r"\$\{[^}]+\}\.?", "", name_lower)
+        if len(actual_table) >= 3:
+            score += 0.5  # High confidence - came from SQL with EL variables
+        return min(score, 1.0)
 
     # Common table name patterns (positive indicators)
     positive_patterns = [
@@ -1010,12 +1055,19 @@ def _score_database_formats(table_name: str) -> float:
         score += 0.8
 
     # SQL qualified names (2-part or 3-part: schema.table or catalog.schema.table)
+    # Strip EL variables for validation since ${var}.table is valid
     if "." in table_name:
         parts = table_name.split(".")
-        if 2 <= len(parts) <= 3 and all(
-            re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_]*$", p) for p in parts
-        ):
-            score += 0.6
+        if 2 <= len(parts) <= 3:
+            # Strip EL variables from each part before validation
+            clean_parts = [re.sub(r"\$\{[^}]+\}", "", p) for p in parts]
+            # Filter out empty parts (which were pure EL variables)
+            clean_parts = [p for p in clean_parts if p]
+            # Check if remaining parts are valid identifiers
+            if clean_parts and all(
+                re.match(r"^[a-zA-Z_0-9][a-zA-Z0-9_]*$", p) for p in clean_parts
+            ):
+                score += 0.6
 
     # MongoDB collection patterns
     if table_name.endswith("s") and len(table_name) > 4:  # plural collections
