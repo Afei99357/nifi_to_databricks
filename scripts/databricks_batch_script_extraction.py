@@ -174,56 +174,26 @@ def process_single_file(xml_path: str) -> List[Dict[str, Any]]:
             all_scripts.append(
                 {
                     "source_file": file_name,
-                    "source_path": xml_path,
-                    "script_path": ext_script.get("path", ""),
-                    "script_type": ext_script.get("type", "unknown"),
-                    "source_type": "External File",
                     "processor_name": processor_name,
-                    "processor_type": processor_type,
-                    "processor_group": processor_group,
                     "processor_id": processor_id,
-                    "line_count": ext_script.get("line_count"),
-                    "referenced_queries": "",
-                    "inline_script_content": "",
-                    "content_preview": "",
+                    "script_type": ext_script.get("type", "unknown"),
+                    "source": "external",
+                    "property_name": ext_script.get("property_source", ""),
                 }
             )
 
         # Process inline scripts
         for inline_script in processor_result.get("inline_scripts", []):
             property_name = inline_script.get("property_name", "")
-            line_count = inline_script.get("line_count", 0)
-            referenced_queries = inline_script.get("referenced_queries", [])
-            full_content = inline_script.get("content", "")
-
-            # Create script path with query references if available
-            script_path = f"{property_name} ({line_count} lines)"
-            if referenced_queries:
-                refs = ", ".join(referenced_queries)
-                script_path = f"{script_path} → {refs}"
-
-            # Create content preview (first 200 chars)
-            content_preview = (
-                full_content[:200] + "..." if len(full_content) > 200 else full_content
-            )
 
             all_scripts.append(
                 {
                     "source_file": file_name,
-                    "source_path": xml_path,
-                    "script_path": script_path,
-                    "script_type": inline_script.get("script_type", "unknown"),
-                    "source_type": "Inline Script",
                     "processor_name": processor_name,
-                    "processor_type": processor_type,
-                    "processor_group": processor_group,
                     "processor_id": processor_id,
-                    "line_count": line_count,
-                    "referenced_queries": (
-                        ", ".join(referenced_queries) if referenced_queries else ""
-                    ),
-                    "inline_script_content": full_content,
-                    "content_preview": content_preview,
+                    "script_type": inline_script.get("script_type", "unknown"),
+                    "source": "inline",
+                    "property_name": property_name,
                 }
             )
 
@@ -291,24 +261,15 @@ else:
     # Create DataFrame
     df = pd.DataFrame(all_scripts)
 
-    # Reorder columns for better readability
-    priority_cols = [
+    # Ensure column order: source_file, processor_name, processor_id, script_type, source, property_name
+    column_order = [
         "source_file",
-        "source_path",
-        "script_path",
-        "script_type",
-        "source_type",
         "processor_name",
-        "processor_type",
-        "processor_group",
         "processor_id",
-        "line_count",
-        "referenced_queries",
-        "content_preview",
-        "inline_script_content",
+        "script_type",
+        "source",
+        "property_name",
     ]
-
-    column_order = [c for c in priority_cols if c in df.columns]
     df = df[column_order]
 
     # Handle different path types in Databricks (DBFS, Workspace, Unity Catalog Volumes)
@@ -333,9 +294,7 @@ else:
 
     # Display preview
     print(f"\nPreview of results (first 10 rows):")
-    # Show columns except full inline content for preview
-    preview_df = df.drop(columns=["inline_script_content"], errors="ignore")
-    display(preview_df.head(10))
+    display(df.head(10))
 
 # COMMAND ----------
 
@@ -346,24 +305,22 @@ else:
 
 if all_scripts:
     # Count by type
-    external_scripts = [s for s in all_scripts if s["source_type"] == "External File"]
-    inline_scripts = [s for s in all_scripts if s["source_type"] == "Inline Script"]
+    external_scripts = [s for s in all_scripts if s["source"] == "external"]
+    inline_scripts = [s for s in all_scripts if s["source"] == "inline"]
 
     # Unique counts
-    unique_processors = set(s["processor_name"] for s in all_scripts)
-    unique_files = set(s["source_file"] for s in all_scripts)
+    unique_processors = set(s["processor_id"] for s in all_scripts)
     unique_script_types = set(s["script_type"] for s in all_scripts)
 
     print(f"{'='*60}")
     print("SUMMARY")
     print(f"{'='*60}")
-    print(f"Files processed:        {len(xml_files) - len(errors)}/{len(xml_files)}")
-    print(f"Files with scripts:     {len(unique_files)}")
+    print(f"Files processed:         {len(xml_files) - len(errors)}/{len(xml_files)}")
     print(f"Total script references: {len(all_scripts)}")
-    print(f"  - External scripts:   {len(external_scripts)}")
-    print(f"  - Inline scripts:     {len(inline_scripts)}")
-    print(f"Unique processors:      {len(unique_processors)}")
-    print(f"Script types found:     {', '.join(sorted(unique_script_types))}")
+    print(f"  - External scripts:    {len(external_scripts)}")
+    print(f"  - Inline scripts:      {len(inline_scripts)}")
+    print(f"Unique processors:       {len(unique_processors)}")
+    print(f"Script types found:      {', '.join(sorted(unique_script_types))}")
 
     if errors:
         print(f"\n⚠ {len(errors)} file(s) had errors:")
@@ -374,7 +331,6 @@ if all_scripts:
     summary_data = {
         "Metric": [
             "Files Processed",
-            "Files with Scripts",
             "Total Scripts",
             "External Scripts",
             "Inline Scripts",
@@ -382,7 +338,6 @@ if all_scripts:
         ],
         "Count": [
             len(xml_files) - len(errors),
-            len(unique_files),
             len(all_scripts),
             len(external_scripts),
             len(inline_scripts),
@@ -407,14 +362,14 @@ if all_scripts:
     print(script_type_counts)
 
     # Top processors by script count
-    processor_counts = df["processor_name"].value_counts().head(10)
+    processor_counts = df["processor_id"].value_counts().head(10)
     print("\nTop 10 Processors with Most Scripts:")
     print(processor_counts)
 
     # External vs Inline breakdown
-    source_type_counts = df["source_type"].value_counts()
+    source_counts = df["source"].value_counts()
     print("\nExternal vs Inline Scripts:")
-    print(source_type_counts)
+    print(source_counts)
 
     # Visualize distributions
     display(script_type_counts.to_frame().reset_index())
@@ -428,33 +383,19 @@ if all_scripts:
 
 if all_scripts:
     # Filter to only inline scripts
-    inline_df = df[df["source_type"] == "Inline Script"].copy()
+    inline_df = df[df["source"] == "inline"].copy()
 
     if not inline_df.empty:
         print(f"Found {len(inline_df)} inline scripts")
 
-        # Show top 5 longest inline scripts
-        longest_scripts = inline_df.nlargest(5, "line_count")[
-            [
-                "processor_name",
-                "script_path",
-                "script_type",
-                "line_count",
-                "content_preview",
-            ]
-        ]
-        print("\nTop 5 Longest Inline Scripts:")
-        display(longest_scripts)
+        # Show inline scripts by type
+        inline_by_type = inline_df["script_type"].value_counts()
+        print("\nInline Scripts by Type:")
+        display(inline_by_type.to_frame().reset_index())
 
-        # Scripts with query references
-        with_refs = inline_df[inline_df["referenced_queries"] != ""]
-        if not with_refs.empty:
-            print(f"\n{len(with_refs)} inline scripts reference other queries")
-            display(
-                with_refs[["processor_name", "script_path", "referenced_queries"]].head(
-                    10
-                )
-            )
+        # Show sample of inline scripts
+        print("\nSample Inline Scripts:")
+        display(inline_df.head(20))
     else:
         print("No inline scripts found")
 
@@ -466,19 +407,12 @@ if all_scripts:
 # MAGIC The results have been saved to the configured output path.
 # MAGIC
 # MAGIC **CSV Columns:**
-# MAGIC - `source_file` - XML filename
-# MAGIC - `source_path` - Full path to XML
-# MAGIC - `script_path` - Script path or property name
-# MAGIC - `script_type` - python, shell, sql, groovy, etc.
-# MAGIC - `source_type` - "External File" or "Inline Script"
-# MAGIC - `processor_name` - Processor name
-# MAGIC - `processor_type` - Processor type
-# MAGIC - `processor_group` - Group name
-# MAGIC - `processor_id` - Processor ID
-# MAGIC - `line_count` - Number of lines
-# MAGIC - `referenced_queries` - Query references (for inline scripts)
-# MAGIC - `content_preview` - First 200 chars preview
-# MAGIC - `inline_script_content` - Full script content (for inline scripts only)
+# MAGIC - `source_file` - NiFi XML filename
+# MAGIC - `processor_name` - Name of the processor
+# MAGIC - `processor_id` - Unique processor identifier
+# MAGIC - `script_type` - Script language (sql, bash, python, shell_script, etc.)
+# MAGIC - `source` - Script source ("inline" or "external")
+# MAGIC - `property_name` - Property name containing the script
 
 # COMMAND ----------
 

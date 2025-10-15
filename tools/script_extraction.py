@@ -24,7 +24,7 @@ SCRIPTY_PROCESSOR_HINTS = [
     "scriptedrecordsetwriter",
     "jolttransformjson",
     "executegroovyscript",
-    "updateattribute",
+    # Note: updateattribute removed - it sets attributes/variables, not executable scripts
 ]
 
 # Property name patterns that likely contain inline code
@@ -271,9 +271,58 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     if re.match(r"query_\d+", prop_name.lower()):
         return True
 
-    # Empty but named like script
+    # Very short values (< 2 chars) are never scripts, regardless of property name
     if len(v.strip()) < 2:
-        return any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
+        return False
+
+    # If value looks like an external file path (ends with script extension and has /),
+    # it should be handled as external script, NOT inline script
+    if "/" in value and any(value.endswith(ext) for ext in SCRIPT_EXTENSIONS):
+        return False
+
+    # Filter pure NiFi EL expressions (routing conditions, not executable code)
+    # If entire value is one ${...} expression, it's configuration, not a script
+    # Only check if it STARTS with ${ (commands like "/bin/mv ${file}" are scripts)
+    if value.strip().startswith("${"):
+        # Extract the outermost ${...} with nested brace handling
+        text = value.strip()
+        depth = 0
+        i = 2  # Start after ${
+        while i < len(text):
+            if text[i : i + 2] == "${":
+                depth += 1
+                i += 1
+            elif text[i] == "}":
+                if depth == 0:
+                    # Found matching close brace for outermost ${
+                    outermost_end = i + 1
+                    # Check if this is the entire value (pure EL expression)
+                    if outermost_end == len(text):
+                        return False  # Pure EL expression, not executable code
+                    break
+                depth -= 1
+            i += 1
+
+    # ExecuteStreamCommand: Skip configuration properties, not actual script content
+    if "executestreamcommand" in processor_type.lower():
+        # These are configuration properties, NOT scripts
+        config_properties = [
+            "ignore stdin",
+            "output destination attribute",
+            "max attribute length",
+            "argumentsstrategy",
+            "argument delimiter",
+            "working directory",
+            "command path",  # Just the executable path
+        ]
+        if any(config_prop in prop_name.lower() for config_prop in config_properties):
+            return False
+
+    # LogMessage: "log-message" property contains prose text, not executable scripts
+    # Even if it mentions SQL keywords like "query" or "insert", it's just log output
+    if "logmessage" in processor_type.lower():
+        if "log-message" in prop_name.lower() or "log message" in prop_name.lower():
+            return False
 
     # Check for code patterns
     longish = len(v) >= 40 or "\n" in v
@@ -282,7 +331,7 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
         for p in [
             r"\b(def|function|class)\b",
             r"[{};]",
-            r"\b(import|from)\b",
+            r"^\s*(import|from)\s+",  # Python imports at start of line (not path segments)
             r"#!/",
             r"\bSELECT\b",
             r"\bINSERT\b",
@@ -296,14 +345,8 @@ def looks_like_code(prop_name: str, value: str, processor_type: str) -> bool:
     name_hint = any(h in prop_name.lower() for h in SCRIPT_PROPERTY_HINTS)
     type_hint = any(h in processor_type.lower() for h in SCRIPTY_PROCESSOR_HINTS)
 
-    # ExecuteStreamCommand special case
-    is_exec_stream = "executestreamcommand" in processor_type.lower()
-
-    return (
-        (longish and (token_hits >= 1 or name_hint or type_hint))
-        or is_exec_stream
-        or name_hint
-    )
+    # Property name hints alone are not enough - content must also be substantial (longish)
+    return longish and (token_hits >= 1 or name_hint or type_hint)
 
 
 def _is_script_false_positive(value: str) -> bool:
@@ -616,56 +659,39 @@ def extract_scripts_from_processor(
     external_hosts = []
     external_scripts = []
 
-    # Special ExecuteStreamCommand handling
+    # Special ExecuteStreamCommand handling - extract external scripts from command
+    exec_stream_processed_props = (
+        set()
+    )  # Track which properties we've already processed
     if "executestreamcommand" in processor_type.lower():
         cmd = properties.get("Command Path", "")
         args = properties.get("Command Arguments", "")
 
         if cmd or args:
             combined = f"{cmd} {args}".strip()
-            tokens = split_command_args(cmd, args)
 
-            # Extract query references
-            refs = extract_query_refs(combined)
-            resolved_queries = []
+            # Extract external script paths from the combined command
+            # This catches .sh/.py/.jar files in ExecuteStreamCommand
+            script_paths = _extract_scripts_from_command(combined)
+            for script_path in script_paths:
+                external_scripts.append(
+                    {
+                        "path": script_path,
+                        "type": _classify_script_type(script_path),
+                        "property_source": "Command Path",
+                    }
+                )
 
-            # Resolve query references if index provided
-            if query_index and refs:
-                group_idx = query_index.get(processor_group, {})
-                for ref in refs:
-                    if ref in group_idx:
-                        proc_id, proc_name, prop_name, value = group_idx[ref]
-                        resolved_queries.append(
-                            {
-                                "name": ref,
-                                "processor": proc_name,
-                                "value": value[:200] if value else "(empty)",
-                            }
-                        )
-
-            # Detect language
-            normalized = _normalize_el(combined)
-            lang, conf = guess_script_type(normalized)
-
-            # Override if referencing SQL queries
-            if refs:
-                lang = "sql"
-                conf = 0.85
-
-            inline_scripts.append(
-                {
-                    "property_name": "Command+Args",
-                    "script_type": lang,
-                    "content": combined,  # Original with variables
-                    "content_preview": redact_secrets(combined[:800]),
-                    "line_count": combined.count("\n") + 1,
-                    "referenced_queries": refs,
-                    "resolved_queries": resolved_queries,
-                }
-            )
+            # Mark these properties as already processed
+            exec_stream_processed_props.add("Command Path")
+            exec_stream_processed_props.add("Command Arguments")
 
     # Process all properties (including query_* properties)
     for prop_name, prop_value in properties.items():
+        # Skip properties already processed by ExecuteStreamCommand handler
+        if prop_name in exec_stream_processed_props:
+            continue
+
         # Handle empty query properties
         if re.match(r"query_\d+", prop_name.lower()):
             if not prop_value or len(str(prop_value).strip()) <= 1:

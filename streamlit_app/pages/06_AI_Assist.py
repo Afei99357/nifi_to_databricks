@@ -38,6 +38,11 @@ from tools.conversion import (
 TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
+- Classification guidance: Processors are pre-classified with a migration_category:
+  - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries.
+  - "Orchestration / Monitoring": Usually mark as "retire" unless they contain essential routing/branching logic.
+  - "Business Logic", "Source Adapter", "Sink Adapter": Generate migration code.
+  - "Ambiguous": Evaluate and decide based on processor details.
 - Scope and mapping: Map NiFi processors to Databricks patterns:
   - Sources/Sinks: files (HDFS/S3/ADLS), JDBC, Kafka, HTTP → Auto Loader, COPY INTO, spark.read/write, Structured Streaming.
   - SQL processors: inline SQL → spark.sql(...) or DBSQL compatible statements.
@@ -901,6 +906,13 @@ def main() -> None:
             placeholder="Optional context or constraints for the composed notebook.",
         )
 
+        # Display cached composition result if available
+        cached_composition = st.session_state.get("composed_notebook_result")
+        if cached_composition:
+            st.info(
+                "📝 A composed notebook is available below. Generate a new one to replace it."
+            )
+
         if st.button("Compose notebook for group", key="compose_button"):
             compose_df = (
                 snippet_df
@@ -926,13 +938,69 @@ def main() -> None:
                     f"The LLM will document the retired processors in a 'Migration Notes' section."
                 )
 
+            # Simplify retired processor records to reduce payload size
+            optimized_records = []
+            for record in compose_records:
+                if not record.get("has_code"):
+                    # Only send essential metadata for retired processors
+                    optimized_records.append(
+                        {
+                            "processor_id": record["processor_id"],
+                            "name": record["name"],
+                            "short_type": record["short_type"],
+                            "migration_category": record["migration_category"],
+                            "databricks_target": record["databricks_target"],
+                            "recommended_target": record.get(
+                                "recommended_target", "retire"
+                            ),
+                            "has_code": False,
+                            "databricks_code": "",
+                        }
+                    )
+                else:
+                    # Send full record for processors with code
+                    optimized_records.append(record)
+
             group_payload = {
                 "group_name": group_label,
-                "processor_count": len(compose_records),
-                "processors": compose_records,
+                "processor_count": len(optimized_records),
+                "processors": optimized_records,
             }
             if compose_notes.strip():
                 group_payload["notes"] = compose_notes.strip()
+
+            # Estimate payload size and warn if too large
+            payload_str = json.dumps(group_payload, ensure_ascii=False)
+            payload_chars = len(payload_str)
+
+            # Rough estimate: 1 token ≈ 3-4 characters
+            estimated_input_tokens = payload_chars // 3
+            system_prompt_tokens = len(COMPOSE_SYSTEM_PROMPT) // 3
+
+            total_input_tokens = estimated_input_tokens + system_prompt_tokens
+
+            # Context limits: Claude 3.5 Sonnet = 200K, Llama 3.3 = 128K
+            if total_input_tokens > 150000:
+                st.error(
+                    f"⚠️ **Payload too large**: ~{total_input_tokens:,} tokens "
+                    f"({payload_chars:,} chars payload + {system_prompt_tokens:,} chars system prompt). "
+                    f"This exceeds typical context limits (128K-200K tokens). "
+                    f"**Please select a smaller group or sub-group.**"
+                )
+                st.caption(
+                    "💡 Tip: Use the 'Compose group' dropdown to select a specific NiFi process group instead of 'All'."
+                )
+                return
+            elif total_input_tokens > 100000:
+                st.warning(
+                    f"⚠️ **Large payload**: ~{total_input_tokens:,} tokens. "
+                    f"This may approach context limits for some models (Llama 3.3: 128K). "
+                    f"If composition fails, select a smaller group."
+                )
+            elif total_input_tokens > 50000:
+                st.info(
+                    f"ℹ️ Moderate payload: ~{total_input_tokens:,} tokens. Should work fine."
+                )
 
             messages = [
                 {"role": "system", "content": COMPOSE_SYSTEM_PROMPT.strip()},
@@ -951,9 +1019,23 @@ def main() -> None:
 
             result_payload = _parse_composition_response(raw_content)
             if result_payload:
+                # Cache the composition result in session state
+                st.session_state["composed_notebook_result"] = {
+                    "result_payload": result_payload,
+                    "group_label": group_label,
+                }
                 _display_composition_result(result_payload, group_label)
             else:
                 st.warning("Unable to parse composition output as JSON.")
+
+        # Always display cached composition if available (even after page refresh)
+        if cached_composition:
+            st.markdown("---")
+            st.subheader("📥 Cached Composed Notebook")
+            _display_composition_result(
+                cached_composition["result_payload"],
+                cached_composition["group_label"],
+            )
 
 
 if __name__ == "__main__":
