@@ -48,8 +48,17 @@ def update_snippet_store(
         processor_id = str(record.get("processor_id") or "")
         if not processor_id:
             continue
-        code = record.get("databricks_code")
-        if not code or not str(code).strip():
+        code = record.get("databricks_code", "")
+
+        # Skip retired processors that have no useful metadata to document
+        # Only cache if: has code OR has implementation_hint/rationale (scheduling, etc.)
+        has_code = code and str(code).strip()
+        has_metadata = (
+            record.get("implementation_hint", "").strip()
+            or record.get("rationale", "").strip()
+        )
+
+        if not has_code and not has_metadata:
             continue
         # Extract lineage information from feature_evidence if available
         feature_evidence = record.get("feature_evidence", {}) or {}
@@ -68,11 +77,12 @@ def update_snippet_store(
             "databricks_target": record.get("databricks_target"),
             "recommended_target": record.get("recommended_target"),
             "migration_needed": record.get("migration_needed"),
-            "implementation_hint": record.get("implementation_hint"),
-            "blockers": record.get("blockers"),
+            "implementation_hint": record.get("implementation_hint", ""),
+            "rationale": record.get("rationale", ""),
+            "blockers": record.get("blockers", ""),
             "next_step": record.get("next_step"),
             "code_language": record.get("code_language", "unknown"),
-            "databricks_code": str(code),
+            "databricks_code": str(code) if code else "",
             "confidence": record.get("confidence"),
             "classification_source": record.get("classification_source"),
             "rule": record.get("rule"),
