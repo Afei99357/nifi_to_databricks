@@ -556,9 +556,11 @@ def main() -> None:
     st.caption(f"Showing {len(filtered_df)} processors after filtering.")
 
     # === Checkbox selection ===
+    # Initialize selection state with all current processors
     if "selected_for_llm" not in st.session_state:
         st.session_state.selected_for_llm = set(filtered_df["processor_id"].tolist())
 
+    # Keep only processors that still exist after filtering
     current_ids = set(filtered_df["processor_id"].tolist())
     st.session_state.selected_for_llm = st.session_state.selected_for_llm.intersection(
         current_ids
@@ -567,37 +569,44 @@ def main() -> None:
     col_select_all, col_select_none = st.columns(2)
     with col_select_all:
         if st.button("Select All", use_container_width=True):
-            st.session_state.selected_for_llm = current_ids
+            st.session_state.selected_for_llm = current_ids.copy()
             st.rerun()
     with col_select_none:
         if st.button("Deselect All", use_container_width=True):
             st.session_state.selected_for_llm = set()
             st.rerun()
 
-    filtered_df["selected"] = filtered_df["processor_id"].apply(
-        lambda pid: pid in st.session_state.selected_for_llm
+    # Build display dataframe with current selection state
+    display_df = (
+        filtered_df[
+            [
+                "processor_id",
+                "template",
+                "name",
+                "short_type",
+                "migration_category",
+                "databricks_target",
+                "classification_source",
+            ]
+        ]
+        .head(200)
+        .copy()
     )
 
-    display_df = filtered_df[
-        [
-            "selected",
-            "processor_id",
-            "template",
-            "name",
-            "short_type",
-            "migration_category",
-            "databricks_target",
-            "classification_source",
-        ]
-    ].head(200)
+    # Add selected column based on current session state
+    display_df.insert(
+        0,
+        "selected",
+        display_df["processor_id"].isin(st.session_state.selected_for_llm),
+    )
 
     edited_df = st.data_editor(
-        display_df.set_index(pd.Index(range(1, min(len(filtered_df), 200) + 1))),
+        display_df,
         column_config={
             "selected": st.column_config.CheckboxColumn(
                 "Include in LLM",
                 help="Select to include this processor in the AI Migration Planner",
-                default=True,
+                default=False,
             )
         },
         disabled=[
@@ -609,11 +618,12 @@ def main() -> None:
             "databricks_target",
             "classification_source",
         ],
+        hide_index=True,
         use_container_width=True,
         key="processor_selection_editor",
     )
 
-    # Update selection state
+    # Update selection state from edited dataframe
     for _, row in edited_df.iterrows():
         pid = row["processor_id"]
         if row["selected"]:
