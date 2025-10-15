@@ -33,6 +33,7 @@ def _clear_ai_session_state() -> None:
 
     for key in [
         "ai_migration_planner_results_records",
+        "composed_notebook_result",
         "snippet_group_select",
         "ai_migration_planner_compositions",
     ]:
