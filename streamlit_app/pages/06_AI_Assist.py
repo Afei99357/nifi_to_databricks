@@ -79,17 +79,19 @@ Context:
   - has_code: true if there's databricks_code, false if retired/infrastructure-only
   - recommended_target: shows intended Databricks pattern (or "retire" if not migrated)
   - upstream_processors and downstream_processors: NiFi data flow relationships
-  - migration_category, implementation_hint, rationale: context about the processor
+  - migration_category, implementation_hint, rationale, blockers: context about the processor
 - Processors with has_code=false were marked as "retire" or infrastructure-only (schedulers, logging, routing)
+- For retired processors, implementation_hint and rationale contain important scheduling/orchestration details
 - Use relationships to determine execution order and maintain data flow
 
 Rules:
 - Handle processors with has_code=false:
   - Don't include their (empty) code in the notebook
   - DO extract and document their metadata in a "Migration Notes" markdown section:
-    - Scheduling information (e.g., "Trigger daily - 08:00" → document as "Run this notebook daily at 08:00 via Databricks Jobs")
-    - Retry logic, error handling, routing rules
-    - Logging and monitoring patterns
+    - Check implementation_hint and rationale for scheduling information (e.g., "Trigger daily - 08:00" → document as "Run this notebook daily at 08:00 via Databricks Jobs")
+    - Extract retry logic, error handling, routing rules from implementation_hint and rationale
+    - Document logging and monitoring patterns
+    - Note any blockers or concerns
   - List each retired processor with its name, type, and reason for retirement
 - Handle processors with has_code=true:
   - Include their databricks_code in the notebook
@@ -942,7 +944,9 @@ def main() -> None:
             optimized_records = []
             for record in compose_records:
                 if not record.get("has_code"):
-                    # Only send essential metadata for retired processors
+                    # Send essential metadata for retired processors
+                    # Include implementation_hint and rationale so 2nd LLM can document
+                    # scheduling, retry logic, routing rules, etc.
                     optimized_records.append(
                         {
                             "processor_id": record["processor_id"],
@@ -953,6 +957,11 @@ def main() -> None:
                             "recommended_target": record.get(
                                 "recommended_target", "retire"
                             ),
+                            "implementation_hint": record.get(
+                                "implementation_hint", ""
+                            ),
+                            "rationale": record.get("rationale", ""),
+                            "blockers": record.get("blockers", ""),
                             "has_code": False,
                             "databricks_code": "",
                         }
