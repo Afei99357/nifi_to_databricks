@@ -263,6 +263,8 @@ def classify_workflow(
             "properties": feature.get("properties"),
             "classification": final_classification.get("migration_category"),
             "data_manipulation_type": final_classification.get("migration_category"),
+            "schedulingStrategy": feature.get("schedulingStrategy", ""),
+            "schedulingPeriod": feature.get("schedulingPeriod", ""),
         }
 
         classifications.append(record)
