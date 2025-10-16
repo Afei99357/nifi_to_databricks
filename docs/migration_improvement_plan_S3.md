@@ -188,9 +188,15 @@ def extract_transformations_from_insert(sql: str) -> Dict[str, Any]:
 
 ## Phase 2: Parallel Flow Detection (Week 3)
 
-### **Goal:** Detect 4 parallel flows (ATTJ/ATKL × emt_log/emt_log_attributes)
+### **Goal:** Detect 4 parallel flows (ATTJ/ATKL × emt_log/emt_log_attributes) and integrate with 2-layer LLM architecture
 
 **Why Critical:** Without this, notebook generates single parameterized function instead of proper multi-task job with parallel execution.
+
+**LLM Architecture Context:** The AI Assist page uses a 2-layer LLM approach:
+- **Layer 1 (TRIAGE):** Evaluates individual processors and generates code snippets
+- **Layer 2 (COMPOSE):** Merges snippets using upstream/downstream relationships to create unified notebook
+
+**Phase 2 Integration:** Parallel flow detection enriches both layers with flow context to generate multi-task notebooks with proper parallelism.
 
 ### **Implementation:**
 
@@ -217,7 +223,14 @@ def detect_parallel_flows(workflow: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "site": "ATTJ",
                 "table": "emt_log",
                 "s3_path": "/landing-zone/emt_log/site=ATTJ/",
-                "processors": [...]
+                "processors": [...],
+                # NEW: Flow context for LLM integration
+                "flow_context": {
+                    "parallel_group_id": "emt_log_pipeline",
+                    "parallel_siblings": ["flow_ATKL_emt_log"],
+                    "execution_mode": "parallel",
+                    "pattern_similarity": 0.95
+                }
             },
             {
                 "flow_id": "flow_ATTJ_emt_log_attributes",
@@ -225,7 +238,13 @@ def detect_parallel_flows(workflow: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "site": "ATTJ",
                 "table": "emt_log_attributes",
                 "s3_path": "/landing-zone/emt_log_attributes/site=ATTJ/",
-                "processors": [...]
+                "processors": [...],
+                "flow_context": {
+                    "parallel_group_id": "emt_log_attributes_pipeline",
+                    "parallel_siblings": ["flow_ATKL_emt_log_attributes"],
+                    "execution_mode": "parallel",
+                    "pattern_similarity": 0.95
+                }
             },
             ...
         ]
@@ -294,10 +313,186 @@ def extract_flow_parameters(flow_cluster: List[nx.DiGraph]) -> Dict[str, List[st
     return {k: list(v) for k, v in all_params.items() if len(v) > 1}
 ```
 
+#### **Task 2.4: AI Assist Integration (2-Layer LLM Enhancement)**
+
+**Goal:** Enrich processor payloads and composition inputs with parallel flow context so the LLM generates multi-task notebooks with proper parallelism.
+
+**Layer 1 (TRIAGE) Enhancement:**
+```python
+# Updated: tools/classification/processor_payloads.py
+
+def build_processor_payload_with_flow_context(
+    processor: Dict[str, Any],
+    classification: Dict[str, Any],
+    parallel_flows: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Enrich processor payload with flow context for Layer 1 TRIAGE.
+
+    Adds flow_context to help LLM understand:
+    - This processor is part of a parallel flow group
+    - There are N similar flows that should use the same pattern
+    - Task should be parameterized for multi-task execution
+    """
+
+    # Find which flow this processor belongs to
+    flow_context = None
+    for flow in parallel_flows:
+        if processor["id"] in [p["id"] for p in flow["processors"]]:
+            flow_context = {
+                "flow_id": flow["flow_id"],
+                "parallel_group_id": flow["flow_context"]["parallel_group_id"],
+                "parallel_count": len(flow["flow_context"]["parallel_siblings"]) + 1,
+                "parameters": {
+                    "site": flow.get("site"),
+                    "table": flow.get("table"),
+                    "s3_path": flow.get("s3_path")
+                },
+                "pattern": flow["pattern"]
+            }
+            break
+
+    payload = {
+        "processor_id": processor["id"],
+        "processor_name": processor["name"],
+        "processor_type": processor["type"],
+        "classification": classification,
+        "properties": processor["properties"],
+        # NEW: Flow context for parallel execution awareness
+        "flow_context": flow_context
+    }
+
+    return payload
+```
+
+**Layer 1 (TRIAGE) Prompt Enhancement:**
+```python
+# Example enhanced TRIAGE prompt (from pages/06_AI_Assist.py)
+
+TRIAGE_SYSTEM_PROMPT_ENHANCED = """
+You are a NiFi to Databricks migration expert. Evaluate each processor and generate migration recommendations.
+
+FLOW CONTEXT AWARENESS:
+- If flow_context is provided, this processor is part of a PARALLEL FLOW GROUP
+- Generate PARAMETERIZED code that can be called multiple times with different parameters
+- Use parameters from flow_context (site, table, s3_path) instead of hardcoded values
+- Example: def process_table(site: str, table: str, s3_path: str) instead of hardcoded "ATTJ"
+
+OUTPUT FORMAT:
+{
+    "processor_id": "...",
+    "migration_recommendation": "migrate|support|eliminate",
+    "databricks_equivalent": "...",
+    "code_snippet": "...",  # Must be parameterized if flow_context.parallel_count > 1
+    "notes": "..."
+}
+"""
+```
+
+**Layer 2 (COMPOSE) Enhancement:**
+```python
+# Updated: streamlit_app/pages/06_AI_Assist.py (compose step)
+
+def build_compose_payload_with_parallel_flows(
+    processor_results: List[Dict[str, Any]],
+    parallel_flows: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Enrich composition payload with parallel flow grouping for Layer 2 COMPOSE.
+
+    Helps LLM generate:
+    - Multi-task job definitions
+    - Parallel execution loops (ThreadPoolExecutor, etc.)
+    - Task dependencies and orchestration
+    """
+
+    # Group processor results by parallel flow
+    flow_groups = defaultdict(list)
+    for result in processor_results:
+        flow_ctx = result.get("flow_context")
+        if flow_ctx:
+            group_id = flow_ctx["parallel_group_id"]
+            flow_groups[group_id].append(result)
+
+    compose_payload = {
+        "processor_results": processor_results,
+        "relationships": build_relationships(processor_results),
+        # NEW: Parallel flow grouping for multi-task generation
+        "parallel_flows": {
+            group_id: {
+                "flow_ids": [r["flow_context"]["flow_id"] for r in results],
+                "execution_mode": "parallel",
+                "task_count": len(results),
+                "common_pattern": results[0]["flow_context"]["pattern"],
+                "parameters": [r["flow_context"]["parameters"] for r in results]
+            }
+            for group_id, results in flow_groups.items()
+        }
+    }
+
+    return compose_payload
+```
+
+**Layer 2 (COMPOSE) Prompt Enhancement:**
+```python
+COMPOSE_SYSTEM_PROMPT_ENHANCED = """
+You are composing a unified Databricks notebook from processor migration snippets.
+
+PARALLEL FLOWS HANDLING:
+- If parallel_flows is provided, generate MULTI-TASK execution patterns
+- For each parallel flow group:
+  1. Create a parameterized function using the common pattern
+  2. Generate parallel execution loop (e.g., ThreadPoolExecutor)
+  3. Call the function for each set of parameters
+
+EXAMPLE OUTPUT FOR PARALLEL FLOWS:
+```python
+# Cell 1: Parameterized function
+def process_site_table(site: str, table: str, s3_path: str):
+    '''Process data for given site/table combination'''
+    df = spark.read.parquet(s3_path)
+    # ... transformations from snippets ...
+    df.write.mode("overwrite").saveAsTable(f"{{table}}_processed")
+
+# Cell 2: Multi-task execution
+from concurrent.futures import ThreadPoolExecutor
+
+tasks = [
+    ("ATTJ", "emt_log", "/landing-zone/emt_log/site=ATTJ/"),
+    ("ATKL", "emt_log", "/landing-zone/emt_log/site=ATKL/"),
+    ("ATTJ", "emt_log_attributes", "/landing-zone/emt_log_attributes/site=ATTJ/"),
+    ("ATKL", "emt_log_attributes", "/landing-zone/emt_log_attributes/site=ATKL/")
+]
+
+with ThreadPoolExecutor(max_workers=4) as executor:
+    futures = [executor.submit(process_site_table, *task) for task in tasks]
+    results = [f.result() for f in futures]
+```
+
+OUTPUT FORMAT:
+{
+    "notebook_cells": [...]
+}
+"""
+```
+
+**Integration Points:**
+1. **Update `processor_payloads.py`**: Add `build_processor_payload_with_flow_context()`
+2. **Update `pages/06_AI_Assist.py`**:
+   - Pass `parallel_flows` to payload builders
+   - Update TRIAGE_SYSTEM_PROMPT with flow context awareness
+   - Update COMPOSE_SYSTEM_PROMPT with parallel flows handling
+3. **Update `run_full_analysis()`**: Cache `parallel_flows` result in session state
+4. **Add tests**: Verify flow context propagates through both LLM layers
+
 ### **Deliverables:**
 - [ ] `tools/parallel_flow_detector.py` - Flow clustering module
 - [ ] `tests/test_parallel_flow_detector.py` - Unit tests with EI.xml
 - [ ] Integration with migration_orchestrator.py
+- [ ] **AI Assist Integration:**
+  - [ ] Update `tools/classification/processor_payloads.py` with flow context enrichment
+  - [ ] Update `streamlit_app/pages/06_AI_Assist.py` TRIAGE prompt with flow awareness
+  - [ ] Update `streamlit_app/pages/06_AI_Assist.py` COMPOSE prompt with parallel flows handling
+  - [ ] Cache `parallel_flows` result in `run_full_analysis()`
+  - [ ] Add tests for LLM prompt enrichment
 - [ ] Documentation: `docs/parallel_flow_detection.md`
 
 **Estimated Effort:** 1 week
