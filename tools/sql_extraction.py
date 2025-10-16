@@ -60,6 +60,7 @@ def extract_sql_from_nifi_workflow(
 
     for processor in processors:
         proc_type = processor.get("type", "")
+        processor_id = processor.get("id")  # NEW: Track which processor has this SQL
 
         # Look for ExecuteStreamCommand processors
         if "ExecuteStreamCommand" in proc_type:
@@ -77,6 +78,9 @@ def extract_sql_from_nifi_workflow(
                         )
                         if schema:
                             table_name = schema["table"]
+                            schema["processor_id"] = (
+                                processor_id  # NEW: Link to processor
+                            )
                             schemas[table_name] = schema
 
                     # Parse INSERT OVERWRITE statements
@@ -87,6 +91,9 @@ def extract_sql_from_nifi_workflow(
                         if transform:
                             table_name = _extract_table_name_from_fqn(
                                 transform["target_table"]
+                            )
+                            transform["processor_id"] = (
+                                processor_id  # NEW: Link to processor
                             )
                             transformations[table_name] = transform
 

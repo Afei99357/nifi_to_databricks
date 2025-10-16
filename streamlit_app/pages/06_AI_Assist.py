@@ -38,13 +38,16 @@ from tools.conversion import (
 TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
-- SQL context awareness (Phase 1): If a processor includes sql_context, it contains EXTRACTED SCHEMA and TRANSFORMATIONS from the original NiFi workflow:
-  - sql_context.schema contains the actual table definition (columns, types, partitions, stored_as)
-  - sql_context.transformation contains actual transformations (TRIM, CAST, ORDER BY, column mappings)
+- SQL context awareness (Phase 1): If a processor includes sql_context, it contains EXTRACTED SCHEMA and/or TRANSFORMATIONS from the original NiFi workflow:
+  - sql_context.schema: table definition (columns, types, partitions, stored_as) - present if this processor has CREATE TABLE
+  - sql_context.transformation: transformations (TRIM, CAST, ORDER BY, column mappings) - present if this processor has INSERT OVERWRITE
+  - sql_context.schema and sql_context.transformation are INDEPENDENT - a processor may have one, both, or neither
   - USE THESE EXACT SCHEMAS AND TRANSFORMATIONS in your generated code
-  - DO NOT generate generic schemas (id, timestamp, message) when sql_context is provided
-  - Example: If sql_context.schema.columns = [{"name": "mid", "type": "STRING"}, {"name": "ts_state_start", "type": "STRING"}], use those exact columns
-  - Example: If sql_context.transformation contains TRIM(ts_state_start), generate trim(col("ts_state_start"))
+  - DO NOT generate generic schemas (id, timestamp, message) when sql_context.schema is provided
+  - DO NOT ignore transformations when sql_context.transformation is provided
+  - Example: CREATE TABLE processor gets sql_context.schema only → use it for table definition
+  - Example: INSERT OVERWRITE processor gets sql_context.transformation only → use it for data processing with trim(col("ts_state_start")), .orderBy(), etc.
+  - Example: If processor has both CREATE and INSERT → use both schema and transformation
 - Classification guidance: Processors are pre-classified with a migration_category:
   - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries. IMPORTANT: Extract scheduling metadata into implementation_hint:
     * Check scheduling_strategy field: if "CRON_DRIVEN", extract the CRON expression from scheduling_period (e.g., "Runs daily at 3:30 AM via CRON: 0 30 03 ? * * *")

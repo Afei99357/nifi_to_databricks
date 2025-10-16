@@ -163,8 +163,10 @@ def _find_sql_context_for_processor(
 ) -> Dict[str, object] | None:
     """Find relevant SQL schemas/transformations for a processor (Phase 1 integration).
 
-    Matches processors to SQL extraction results by checking if table names
-    appear in processor properties (Command Arguments, etc.).
+    Matches processors to SQL extraction results by processor_id for precise linkage.
+    - CREATE TABLE processor gets schema only
+    - INSERT OVERWRITE processor gets transformation only
+    - If a processor has both, returns both
 
     Args:
         processor_id: Processor ID
@@ -172,7 +174,7 @@ def _find_sql_context_for_processor(
         sql_extraction: SQL extraction results from extract_sql_from_nifi_workflow()
 
     Returns:
-        SQL context dict with matched table schema/transformation, or None
+        SQL context dict with matched schema and/or transformation, or None
     """
     if not sql_extraction:
         return None
@@ -183,35 +185,32 @@ def _find_sql_context_for_processor(
     if not schemas and not transformations:
         return None
 
-    # Get processor properties to search for table references
-    properties = record.get("properties", {}) or {}
-    scripts_detail = record.get("scripts_detail", {}) or {}
+    matched_schema = None
+    matched_transformation = None
+    matched_table = None
 
-    # Collect searchable text from processor
-    searchable_texts: List[str] = []
+    # Check if this processor has a CREATE TABLE (schema)
+    for table_name, schema in schemas.items():
+        if schema.get("processor_id") == processor_id:
+            matched_schema = schema
+            matched_table = table_name
+            break
 
-    # Add property values
-    for prop_value in properties.values():
-        if isinstance(prop_value, str):
-            searchable_texts.append(prop_value)
+    # Check if this processor has an INSERT OVERWRITE (transformation)
+    for table_name, transform in transformations.items():
+        if transform.get("processor_id") == processor_id:
+            matched_transformation = transform
+            if not matched_table:
+                matched_table = table_name
+            break
 
-    # Add script content
-    for script in scripts_detail.get("inline", []) or []:
-        if isinstance(script, dict):
-            content = script.get("content", "")
-            if content:
-                searchable_texts.append(str(content))
-
-    # Search for table name matches
-    for table_name in schemas.keys():
-        for text in searchable_texts:
-            if table_name in text:
-                # Found a match!
-                return {
-                    "table": table_name,
-                    "schema": schemas[table_name],
-                    "transformation": transformations.get(table_name),
-                }
+    # Return context if we found anything
+    if matched_schema or matched_transformation:
+        return {
+            "table": matched_table,
+            "schema": matched_schema,
+            "transformation": matched_transformation,
+        }
 
     return None
 
