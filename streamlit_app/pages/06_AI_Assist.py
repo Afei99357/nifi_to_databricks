@@ -38,6 +38,13 @@ from tools.conversion import (
 TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
+- SQL context awareness (Phase 1): If a processor includes sql_context, it contains EXTRACTED SCHEMA and TRANSFORMATIONS from the original NiFi workflow:
+  - sql_context.schema contains the actual table definition (columns, types, partitions, stored_as)
+  - sql_context.transformation contains actual transformations (TRIM, CAST, ORDER BY, column mappings)
+  - USE THESE EXACT SCHEMAS AND TRANSFORMATIONS in your generated code
+  - DO NOT generate generic schemas (id, timestamp, message) when sql_context is provided
+  - Example: If sql_context.schema.columns = [{"name": "mid", "type": "STRING"}, {"name": "ts_state_start", "type": "STRING"}], use those exact columns
+  - Example: If sql_context.transformation contains TRIM(ts_state_start), generate trim(col("ts_state_start"))
 - Classification guidance: Processors are pre-classified with a migration_category:
   - "Infrastructure Only": ALWAYS mark as recommended_target="retire" with empty databricks_code. These are schedulers, logging, delays, retries. IMPORTANT: Extract scheduling metadata into implementation_hint:
     * Check scheduling_strategy field: if "CRON_DRIVEN", extract the CRON expression from scheduling_period (e.g., "Runs daily at 3:30 AM via CRON: 0 30 03 ? * * *")
@@ -435,6 +442,32 @@ def _collect_script_lookup() -> Dict[str, Dict[str, object]]:
     return build_script_lookup(script_entries) if script_entries else {}
 
 
+def _collect_sql_extraction() -> Dict[str, object] | None:
+    """Collect SQL extraction results from session state (Phase 1 integration).
+
+    Returns merged SQL extraction with all schemas and transformations from all templates.
+    """
+    merged_schemas: Dict[str, object] = {}
+    merged_transformations: Dict[str, object] = {}
+
+    for key, payload in st.session_state.items():
+        if not isinstance(key, str) or not key.startswith("sql_extraction_"):
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        schemas = payload.get("schemas", {}) or {}
+        transformations = payload.get("transformations", {}) or {}
+
+        merged_schemas.update(schemas)
+        merged_transformations.update(transformations)
+
+    if not merged_schemas and not merged_transformations:
+        return None
+
+    return {"schemas": merged_schemas, "transformations": merged_transformations}
+
+
 def main() -> None:
     st.set_page_config(page_title="AI Migration Planner", page_icon="🧭", layout="wide")
     st.title("🧭 AI Migration Planner")
@@ -474,6 +507,7 @@ def main() -> None:
     # === Load data ===
     records, template_payloads = _collect_session_classifications()
     script_lookup = _collect_script_lookup()
+    sql_extraction = _collect_sql_extraction()  # NEW: Phase 1 integration
 
     # Attach script details to records
     for record in records:
@@ -702,8 +736,8 @@ def main() -> None:
                 f"Batch {batch_index}: {len(batch_ids)} processors, ≈{batch_payload.get('prompt_char_count', 0):,} chars"
             )
 
-            # Build payload
-            payloads = build_payloads(batch_records)
+            # Build payload (Phase 1: include SQL extraction context)
+            payloads = build_payloads(batch_records, sql_extraction=sql_extraction)
             payload_json = format_payloads_for_prompt(payloads)
             user_payload_dict = json.loads(payload_json)
             user_payload_dict["selection_summary"] = {

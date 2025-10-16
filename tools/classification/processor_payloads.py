@@ -29,9 +29,10 @@ class ProcessorPayload:
     scripts: Dict[str, object]
     scheduling_strategy: str
     scheduling_period: str
+    sql_context: Dict[str, object] | None = None  # NEW: Phase 1 SQL extraction results
 
     def to_payload(self) -> Dict[str, object]:
-        return {
+        payload = {
             "processor_id": self.processor_id,
             "template": self.template,
             "name": self.name,
@@ -52,6 +53,10 @@ class ProcessorPayload:
             "scheduling_strategy": self.scheduling_strategy,
             "scheduling_period": self.scheduling_period,
         }
+        # Include sql_context if present (Phase 1 integration)
+        if self.sql_context:
+            payload["sql_context"] = self.sql_context
+        return payload
 
 
 def load_classification_records(paths: Sequence[Path]) -> List[Dict[str, object]]:
@@ -151,7 +156,79 @@ def _summarise_scripts(raw: Dict[str, object] | None) -> Dict[str, object]:
     }
 
 
-def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayload]:
+def _find_sql_context_for_processor(
+    processor_id: str,
+    record: Dict[str, object],
+    sql_extraction: Dict[str, object] | None,
+) -> Dict[str, object] | None:
+    """Find relevant SQL schemas/transformations for a processor (Phase 1 integration).
+
+    Matches processors to SQL extraction results by checking if table names
+    appear in processor properties (Command Arguments, etc.).
+
+    Args:
+        processor_id: Processor ID
+        record: Classification record with processor details
+        sql_extraction: SQL extraction results from extract_sql_from_nifi_workflow()
+
+    Returns:
+        SQL context dict with matched table schema/transformation, or None
+    """
+    if not sql_extraction:
+        return None
+
+    schemas = sql_extraction.get("schemas", {}) or {}
+    transformations = sql_extraction.get("transformations", {}) or {}
+
+    if not schemas and not transformations:
+        return None
+
+    # Get processor properties to search for table references
+    properties = record.get("properties", {}) or {}
+    scripts_detail = record.get("scripts_detail", {}) or {}
+
+    # Collect searchable text from processor
+    searchable_texts: List[str] = []
+
+    # Add property values
+    for prop_value in properties.values():
+        if isinstance(prop_value, str):
+            searchable_texts.append(prop_value)
+
+    # Add script content
+    for script in scripts_detail.get("inline", []) or []:
+        if isinstance(script, dict):
+            content = script.get("content", "")
+            if content:
+                searchable_texts.append(str(content))
+
+    # Search for table name matches
+    for table_name in schemas.keys():
+        for text in searchable_texts:
+            if table_name in text:
+                # Found a match!
+                return {
+                    "table": table_name,
+                    "schema": schemas[table_name],
+                    "transformation": transformations.get(table_name),
+                }
+
+    return None
+
+
+def build_payloads(
+    records: Sequence[Dict[str, object]],
+    sql_extraction: Dict[str, object] | None = None,
+) -> List[ProcessorPayload]:
+    """Build processor payloads for LLM triage.
+
+    Args:
+        records: Classification records from workflow analysis
+        sql_extraction: Optional SQL extraction results from Phase 1 (schemas, transformations)
+
+    Returns:
+        List of processor payloads enriched with SQL context where applicable
+    """
     id_to_short_type = {
         str(rec.get("processor_id")): str(
             rec.get("short_type") or rec.get("processor_type") or ""
@@ -197,6 +274,9 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
         )
         scripts = _summarise_scripts(rec.get("scripts_detail"))
 
+        # NEW: Find SQL context for this processor (Phase 1 integration)
+        sql_context = _find_sql_context_for_processor(processor_id, rec, sql_extraction)
+
         group_name = (
             str(
                 rec.get("parent_group")
@@ -233,6 +313,7 @@ def build_payloads(records: Sequence[Dict[str, object]]) -> List[ProcessorPayloa
             scripts=scripts,
             scheduling_strategy=str(rec.get("schedulingStrategy") or ""),
             scheduling_period=str(rec.get("schedulingPeriod") or ""),
+            sql_context=sql_context,  # NEW: Phase 1 SQL extraction context
         )
         payloads.append(payload)
     return payloads
