@@ -7,14 +7,18 @@ Command Arguments properties.
 import re
 from typing import Any, Dict, List, Optional
 
+from tools.variable_extraction import find_variable_definitions
 from tools.xml_tools import parse_nifi_template_impl
 
 
-def extract_sql_from_nifi_workflow(xml_path: str) -> Dict[str, Any]:
+def extract_sql_from_nifi_workflow(
+    xml_path: str, variable_definitions: Optional[Dict[str, List]] = None
+) -> Dict[str, Any]:
     """Extract all SQL statements from NiFi workflow.
 
     Args:
         xml_path: Path to NiFi XML template file
+        variable_definitions: Optional dict of variable definitions from variable extraction
 
     Returns:
         Dictionary with extracted schemas and transformations:
@@ -47,6 +51,10 @@ def extract_sql_from_nifi_workflow(xml_path: str) -> Dict[str, Any]:
     template_data = parse_nifi_template_impl(xml_content)
     processors = template_data.get("processors", [])
 
+    # Extract variable definitions if not provided
+    if variable_definitions is None:
+        variable_definitions = find_variable_definitions(processors)
+
     schemas = {}
     transformations = {}
 
@@ -64,14 +72,18 @@ def extract_sql_from_nifi_workflow(xml_path: str) -> Dict[str, Any]:
                 # Parse CREATE TABLE statements
                 for stmt in sql_statements:
                     if stmt["type"] == "CREATE_TABLE":
-                        schema = parse_create_table_statement(stmt["sql"])
+                        schema = parse_create_table_statement(
+                            stmt["sql"], variable_definitions
+                        )
                         if schema:
                             table_name = schema["table"]
                             schemas[table_name] = schema
 
                     # Parse INSERT OVERWRITE statements
                     elif stmt["type"] == "INSERT_OVERWRITE":
-                        transform = parse_insert_overwrite_statement(stmt["sql"])
+                        transform = parse_insert_overwrite_statement(
+                            stmt["sql"], variable_definitions
+                        )
                         if transform:
                             table_name = _extract_table_name_from_fqn(
                                 transform["target_table"]
@@ -163,18 +175,68 @@ def classify_sql_statement(sql: str) -> Optional[str]:
     return None
 
 
-def parse_create_table_statement(sql: str) -> Optional[Dict[str, Any]]:
+def _resolve_variable(
+    table_name: str, variable_definitions: Optional[Dict[str, List]]
+) -> str:
+    """Resolve NiFi EL variables like ${tempTable} to their actual values.
+
+    Args:
+        table_name: Table name that may contain ${variable}
+        variable_definitions: Dict of variable definitions
+
+    Returns:
+        Resolved table name, or original EL expression if:
+        - Variable is not defined (external)
+        - Variable is dynamic (contains other ${vars})
+    """
+    if not variable_definitions or "${" not in table_name:
+        return table_name
+
+    # Extract variable name from ${varname}
+    var_match = re.search(r"\$\{([^}]+)\}", table_name)
+    if not var_match:
+        return table_name
+
+    var_name = var_match.group(1)
+
+    # Look up variable definition
+    if var_name in variable_definitions:
+        definitions = variable_definitions[var_name]
+        if definitions:
+            # Use the first static definition if available
+            for defn in definitions:
+                if defn.get("definition_type") == "static":
+                    resolved_value = defn.get("property_value", "")
+                    # Replace ${varname} with the resolved value
+                    return table_name.replace(f"${{{var_name}}}", resolved_value)
+
+            # If only dynamic definitions exist, keep the dynamic value as-is
+            # This helps document that it's a dynamic variable pattern
+            first_defn = definitions[0]
+            if first_defn.get("definition_type") == "dynamic":
+                # Keep the EL expression to show it's a variable
+                return table_name
+
+    # Can't resolve (external variable) - return original with EL expression
+    return table_name
+
+
+def parse_create_table_statement(
+    sql: str, variable_definitions: Optional[Dict[str, List]] = None
+) -> Optional[Dict[str, Any]]:
     """Parse CREATE TABLE statement to extract schema.
 
     Args:
         sql: CREATE TABLE SQL statement
+        variable_definitions: Optional dict of variable definitions for resolving ${vars}
 
     Returns:
         Schema dictionary or None if parsing fails
     """
-    # Extract table name (database.table or just table)
+    # Extract table name (database.table or just table or ${variable})
+    # Pattern supports: db.table, table, ${variable}
     table_name_match = re.search(
-        r"CREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_$.]+)",
+        r"CREATE\s+(?:EXTERNAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.${}]+)",
         sql,
         re.IGNORECASE,
     )
@@ -182,6 +244,10 @@ def parse_create_table_statement(sql: str) -> Optional[Dict[str, Any]]:
         return None
 
     full_table_name = table_name_match.group(1)
+
+    # Resolve variables like ${tempTable}
+    full_table_name = _resolve_variable(full_table_name, variable_definitions)
+
     if "." in full_table_name:
         database, table = full_table_name.split(".", 1)
     else:
@@ -282,23 +348,28 @@ def parse_column_definitions(columns_text: str) -> List[Dict[str, Any]]:
     return columns
 
 
-def parse_insert_overwrite_statement(sql: str) -> Optional[Dict[str, Any]]:
+def parse_insert_overwrite_statement(
+    sql: str, variable_definitions: Optional[Dict[str, List]] = None
+) -> Optional[Dict[str, Any]]:
     """Parse INSERT OVERWRITE statement to extract transformations.
 
     Args:
         sql: INSERT OVERWRITE SQL statement
+        variable_definitions: Optional dict of variable definitions for resolving ${vars}
 
     Returns:
         Transformation dictionary or None if parsing fails
     """
-    # Extract target table
+    # Extract target table (supports ${variables})
     table_match = re.search(
-        r"INSERT\s+OVERWRITE\s+TABLE\s+([a-zA-Z0-9_$.]+)", sql, re.IGNORECASE
+        r"INSERT\s+OVERWRITE\s+TABLE\s+([a-zA-Z0-9_.${}]+)", sql, re.IGNORECASE
     )
     if not table_match:
         return None
 
     target_table = table_match.group(1)
+    # Resolve variables in target table
+    target_table = _resolve_variable(target_table, variable_definitions)
 
     # Extract partition specification
     partition_match = re.search(
@@ -319,9 +390,11 @@ def parse_insert_overwrite_statement(sql: str) -> Optional[Dict[str, Any]]:
     select_text = select_match.group(1)
     column_mappings = parse_select_expressions(select_text)
 
-    # Extract source table
-    from_match = re.search(r"FROM\s+([a-zA-Z0-9_$.{}\-]+)", sql, re.IGNORECASE)
+    # Extract source table (supports ${variables})
+    from_match = re.search(r"FROM\s+([a-zA-Z0-9_.${}]+)", sql, re.IGNORECASE)
     source_table = from_match.group(1) if from_match else ""
+    # Resolve variables in source table
+    source_table = _resolve_variable(source_table, variable_definitions)
 
     # Extract ORDER BY
     order_by_match = re.search(r"ORDER BY\s+(.*?)(?:;|$)", sql, re.IGNORECASE)
