@@ -486,22 +486,23 @@ def display_sql_extraction(sql_data, uploaded_file):
                 f"**{transform['target_table']}** ← {transform['source_table']}",
                 expanded=False,
             ):
-                # Show transformations
-                transform_data = []
-                for m in transform["column_mappings"]:
-                    transform_data.append(
-                        {
-                            "Column": m["target"],
-                            "Transformation": m["transform"] or "→ (direct)",
-                        }
-                    )
-                transform_df = pd.DataFrame(transform_data)
-                st.dataframe(
-                    transform_df, use_container_width=True, hide_index=True, height=300
-                )
+                # Display the original SQL statement
+                st.markdown("**Original SQL Statement:**")
+                original_sql = transform.get("original_sql", "")
+                if original_sql:
+                    st.code(original_sql, language="sql")
+                else:
+                    st.warning("Original SQL not available")
 
-                if transform.get("order_by"):
-                    st.markdown(f"**Order By:** {', '.join(transform['order_by'])}")
+                # Show summary statistics
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Columns", len(transform["column_mappings"]))
+                with col2:
+                    transform_count = sum(
+                        1 for m in transform["column_mappings"] if m["transform"]
+                    )
+                    st.metric("Transformations", transform_count)
 
 
 def main():
