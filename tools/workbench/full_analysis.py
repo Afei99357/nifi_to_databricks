@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Tuple
 from tools.classification import classify_workflow
 from tools.nifi_table_lineage import analyze_nifi_table_lineage
 from tools.script_extraction import extract_all_scripts_from_nifi_xml
+from tools.sql_extraction import extract_sql_from_nifi_workflow
 from tools.table_extraction import extract_all_tables_from_nifi_xml
 from tools.variable_extraction import extract_variable_dependencies
 
@@ -95,6 +96,16 @@ def run_full_analysis(
         script_results = extract_all_scripts_from_nifi_xml(str(xml_path))
         session_state[f"script_results_{file_name}"] = script_results
         _complete(step, message=f"{len(script_results)} processors with scripts")
+
+        # SQL extraction
+        step = _start("sql_extraction")
+        sql_results = extract_sql_from_nifi_workflow(str(xml_path))
+        session_state[f"sql_extraction_{file_name}"] = sql_results
+        schema_count = len(sql_results.get("schemas", {}))
+        transform_count = len(sql_results.get("transformations", {}))
+        _complete(
+            step, message=f"{schema_count} schemas, {transform_count} transformations"
+        )
 
         # Lineage analysis
         step = _start("lineage_analysis")

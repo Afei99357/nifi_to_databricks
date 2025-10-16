@@ -21,6 +21,7 @@ ANALYSIS_RESULT_PREFIXES = [
     "classification_results_",
     "table_results_",
     "script_results_",
+    "sql_extraction_",
     "lineage_results_",
     "variable_results_",
     "processor_info_",
