@@ -11,8 +11,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import streamlit as st
 
+from tools.sql_extraction import extract_sql_from_nifi_workflow
+
 # Configure the page
-st.set_page_config(page_title="Script Extraction", page_icon="📜", layout="wide")
+st.set_page_config(page_title="Script & SQL Extraction", page_icon="📜", layout="wide")
 
 
 def display_script_results(scripts, uploaded_file):
@@ -429,9 +431,84 @@ def display_script_results(scripts, uploaded_file):
         st.code(f"Exception: {str(e)}")
 
 
+def display_sql_extraction(sql_data, uploaded_file):
+    """Display SQL schema and transformation extraction results."""
+    if not sql_data:
+        st.info("No SQL extraction data available. Run extraction below.")
+        return
+
+    schemas = sql_data.get("schemas", {})
+    transformations = sql_data.get("transformations", {})
+
+    # Summary
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Tables", len(schemas))
+    with col2:
+        total_columns = sum(len(s["columns"]) for s in schemas.values())
+        st.metric("Columns", total_columns)
+    with col3:
+        st.metric("Transformations", len(transformations))
+
+    # Table Schemas Section
+    if schemas:
+        st.markdown("#### 🗂️ Table Schemas (from CREATE TABLE)")
+        for table_name, schema in schemas.items():
+            with st.expander(
+                f"**{schema['database']}.{schema['table']}** ({len(schema['columns'])} columns, {schema['stored_as']})",
+                expanded=False,
+            ):
+                if schema.get("comment"):
+                    st.caption(schema["comment"])
+
+                # Columns table
+                columns_df = pd.DataFrame(schema["columns"])
+                st.dataframe(
+                    columns_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(len(schema["columns"]) * 35 + 38, 400),
+                )
+
+                # Partitions
+                if schema["partition_columns"]:
+                    st.markdown(
+                        f"**Partitions:** {', '.join(c['name'] + ':' + c['type'] for c in schema['partition_columns'])}"
+                    )
+                if schema.get("sort_by"):
+                    st.markdown(f"**Sort By:** {', '.join(schema['sort_by'])}")
+
+    # Transformations Section
+    if transformations:
+        st.markdown("#### 🔄 SQL Transformations (from INSERT OVERWRITE)")
+        for table_name, transform in transformations.items():
+            with st.expander(
+                f"**{transform['target_table']}** ← {transform['source_table']}",
+                expanded=False,
+            ):
+                # Show transformations
+                transform_data = []
+                for m in transform["column_mappings"]:
+                    transform_data.append(
+                        {
+                            "Column": m["target"],
+                            "Transformation": m["transform"] or "→ (direct)",
+                        }
+                    )
+                transform_df = pd.DataFrame(transform_data)
+                st.dataframe(
+                    transform_df, use_container_width=True, hide_index=True, height=300
+                )
+
+                if transform.get("order_by"):
+                    st.markdown(f"**Order By:** {', '.join(transform['order_by'])}")
+
+
 def main():
-    st.title("📜 Script Extraction")
-    st.markdown("**Extract external scripts and executables from NiFi workflows.**")
+    st.title("📜 Script & SQL Extraction")
+    st.markdown(
+        "**Extract scripts, executables, and SQL schemas from NiFi workflows.**"
+    )
 
     uploaded_file = st.session_state.get("uploaded_file", None)
 
@@ -443,24 +520,66 @@ def main():
 
     st.success(f"✅ Processing file: {uploaded_file.name}")
 
-    script_cache_key = f"script_results_{uploaded_file.name}"
-    cached_scripts = st.session_state.get(script_cache_key)
+    # Create tabs for different extraction types
+    tab1, tab2 = st.tabs(["📜 Scripts & Assets", "🗂️ SQL Schemas & Transformations"])
 
-    if isinstance(cached_scripts, list):
-        st.info(
-            "📋 Showing cached script extraction results generated via the Dashboard analysis."
-        )
-        display_script_results(cached_scripts, uploaded_file)
-    elif isinstance(cached_scripts, str):
-        st.error(f"❌ Script extraction failed: {cached_scripts}")
-        if st.button("🔙 Back to Dashboard", use_container_width=True):
-            st.switch_page("Dashboard.py")
-    else:
-        st.warning(
-            "Run the full analysis from the Dashboard to generate script extraction results."
-        )
-        if st.button("🔙 Back to Dashboard", use_container_width=True):
-            st.switch_page("Dashboard.py")
+    # Tab 1: Scripts (existing functionality)
+    with tab1:
+        script_cache_key = f"script_results_{uploaded_file.name}"
+        cached_scripts = st.session_state.get(script_cache_key)
+
+        if isinstance(cached_scripts, list):
+            st.info(
+                "📋 Showing cached script extraction results from Dashboard analysis."
+            )
+            display_script_results(cached_scripts, uploaded_file)
+        elif isinstance(cached_scripts, str):
+            st.error(f"❌ Script extraction failed: {cached_scripts}")
+        else:
+            st.warning(
+                "Run the full analysis from the Dashboard to generate script extraction results."
+            )
+            if st.button("🔙 Back to Dashboard", key="scripts_back"):
+                st.switch_page("Dashboard.py")
+
+    # Tab 2: SQL Extraction (new functionality)
+    with tab2:
+        sql_cache_key = f"sql_extraction_{uploaded_file.name}"
+        cached_sql = st.session_state.get(sql_cache_key)
+
+        if cached_sql:
+            st.info("📋 Showing cached SQL extraction results.")
+            display_sql_extraction(cached_sql, uploaded_file)
+
+            # Re-extract button
+            if st.button("🔄 Re-extract SQL", use_container_width=True):
+                del st.session_state[sql_cache_key]
+                st.rerun()
+        else:
+            st.info(
+                "SQL extraction analyzes ExecuteStreamCommand processors to extract CREATE TABLE schemas and INSERT OVERWRITE transformations."
+            )
+
+            if st.button("🚀 Extract SQL Schemas", use_container_width=True):
+                with st.spinner(
+                    "Extracting SQL from ExecuteStreamCommand processors..."
+                ):
+                    tmp_dir = st.session_state.get(
+                        "analysis_tmp_dir", ".streamlit_analysis"
+                    )
+                    xml_path = os.path.join(tmp_dir, uploaded_file.name)
+
+                    if os.path.exists(xml_path):
+                        sql_data = extract_sql_from_nifi_workflow(xml_path)
+                        st.session_state[sql_cache_key] = sql_data
+                        st.success("✅ SQL extraction complete!")
+                        st.rerun()
+                    else:
+                        st.error("XML file not found. Please re-upload from Dashboard.")
+
+            st.markdown("---")
+            if st.button("🔙 Back to Dashboard", key="sql_back"):
+                st.switch_page("Dashboard.py")
 
 
 if __name__ == "__main__":
