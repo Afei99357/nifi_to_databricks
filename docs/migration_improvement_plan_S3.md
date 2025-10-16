@@ -324,7 +324,8 @@ def extract_flow_parameters(flow_cluster: List[nx.DiGraph]) -> Dict[str, List[st
 def build_processor_payload_with_flow_context(
     processor: Dict[str, Any],
     classification: Dict[str, Any],
-    parallel_flows: List[Dict[str, Any]]
+    parallel_flows: List[Dict[str, Any]],
+    sql_extraction: Dict[str, Any]  # NEW: Phase 1 results
 ) -> Dict[str, Any]:
     """Enrich processor payload with flow context for Layer 1 TRIAGE.
 
@@ -332,6 +333,10 @@ def build_processor_payload_with_flow_context(
     - This processor is part of a parallel flow group
     - There are N similar flows that should use the same pattern
     - Task should be parameterized for multi-task execution
+
+    NEW: Also adds SQL extraction results (schemas, transformations) from Phase 1
+    - Helps LLM generate accurate CREATE TABLE with real schemas
+    - Helps LLM generate correct transformations (TRIM, CAST, ORDER BY)
     """
 
     # Find which flow this processor belongs to
@@ -351,14 +356,36 @@ def build_processor_payload_with_flow_context(
             }
             break
 
+    # Find relevant SQL schemas/transformations for this processor (Phase 1 results)
+    sql_context = None
+    schemas = sql_extraction.get("schemas", {})
+    transformations = sql_extraction.get("transformations", {})
+
+    # Check if this processor references any tables in schemas/transformations
+    processor_props = processor.get("properties", {})
+    for table_name, schema in schemas.items():
+        # Check if table name appears in processor properties (Command Arguments, etc.)
+        for prop_value in processor_props.values():
+            if isinstance(prop_value, str) and table_name in prop_value:
+                sql_context = {
+                    "table": table_name,
+                    "schema": schema,
+                    "transformation": transformations.get(table_name)
+                }
+                break
+        if sql_context:
+            break
+
     payload = {
         "processor_id": processor["id"],
         "processor_name": processor["name"],
         "processor_type": processor["type"],
         "classification": classification,
         "properties": processor["properties"],
-        # NEW: Flow context for parallel execution awareness
-        "flow_context": flow_context
+        # NEW: Flow context for parallel execution awareness (Phase 2)
+        "flow_context": flow_context,
+        # NEW: SQL context for schema/transformation awareness (Phase 1)
+        "sql_context": sql_context
     }
 
     return payload
@@ -371,18 +398,68 @@ def build_processor_payload_with_flow_context(
 TRIAGE_SYSTEM_PROMPT_ENHANCED = """
 You are a NiFi to Databricks migration expert. Evaluate each processor and generate migration recommendations.
 
-FLOW CONTEXT AWARENESS:
+FLOW CONTEXT AWARENESS (Phase 2):
 - If flow_context is provided, this processor is part of a PARALLEL FLOW GROUP
 - Generate PARAMETERIZED code that can be called multiple times with different parameters
 - Use parameters from flow_context (site, table, s3_path) instead of hardcoded values
 - Example: def process_table(site: str, table: str, s3_path: str) instead of hardcoded "ATTJ"
+
+SQL CONTEXT AWARENESS (Phase 1):
+- If sql_context is provided, use the EXTRACTED SCHEMA and TRANSFORMATIONS
+- DO NOT use generic schemas (id, timestamp, message)
+- Use actual columns from sql_context.schema.columns (e.g., mid, ts_state_start, seq_num, state, prev_state)
+- Apply transformations from sql_context.transformation (TRIM, CAST, ORDER BY)
+- Preserve partition columns from sql_context.schema.partition_columns
+
+EXAMPLE WITH SQL CONTEXT:
+Input processor has sql_context:
+{
+    "table": "emt_log_new",
+    "schema": {
+        "columns": [
+            {"name": "mid", "type": "STRING"},
+            {"name": "ts_state_start", "type": "STRING"},
+            {"name": "seq_num", "type": "INTEGER"}
+        ],
+        "partition_columns": [{"name": "site", "type": "STRING"}]
+    },
+    "transformation": {
+        "column_mappings": [
+            {"source": "mid", "target": "mid", "transform": null},
+            {"source": "ts_state_start", "target": "ts_state_start", "transform": "TRIM(ts_state_start)"},
+            {"source": "seq_num", "target": "seq_num", "transform": "CAST(seq_num AS INT)"}
+        ],
+        "order_by": ["mid", "ts_state_start"]
+    }
+}
+
+Expected code_snippet:
+```python
+# Create table with ACTUAL schema
+spark.sql('''
+    CREATE TABLE IF NOT EXISTS catalog.schema.emt_log_new (
+        mid STRING,
+        ts_state_start STRING,
+        seq_num INT
+    )
+    PARTITIONED BY (site STRING)
+    USING DELTA
+''')
+
+# Apply ACTUAL transformations
+df_transformed = df.select(
+    col("mid"),
+    trim(col("ts_state_start")).alias("ts_state_start"),
+    col("seq_num").cast("int")
+).orderBy("mid", "ts_state_start")
+```
 
 OUTPUT FORMAT:
 {
     "processor_id": "...",
     "migration_recommendation": "migrate|support|eliminate",
     "databricks_equivalent": "...",
-    "code_snippet": "...",  # Must be parameterized if flow_context.parallel_count > 1
+    "code_snippet": "...",  # Must use sql_context if provided
     "notes": "..."
 }
 """
@@ -394,7 +471,8 @@ OUTPUT FORMAT:
 
 def build_compose_payload_with_parallel_flows(
     processor_results: List[Dict[str, Any]],
-    parallel_flows: List[Dict[str, Any]]
+    parallel_flows: List[Dict[str, Any]],
+    sql_extraction: Dict[str, Any]  # NEW: Phase 1 results
 ) -> Dict[str, Any]:
     """Enrich composition payload with parallel flow grouping for Layer 2 COMPOSE.
 
@@ -402,6 +480,10 @@ def build_compose_payload_with_parallel_flows(
     - Multi-task job definitions
     - Parallel execution loops (ThreadPoolExecutor, etc.)
     - Task dependencies and orchestration
+
+    NEW: Also provides complete SQL extraction results (Phase 1)
+    - All schemas for CREATE TABLE generation
+    - All transformations for data processing
     """
 
     # Group processor results by parallel flow
@@ -415,7 +497,7 @@ def build_compose_payload_with_parallel_flows(
     compose_payload = {
         "processor_results": processor_results,
         "relationships": build_relationships(processor_results),
-        # NEW: Parallel flow grouping for multi-task generation
+        # NEW: Parallel flow grouping for multi-task generation (Phase 2)
         "parallel_flows": {
             group_id: {
                 "flow_ids": [r["flow_context"]["flow_id"] for r in results],
@@ -425,6 +507,11 @@ def build_compose_payload_with_parallel_flows(
                 "parameters": [r["flow_context"]["parameters"] for r in results]
             }
             for group_id, results in flow_groups.items()
+        },
+        # NEW: Complete SQL extraction results for schema/transformation awareness (Phase 1)
+        "sql_extraction": {
+            "schemas": sql_extraction.get("schemas", {}),
+            "transformations": sql_extraction.get("transformations", {})
         }
     }
 
@@ -436,23 +523,55 @@ def build_compose_payload_with_parallel_flows(
 COMPOSE_SYSTEM_PROMPT_ENHANCED = """
 You are composing a unified Databricks notebook from processor migration snippets.
 
-PARALLEL FLOWS HANDLING:
+PARALLEL FLOWS HANDLING (Phase 2):
 - If parallel_flows is provided, generate MULTI-TASK execution patterns
 - For each parallel flow group:
   1. Create a parameterized function using the common pattern
   2. Generate parallel execution loop (e.g., ThreadPoolExecutor)
   3. Call the function for each set of parameters
 
-EXAMPLE OUTPUT FOR PARALLEL FLOWS:
+SQL EXTRACTION HANDLING (Phase 1):
+- If sql_extraction is provided, use ACTUAL schemas and transformations
+- DO NOT generate generic CREATE TABLE statements
+- Use sql_extraction.schemas for accurate table definitions
+- Use sql_extraction.transformations for data processing logic
+- Preserve all columns, partitions, and transformations from SQL extraction
+
+EXAMPLE OUTPUT FOR PARALLEL FLOWS WITH SQL EXTRACTION:
 ```python
-# Cell 1: Parameterized function
+# Cell 1: CREATE TABLE using extracted schema (from sql_extraction.schemas)
+spark.sql('''
+    CREATE TABLE IF NOT EXISTS catalog.schema.emt_log_new (
+        mid STRING,
+        ts_state_start STRING,
+        seq_num INT,
+        state STRING,
+        prev_state STRING
+    )
+    PARTITIONED BY (site STRING, year SMALLINT, month TINYINT, day TINYINT)
+    USING DELTA
+    CLUSTER BY (mid)
+''')
+
+# Cell 2: Parameterized function with extracted transformations
 def process_site_table(site: str, table: str, s3_path: str):
     '''Process data for given site/table combination'''
+    # Read from S3
     df = spark.read.parquet(s3_path)
-    # ... transformations from snippets ...
-    df.write.mode("overwrite").saveAsTable(f"{{table}}_processed")
 
-# Cell 2: Multi-task execution
+    # Apply transformations from sql_extraction.transformations
+    df_transformed = df.select(
+        col("mid"),
+        trim(col("ts_state_start")).alias("ts_state_start"),  # TRIM from extraction
+        col("seq_num").cast("int"),  # CAST from extraction
+        col("state"),
+        col("prev_state")
+    ).orderBy("mid", "ts_state_start")  # ORDER BY from extraction
+
+    # Write to Delta
+    df_transformed.write.mode("overwrite").saveAsTable(f"catalog.schema.{{table}}")
+
+# Cell 3: Multi-task execution
 from concurrent.futures import ThreadPoolExecutor
 
 tasks = [
@@ -476,12 +595,17 @@ OUTPUT FORMAT:
 
 **Integration Points:**
 1. **Update `processor_payloads.py`**: Add `build_processor_payload_with_flow_context()`
+   - Accept `sql_extraction` parameter (Phase 1 results)
+   - Match processors to relevant schemas/transformations
+   - Include `sql_context` in processor payload
 2. **Update `pages/06_AI_Assist.py`**:
-   - Pass `parallel_flows` to payload builders
-   - Update TRIAGE_SYSTEM_PROMPT with flow context awareness
-   - Update COMPOSE_SYSTEM_PROMPT with parallel flows handling
-3. **Update `run_full_analysis()`**: Cache `parallel_flows` result in session state
-4. **Add tests**: Verify flow context propagates through both LLM layers
+   - Pass `parallel_flows` AND `sql_extraction` to payload builders
+   - Update TRIAGE_SYSTEM_PROMPT with SQL context awareness (Phase 1)
+   - Update TRIAGE_SYSTEM_PROMPT with flow context awareness (Phase 2)
+   - Update COMPOSE_SYSTEM_PROMPT with SQL extraction handling (Phase 1)
+   - Update COMPOSE_SYSTEM_PROMPT with parallel flows handling (Phase 2)
+3. **Update `run_full_analysis()`**: Cache both `parallel_flows` AND `sql_extraction` results in session state
+4. **Add tests**: Verify both Phase 1 (SQL) and Phase 2 (flows) context propagates through both LLM layers
 
 ### **Deliverables:**
 - [ ] `tools/parallel_flow_detector.py` - Flow clustering module
