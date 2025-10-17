@@ -629,14 +629,20 @@ def main() -> None:
 
     # === Checkbox selection ===
     # Initialize selection state with all current processors
-    if "selected_for_llm" not in st.session_state:
-        st.session_state.selected_for_llm = set(filtered_df["processor_id"].tolist())
-
-    # Keep only processors that still exist after filtering
     current_ids = set(filtered_df["processor_id"].tolist())
-    st.session_state.selected_for_llm = st.session_state.selected_for_llm.intersection(
-        current_ids
-    )
+
+    if "selected_for_llm" not in st.session_state:
+        st.session_state.selected_for_llm = current_ids.copy()
+    else:
+        # Keep only processors that still exist after filtering
+        intersection = st.session_state.selected_for_llm.intersection(current_ids)
+
+        # If intersection is empty but we have processors, it means new file was loaded
+        # Re-initialize with all current processors
+        if not intersection and current_ids:
+            st.session_state.selected_for_llm = current_ids.copy()
+        else:
+            st.session_state.selected_for_llm = intersection
 
     col_select_all, col_select_none = st.columns(2)
     with col_select_all:
