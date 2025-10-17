@@ -678,6 +678,9 @@ def main() -> None:
         display_df["processor_id"].isin(st.session_state.selected_for_llm),
     )
 
+    # Use unique key based on processor IDs to prevent state conflicts
+    editor_key = f"processor_selection_{hash(frozenset(current_ids))}"
+
     edited_df = st.data_editor(
         display_df,
         column_config={
@@ -698,16 +701,13 @@ def main() -> None:
         ],
         hide_index=True,
         use_container_width=True,
-        key="processor_selection_editor",
+        key=editor_key,
     )
 
-    # Update selection state from edited dataframe
-    for _, row in edited_df.iterrows():
-        pid = row["processor_id"]
-        if row["selected"]:
-            st.session_state.selected_for_llm.add(pid)
-        else:
-            st.session_state.selected_for_llm.discard(pid)
+    # Update selection state from edited dataframe only if it changed
+    edited_ids = set(edited_df[edited_df["selected"]]["processor_id"].tolist())
+    if edited_ids != st.session_state.selected_for_llm:
+        st.session_state.selected_for_llm = edited_ids
 
     st.caption(
         f"✓ {len(st.session_state.selected_for_llm)} processor(s) selected for LLM call"
