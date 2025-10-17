@@ -11,17 +11,28 @@ import networkx as nx
 
 
 def build_processor_graph(template_data: Dict[str, Any]) -> nx.DiGraph:
-    """Build directed graph from NiFi processors and connections."""
+    """Build directed graph from NiFi processors and connections.
+
+    Includes processors, input/output ports, and funnels to create complete flow graph.
+    """
     G = nx.DiGraph()
 
     # Add processor nodes
     for proc in template_data.get("processors", []):
         G.add_node(proc["id"], **proc)
 
-    # Add edges from connections
+    # Add input port nodes
+    for port in template_data.get("input_ports", []):
+        G.add_node(port["id"], **port, type="INPUT_PORT")
+
+    # Add output port nodes
+    for port in template_data.get("output_ports", []):
+        G.add_node(port["id"], **port, type="OUTPUT_PORT")
+
+    # Add edges from connections (includes FUNNEL, INPUT_PORT, OUTPUT_PORT connections)
     for conn in template_data.get("connections", []):
-        source_id = conn.get("sourceId")
-        dest_id = conn.get("destinationId")
+        source_id = conn.get("source")
+        dest_id = conn.get("destination")
         if source_id and dest_id:
             G.add_edge(source_id, dest_id)
 
@@ -100,8 +111,92 @@ def extract_flow_parameters(flow: Set[str], G: nx.DiGraph) -> Dict[str, Any]:
     return params
 
 
+def detect_parallel_process_groups(
+    template_data: Dict[str, Any], G: nx.DiGraph, threshold: float = 0.9
+) -> List[Dict[str, Any]]:
+    """Detect parallel flows organized as process groups within connected components.
+
+    This finds parallel patterns where flows are connected via shared infrastructure
+    but run in parallel (no direct edges between group processors).
+    """
+    processors = template_data.get("processors", [])
+
+    # Group processors by parentGroupName
+    groups_map = defaultdict(list)
+    for proc in processors:
+        group_name = proc.get("parentGroupName") or proc.get("parentGroupId") or "Root"
+        groups_map[group_name].append(proc)
+
+    # Find groups with similar processor signatures
+    parallel_groups = []
+    group_names = list(groups_map.keys())
+
+    for i, group1_name in enumerate(group_names):
+        group1_procs = groups_map[group1_name]
+        group1_types = sorted([p.get("type", "") for p in group1_procs])
+
+        for j, group2_name in enumerate(group_names):
+            if j <= i:
+                continue
+
+            group2_procs = groups_map[group2_name]
+            group2_types = sorted([p.get("type", "") for p in group2_procs])
+
+            # Calculate similarity
+            if len(group1_types) != len(group2_types):
+                continue
+
+            matches = sum(1 for t1, t2 in zip(group1_types, group2_types) if t1 == t2)
+            similarity = matches / len(group1_types) if group1_types else 0.0
+
+            if similarity >= threshold:
+                # Check if groups have direct edges between them
+                group1_ids = {p["id"] for p in group1_procs}
+                group2_ids = {p["id"] for p in group2_procs}
+
+                has_direct_edge = any(
+                    G.has_edge(id1, id2) or G.has_edge(id2, id1)
+                    for id1 in group1_ids
+                    for id2 in group2_ids
+                )
+
+                if not has_direct_edge:
+                    # Extract parameters from each group
+                    params1 = extract_flow_parameters(group1_ids, G)
+                    params2 = extract_flow_parameters(group2_ids, G)
+
+                    parallel_groups.append(
+                        {
+                            "pattern_type": "process_group_parallel",
+                            "groups": [
+                                {
+                                    "group_name": group1_name,
+                                    "processor_count": len(group1_procs),
+                                    "processor_ids": list(group1_ids),
+                                    "parameters": params1,
+                                    "signature": group1_types,
+                                },
+                                {
+                                    "group_name": group2_name,
+                                    "processor_count": len(group2_procs),
+                                    "processor_ids": list(group2_ids),
+                                    "parameters": params2,
+                                    "signature": group2_types,
+                                },
+                            ],
+                            "similarity": similarity,
+                        }
+                    )
+
+    return parallel_groups
+
+
 def detect_parallel_flows(template_data: Dict[str, Any]) -> Dict[str, Any]:
     """Main function to detect parallel flows and extract flow context.
+
+    Detects both:
+    1. Disconnected parallel subgraphs (independent flows)
+    2. Process-group-based parallel flows (connected but parallel)
 
     Returns:
         Dictionary with flow groups and metadata for LLM integration
@@ -109,29 +204,34 @@ def detect_parallel_flows(template_data: Dict[str, Any]) -> Dict[str, Any]:
     # Build graph
     G = build_processor_graph(template_data)
 
-    # Find parallel subgraphs
+    # Layer 1: Find disconnected parallel subgraphs
     components = find_parallel_subgraphs(G)
-
-    # Cluster similar flows
     clusters = cluster_similar_flows(components, G, threshold=0.9)
+
+    # Layer 2: Find process-group-based parallel flows
+    process_group_patterns = detect_parallel_process_groups(template_data, G)
 
     # Build flow context
     flow_groups = []
     processor_to_flow = {}
+    cluster_idx = 0
 
-    for cluster_idx, cluster in enumerate(clusters):
+    # Add disconnected flow clusters
+    for cluster in clusters:
+        if len(cluster) <= 1:
+            continue
+
         flows_in_cluster = []
-
         for flow_idx, flow in enumerate(cluster):
-            flow_id = f"flow_{cluster_idx}_{flow_idx}"
+            flow_id = f"disconnected_flow_{cluster_idx}_{flow_idx}"
             params = extract_flow_parameters(flow, G)
 
-            # Map processors to flow
             for proc_id in flow:
                 processor_to_flow[proc_id] = {
                     "flow_id": flow_id,
                     "cluster_id": cluster_idx,
-                    "is_parallel": len(cluster) > 1,
+                    "is_parallel": True,
+                    "pattern_type": "disconnected",
                     "parameters": params,
                 }
 
@@ -139,14 +239,52 @@ def detect_parallel_flows(template_data: Dict[str, Any]) -> Dict[str, Any]:
                 {"flow_id": flow_id, "processor_ids": list(flow), "parameters": params}
             )
 
-        if len(cluster) > 1:  # Only include parallel clusters
-            flow_groups.append(
-                {
+        flow_groups.append(
+            {
+                "cluster_id": cluster_idx,
+                "pattern_type": "disconnected",
+                "flows": flows_in_cluster,
+                "is_parallel": True,
+            }
+        )
+        cluster_idx += 1
+
+    # Add process-group-based parallel flows
+    for pg_idx, pattern in enumerate(process_group_patterns):
+        flows_in_cluster = []
+
+        for group_idx, group in enumerate(pattern["groups"]):
+            flow_id = f"process_group_{cluster_idx}_{group_idx}"
+
+            for proc_id in group["processor_ids"]:
+                processor_to_flow[proc_id] = {
+                    "flow_id": flow_id,
                     "cluster_id": cluster_idx,
-                    "flows": flows_in_cluster,
                     "is_parallel": True,
+                    "pattern_type": "process_group",
+                    "group_name": group["group_name"],
+                    "parameters": group["parameters"],
+                }
+
+            flows_in_cluster.append(
+                {
+                    "flow_id": flow_id,
+                    "group_name": group["group_name"],
+                    "processor_ids": group["processor_ids"],
+                    "parameters": group["parameters"],
                 }
             )
+
+        flow_groups.append(
+            {
+                "cluster_id": cluster_idx,
+                "pattern_type": "process_group",
+                "flows": flows_in_cluster,
+                "is_parallel": True,
+                "similarity": pattern["similarity"],
+            }
+        )
+        cluster_idx += 1
 
     return {
         "flow_groups": flow_groups,
