@@ -83,6 +83,17 @@ def extract_sql_from_nifi_workflow(
                             )
                             schemas[table_name] = schema
 
+                    # Parse ALTER TABLE ADD PARTITION for LOCATION
+                    elif stmt["type"] == "ALTER_TABLE":
+                        location_info = parse_alter_table_location(stmt["sql"])
+                        if location_info:
+                            # Find matching CREATE TABLE schema and add location
+                            table_name = location_info["table"]
+                            if table_name in schemas:
+                                schemas[table_name]["location"] = location_info[
+                                    "location"
+                                ]
+
                     # Parse INSERT OVERWRITE statements
                     elif stmt["type"] == "INSERT_OVERWRITE":
                         transform = parse_insert_overwrite_statement(
@@ -240,6 +251,9 @@ def parse_create_table_statement(
     Returns:
         Schema dictionary or None if parsing fails
     """
+    # Check if this is an EXTERNAL table
+    is_external = bool(re.search(r"CREATE\s+EXTERNAL\s+TABLE", sql, re.IGNORECASE))
+
     # Extract table name (database.table or just table or ${variable})
     # Pattern supports: db.table, table, ${variable}
     table_name_match = re.search(
@@ -307,6 +321,15 @@ def parse_create_table_statement(
     comment_match = re.search(r"COMMENT\s+['\"](.+?)['\"]", sql, re.IGNORECASE)
     comment = comment_match.group(1) if comment_match else ""
 
+    # Detect if this is a temp/staging table based on naming pattern
+    is_temp_table = bool(
+        re.search(
+            r"(temp|tmp|staging|stg|_tmp\b|\${temp)",
+            table,
+            re.IGNORECASE,
+        )
+    )
+
     return {
         "database": database,
         "table": table,
@@ -315,6 +338,8 @@ def parse_create_table_statement(
         "stored_as": stored_as,
         "sort_by": sort_by,
         "comment": comment,
+        "is_external": is_external,
+        "is_temp_table": is_temp_table,
         "original_sql": sql,
     }
 
@@ -546,3 +571,27 @@ def _extract_table_name_from_fqn(fqn: str) -> str:
     if "." in fqn:
         return fqn.split(".")[-1]
     return fqn
+
+
+def parse_alter_table_location(sql: str) -> Optional[Dict[str, str]]:
+    """Parse ALTER TABLE ADD PARTITION statement to extract LOCATION.
+
+    Args:
+        sql: ALTER TABLE SQL statement
+
+    Returns:
+        Dictionary with table and location, or None if not a LOCATION statement
+    """
+    # Match: ALTER TABLE ${tempTable} ADD ... PARTITION ... LOCATION '${landingPath}'
+    location_match = re.search(
+        r"ALTER\s+TABLE\s+([a-zA-Z0-9_.${}]+).*?LOCATION\s+['\"](.+?)['\"]",
+        sql,
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    if location_match:
+        table_name = location_match.group(1)
+        location = location_match.group(2)
+        return {"table": table_name, "location": location}
+
+    return None

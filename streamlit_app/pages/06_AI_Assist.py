@@ -39,12 +39,18 @@ TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating pro
 
 Rules:
 - SQL context awareness (Phase 1): If a processor includes sql_context, it contains EXTRACTED SCHEMA and/or TRANSFORMATIONS from the original NiFi workflow:
-  - sql_context.schema: table definition (columns, types, partitions, stored_as) - present if this processor has CREATE TABLE
-  - sql_context.transformation: transformations (TRIM, CAST, ORDER BY, column mappings) - present if this processor has INSERT OVERWRITE
+  - sql_context.schema: table definition (columns, types, partitions, stored_as, is_external, is_temp_table, location) - present if this processor has CREATE TABLE
+  - sql_context.transformation: transformations (TRIM, CAST, ORDER BY, column_mappings) - present if this processor has INSERT OVERWRITE
   - sql_context.schema and sql_context.transformation are INDEPENDENT - a processor may have one, both, or neither
   - USE THESE EXACT SCHEMAS AND TRANSFORMATIONS in your generated code
   - DO NOT generate generic schemas (id, timestamp, message) when sql_context.schema is provided
   - DO NOT ignore transformations when sql_context.transformation is provided
+  - **CRITICAL - EXTERNAL TABLE pattern**: If sql_context.schema.is_external is True:
+    - This is a METADATA-ONLY table pointing to files that ALREADY EXIST in storage
+    - DO NOT generate JDBC ingestion code (spark.read.format("jdbc"))
+    - INSTEAD: Read files directly from sql_context.schema.location using spark.read (CSV/Parquet/etc.)
+    - If sql_context.schema.is_temp_table is True: This is a staging table for intermediate processing
+    - Pattern: EXTERNAL temp table → Read from landing path → Transform → Write to final Delta table
   - Example: CREATE TABLE processor gets sql_context.schema only → use it for table definition
   - Example: INSERT OVERWRITE processor gets sql_context.transformation only → use it for data processing with trim(col("ts_state_start")), .orderBy(), etc.
   - Example: If processor has both CREATE and INSERT → use both schema and transformation
