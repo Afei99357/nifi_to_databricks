@@ -8,10 +8,12 @@ from typing import Any, Callable, Dict, List, Tuple
 
 from tools.classification import classify_workflow
 from tools.nifi_table_lineage import analyze_nifi_table_lineage
+from tools.parallel_flow_detector import detect_parallel_flows
 from tools.script_extraction import extract_all_scripts_from_nifi_xml
 from tools.sql_extraction import extract_sql_from_nifi_workflow
 from tools.table_extraction import extract_all_tables_from_nifi_xml
 from tools.variable_extraction import extract_variable_dependencies
+from tools.xml_tools import parse_nifi_template_impl
 
 AnalysisCallback = Callable[[List[Dict[str, Any]]], None]
 
@@ -127,6 +129,17 @@ def run_full_analysis(
         _complete(
             step,
             message=f"{variable_result.get('total_variables', 0)} variables",
+        )
+
+        # Parallel flow detection (Phase 2)
+        step = _start("parallel_flow_detection")
+        with open(xml_path, "r") as f:
+            template_data = parse_nifi_template_impl(f.read())
+        parallel_flows = detect_parallel_flows(template_data)
+        session_state[f"parallel_flows_{file_name}"] = parallel_flows
+        _complete(
+            step,
+            message=f"{parallel_flows.get('total_parallel_flows', 0)} parallel flows",
         )
 
         session_state["analysis_summary"] = {

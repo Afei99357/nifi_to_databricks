@@ -38,6 +38,12 @@ from tools.conversion import (
 TRIAGE_SYSTEM_PROMPT = """You are a Databricks migration engineer generating production-ready code from NiFi processors. Output STRICT JSON (array) using the schema below.
 
 Rules:
+- Parallel flow context (Phase 2): If a processor includes flow_context, it contains PARALLEL FLOW INFORMATION:
+  - flow_context.flow_id: unique flow identifier
+  - flow_context.is_parallel: true if this processor is part of a parallel flow pattern
+  - flow_context.parameters: differentiating parameters (site, table, path)
+  - Generate PARAMETERIZED code using these parameters as function arguments
+  - Document flow parallelization in implementation_hint (e.g., "Part of parallel flow for site=ATKL, table=emt_log")
 - SQL context awareness (Phase 1): If a processor includes sql_context, it contains EXTRACTED SCHEMA and/or TRANSFORMATIONS from the original NiFi workflow:
   - sql_context.schema: table definition (columns, types, partitions, stored_as, is_external, is_temp_table, location) - present if this processor has CREATE TABLE
   - sql_context.transformation: transformations (TRIM, CAST, ORDER BY, column_mappings) - present if this processor has INSERT OVERWRITE
@@ -102,6 +108,11 @@ Context:
 - Processors with has_code=false were marked as "retire" or infrastructure-only (schedulers, logging, routing)
 - For retired processors, implementation_hint and rationale contain important scheduling/orchestration details
 - Use relationships to determine execution order and maintain data flow
+- Parallel flow detection (Phase 2): If multiple processors have similar implementation_hint mentioning parallel flows:
+  - Extract common flow patterns and parameters from implementation_hint
+  - Generate multi-task notebook with ThreadPoolExecutor or Databricks Jobs multi-task pattern
+  - Create parameterized functions for parallel execution
+  - Document parallel execution strategy in Migration Notes
 
 Rules:
 - Handle processors with has_code=false:
@@ -477,6 +488,20 @@ def _collect_sql_extraction() -> Dict[str, object] | None:
     return {"schemas": merged_schemas, "transformations": merged_transformations}
 
 
+def _collect_parallel_flows() -> Dict[str, object] | None:
+    """Collect parallel flow detection results from session state (Phase 2 integration).
+
+    Returns parallel flows with flow groups and processor-to-flow mapping.
+    """
+    for key, payload in st.session_state.items():
+        if not isinstance(key, str) or not key.startswith("parallel_flows_"):
+            continue
+        if isinstance(payload, dict):
+            return payload
+
+    return None
+
+
 def main() -> None:
     st.set_page_config(page_title="AI Migration Planner", page_icon="🧭", layout="wide")
     st.title("🧭 AI Migration Planner")
@@ -517,6 +542,7 @@ def main() -> None:
     records, template_payloads = _collect_session_classifications()
     script_lookup = _collect_script_lookup()
     sql_extraction = _collect_sql_extraction()  # NEW: Phase 1 integration
+    parallel_flows = _collect_parallel_flows()  # NEW: Phase 2 integration
 
     # Attach script details to records
     for record in records:
@@ -745,8 +771,12 @@ def main() -> None:
                 f"Batch {batch_index}: {len(batch_ids)} processors, ≈{batch_payload.get('prompt_char_count', 0):,} chars"
             )
 
-            # Build payload (Phase 1: include SQL extraction context)
-            payloads = build_payloads(batch_records, sql_extraction=sql_extraction)
+            # Build payload (Phase 1 & 2: include SQL extraction and parallel flows context)
+            payloads = build_payloads(
+                batch_records,
+                sql_extraction=sql_extraction,
+                parallel_flows=parallel_flows,
+            )
             payload_json = format_payloads_for_prompt(payloads)
             user_payload_dict = json.loads(payload_json)
             user_payload_dict["selection_summary"] = {

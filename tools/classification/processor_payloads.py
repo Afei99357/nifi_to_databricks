@@ -30,6 +30,7 @@ class ProcessorPayload:
     scheduling_strategy: str
     scheduling_period: str
     sql_context: Dict[str, object] | None = None  # NEW: Phase 1 SQL extraction results
+    flow_context: Dict[str, object] | None = None  # NEW: Phase 2 parallel flow context
 
     def to_payload(self) -> Dict[str, object]:
         payload = {
@@ -56,6 +57,9 @@ class ProcessorPayload:
         # Include sql_context if present (Phase 1 integration)
         if self.sql_context:
             payload["sql_context"] = self.sql_context
+        # Include flow_context if present (Phase 2 integration)
+        if self.flow_context:
+            payload["flow_context"] = self.flow_context
         return payload
 
 
@@ -218,15 +222,17 @@ def _find_sql_context_for_processor(
 def build_payloads(
     records: Sequence[Dict[str, object]],
     sql_extraction: Dict[str, object] | None = None,
+    parallel_flows: Dict[str, object] | None = None,
 ) -> List[ProcessorPayload]:
     """Build processor payloads for LLM triage.
 
     Args:
         records: Classification records from workflow analysis
         sql_extraction: Optional SQL extraction results from Phase 1 (schemas, transformations)
+        parallel_flows: Optional parallel flow detection from Phase 2 (flow groups, parameters)
 
     Returns:
-        List of processor payloads enriched with SQL context where applicable
+        List of processor payloads enriched with SQL context and flow context where applicable
     """
     id_to_short_type = {
         str(rec.get("processor_id")): str(
@@ -276,6 +282,12 @@ def build_payloads(
         # NEW: Find SQL context for this processor (Phase 1 integration)
         sql_context = _find_sql_context_for_processor(processor_id, rec, sql_extraction)
 
+        # NEW: Find flow context for this processor (Phase 2 integration)
+        flow_context = None
+        if parallel_flows:
+            processor_to_flow = parallel_flows.get("processor_to_flow", {})
+            flow_context = processor_to_flow.get(processor_id)
+
         group_name = (
             str(
                 rec.get("parent_group")
@@ -313,6 +325,7 @@ def build_payloads(
             scheduling_strategy=str(rec.get("schedulingStrategy") or ""),
             scheduling_period=str(rec.get("schedulingPeriod") or ""),
             sql_context=sql_context,  # NEW: Phase 1 SQL extraction context
+            flow_context=flow_context,  # NEW: Phase 2 parallel flow context
         )
         payloads.append(payload)
     return payloads
